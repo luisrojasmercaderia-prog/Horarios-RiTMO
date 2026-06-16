@@ -18,9 +18,11 @@ const emptyEntry = (id) => ({
   observacion: "",
 });
 
+const ROWS_PER_DAY = 8;
+
 const emptyDay = (dia, idStart) => ({
   dia,
-  entries: [emptyEntry(idStart)],
+  entries: Array.from({ length: ROWS_PER_DAY }, (_, i) => emptyEntry(idStart + i)),
 });
 
 const STORAGE_KEY = "ritmo-horarios-v2";
@@ -38,8 +40,15 @@ export default function HorariosApp() {
   const [codigo, setCodigo] = useState("");
   const [fecha, setFecha] = useState("");
   const [supervisor, setSupervisor] = useState("");
-  const [days, setDays] = useState(() => DIAS.map((d, i) => emptyDay(d, i + 1)));
-  const [nextId, setNextId] = useState(DIAS.length + 1);
+  const [days, setDays] = useState(() => {
+    let id = 1;
+    return DIAS.map((d) => {
+      const day = emptyDay(d, id);
+      id += ROWS_PER_DAY;
+      return day;
+    });
+  });
+  const [nextId, setNextId] = useState(DIAS.length * ROWS_PER_DAY + 1);
   const [saveState, setSaveState] = useState("idle");
   const [loaded, setLoaded] = useState(false);
 
@@ -52,8 +61,19 @@ export default function HorariosApp() {
         setCodigo(data.codigo || "");
         setFecha(data.fecha || "");
         setSupervisor(data.supervisor || "");
-        setDays(data.days && data.days.length ? data.days : DIAS.map((d, i) => emptyDay(d, i + 1)));
-        setNextId(data.nextId || DIAS.length + 1);
+        setDays(
+          data.days && data.days.length
+            ? data.days
+            : (() => {
+                let id = 1;
+                return DIAS.map((d) => {
+                  const day = emptyDay(d, id);
+                  id += ROWS_PER_DAY;
+                  return day;
+                });
+              })()
+        );
+        setNextId(data.nextId || DIAS.length * ROWS_PER_DAY + 1);
       }
     } catch (e) {
       // no existing data yet
@@ -217,7 +237,7 @@ export default function HorariosApp() {
                   </thead>
                   <tbody>
                     {d.entries.map((entry) => (
-                      <tr key={entry.id} className="entry-row" style={{ borderTop: "1px solid #EDEBE4" }}>
+                      <tr key={entry.id} className="entry-row">
                         <Td>
                           <input className="cell-input" value={entry.fecha} onChange={(e) => updateEntry(d.dia, entry.id, "fecha", e.target.value)} placeholder="06/16" />
                         </Td>
@@ -329,7 +349,7 @@ function Th({ children }) {
 }
 
 function Td({ children, style }) {
-  return <td style={{ padding: "6px 8px", fontSize: 12.5, verticalAlign: "middle", ...style }}>{children}</td>;
+  return <td style={{ padding: "4px 8px", fontSize: 12.5, verticalAlign: "middle", borderTop: "1px solid #EDEBE4", ...style }}>{children}</td>;
 }
 
 function SummaryRow({ label, value, bold, color }) {
