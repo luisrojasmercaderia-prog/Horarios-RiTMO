@@ -35,7 +35,9 @@ function calcSaldo(prog, real) {
   if (isNaN(p) || isNaN(r)) return "";
   const diff = r - p;
   return diff === 0 ? "0" : diff > 0 ? `+${diff}` : `${diff}`;
-}function esNoLaborable(estado) {
+}
+
+function esNoLaborable(estado) {
   return ["descanso", "incapacitado", "licencia_maternidad", "luto"].includes(estado);
 }
 
@@ -256,31 +258,34 @@ export default function HorariosApp() {
                             onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
                             style={{
                               cursor: "pointer",
-                              fontWeight: entry.estado === "descanso" ? 700 : 400,
-                              color: entry.estado === "descanso" ? "#946800" : "#241C14",
+                              fontWeight: esNoLaborable(entry.estado) ? 700 : 400,
+                              color: esNoLaborable(entry.estado) ? "#946800" : "#241C14",
                             }}
                           >
                             <option value="trabaja">Trabaja</option>
                             <option value="descanso">Descanso</option>
+                            <option value="incapacitado">Incapacitado</option>
+                            <option value="licencia_maternidad">Licencia de maternidad</option>
+                            <option value="luto">Luto</option>
                           </select>
                         </Td>
                         <Td>
-                          <input disabled={entry.estado === "descanso"} type="time" className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)} style={entry.estado === "descanso" ? disabledCellStyle : undefined} />
+                          <input disabled={esNoLaborable(entry.estado)} type="time" className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)} style={esNoLaborable(entry.estado) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={entry.estado === "descanso"} type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} style={entry.estado === "descanso" ? disabledCellStyle : undefined} />
+                          <input disabled={esNoLaborable(entry.estado)} type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} style={esNoLaborable(entry.estado) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={entry.estado === "descanso"} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={entry.estado === "descanso" ? disabledCellStyle : undefined} />
+                          <input disabled={esNoLaborable(entry.estado)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={esNoLaborable(entry.estado) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={entry.estado === "descanso"} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={entry.estado === "descanso" ? disabledCellStyle : undefined} />
+                          <input disabled={esNoLaborable(entry.estado)} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={esNoLaborable(entry.estado) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={entry.estado === "descanso"} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(entry.estado === "descanso" ? disabledCellStyle : {}) }} />
+                          <input disabled={esNoLaborable(entry.estado)} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(esNoLaborable(entry.estado) ? disabledCellStyle : {}) }} />
                         </Td>
                         <Td>
-                          <input disabled={entry.estado === "descanso"} className="cell-input" value={entry.horasReales} onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(entry.estado === "descanso" ? disabledCellStyle : {}) }} />
+                          <input disabled={esNoLaborable(entry.estado)} className="cell-input" value={entry.horasReales} onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(esNoLaborable(entry.estado) ? disabledCellStyle : {}) }} />
                         </Td>
                         <Td>
                           <span
@@ -297,7 +302,7 @@ export default function HorariosApp() {
                           <input className="cell-input" value={entry.firma} onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)} />
                         </Td>
                         <Td>
-                          <input className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder={entry.estado === "descanso" ? "Descanso" : "—"} />
+                          <input className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder={esNoLaborable(entry.estado) ? "—" : "—"} />
                         </Td>
                         <Td>
                           {d.entries.length > 1 && (
