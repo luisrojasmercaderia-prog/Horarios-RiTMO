@@ -134,7 +134,7 @@ export default function HorariosApp() {
   const handlePrint = () => window.print();
 
   return (
-    <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#F6F5F2", minHeight: "100vh", color: "#1F2421" }}>
+    <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#FFF6EE", minHeight: "100vh", color: "#241C14" }}>
       <style>{`
         @media print {
           .no-print { display: none !important; }
@@ -159,7 +159,7 @@ export default function HorariosApp() {
         .day-row:hover { background: #FAFAF7; }
       `}</style>
 
-      <div className="no-print" style={{ background: "#1F4D3D", color: "#F6F5F2", padding: "18px 28px" }}>
+      <div className="no-print" style={{ background: "#E85D1F", color: "#FFFFFF", padding: "18px 28px" }}>
         <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div>
             <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.7 }}>Tiendas RITMO</div>
@@ -167,7 +167,7 @@ export default function HorariosApp() {
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <SaveIndicator state={saveState} />
-            <button onClick={handlePrint} style={btnStyle("#F6F5F2", "#1F4D3D")}>
+            <button onClick={handlePrint} style={btnStyle("#3FBFC4", "#FFFFFF")}>
               <Printer size={15} /> Imprimir
             </button>
           </div>
@@ -177,8 +177,8 @@ export default function HorariosApp() {
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 28px 60px" }}>
         <div className="sheet" style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 28 }}>
           {/* Header notes */}
-          <div style={{ fontSize: 11.5, color: "#5C5F5A", borderBottom: "2px solid #1F4D3D", paddingBottom: 14, marginBottom: 18, lineHeight: 1.6 }}>
-            <strong style={{ color: "#1F4D3D" }}>Tiendas RITMO</strong> · "Precios bajos todos los días" — Cada colaborador debe disfrutar de 36 horas continuas de descanso semanal. Las horas extras por inventario deben ser mínimas; solo el turno de la tarde debe generarlas. El turno de la mañana entra a las 6:00 a.m. y sale a la 1:30 p.m. No se pagarán horas extras no justificadas: toda hora extra requiere observación y aprobación del Jefe de Zona.
+          <div style={{ fontSize: 11.5, color: "#6B5A4A", borderBottom: "2px solid #E85D1F", paddingBottom: 14, marginBottom: 18, lineHeight: 1.6 }}>
+            <strong style={{ color: "#E85D1F" }}>Tiendas RITMO</strong> · "Precios bajos todos los días" — Cada colaborador debe disfrutar de 36 horas continuas de descanso semanal. Las horas extras por inventario deben ser mínimas; solo el turno de la tarde debe generarlas. El turno de la mañana entra a las 6:00 a.m. y sale a la 1:30 p.m. No se pagarán horas extras no justificadas: toda hora extra requiere observación y aprobación del Jefe de Zona.
           </div>
 
           {/* Store info */}
@@ -197,9 +197,9 @@ export default function HorariosApp() {
           {/* Employees */}
           {employees.map((emp, idx) => (
             <div key={emp.id} style={{ marginBottom: 26, border: "1px solid #E5E3DC", borderRadius: 8, overflow: "hidden" }}>
-              <div style={{ background: "#F0EEE7", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <div style={{ background: "#E6F7F8", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
-                  <Users size={15} color="#1F4D3D" />
+                  <Users size={15} color="#1B8388" />
                   <input
                     value={emp.nombre}
                     onChange={(e) => updateEmpName(emp.id, e.target.value)}
@@ -234,7 +234,7 @@ export default function HorariosApp() {
                   <tbody>
                     {emp.rows.map((row) => (
                       <tr key={row.dia} className="day-row" style={{ borderTop: "1px solid #EDEBE4" }}>
-                        <td style={{ ...tdStyle, fontWeight: 600, color: "#1F4D3D", whiteSpace: "nowrap" }}>{row.dia}</td>
+                        <td style={{ ...tdStyle, fontWeight: 600, color: "#E85D1F", whiteSpace: "nowrap" }}>{row.dia}</td>
                         <Td>
                           <input className="cell-input" value={row.fecha} onChange={(e) => updateRow(emp.id, row.dia, "fecha", e.target.value)} placeholder="06/16" />
                         </Td>
@@ -281,12 +281,12 @@ export default function HorariosApp() {
             </div>
           ))}
 
-          <button className="no-print" onClick={addEmployee} style={{ ...btnStyle("#1F4D3D", "white"), marginBottom: 28 }}>
+          <button className="no-print" onClick={addEmployee} style={{ ...btnStyle("#E85D1F", "white"), marginBottom: 28 }}>
             <Plus size={15} /> Agregar colaborador
           </button>
 
           {/* Footer: supervisor + totals */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 24, paddingTop: 20, borderTop: "2px solid #1F4D3D" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 24, paddingTop: 20, borderTop: "2px solid #E85D1F" }}>
             <div>
               <Field label="Nombre Supervisor">
                 <input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} style={fieldInputStyle} placeholder="Nombre del supervisor" />
@@ -299,8 +299,8 @@ export default function HorariosApp() {
               </div>
             </div>
 
-            <div style={{ background: "#F0EEE7", borderRadius: 8, padding: 18 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, color: "#1F4D3D", fontWeight: 700, fontSize: 12.5, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            <div style={{ background: "#E6F7F8", borderRadius: 8, padding: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, color: "#1B8388", fontWeight: 700, fontSize: 12.5, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                 <Clock size={14} /> Resumen Semanal
               </div>
               <SummaryRow label="Total Horas Programadas" value={totalProgramadas} />
@@ -310,7 +310,7 @@ export default function HorariosApp() {
                 label="SALDO"
                 value={saldoTotal}
                 bold
-                color={saldoTotal > 0 ? "#B3261E" : saldoTotal < 0 ? "#946800" : "#1F4D3D"}
+                color={saldoTotal > 0 ? "#B3261E" : saldoTotal < 0 ? "#946800" : "#1B8388"}
               />
             </div>
           </div>
