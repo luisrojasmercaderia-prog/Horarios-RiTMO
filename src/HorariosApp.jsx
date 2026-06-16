@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Save, Printer, Users, Clock, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 
 const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
-const emptyRow = (dia) => ({
-  dia,
+const emptyEntry = (id) => ({
+  id,
   fecha: "",
   nombre: "",
   llegada: "",
@@ -18,13 +18,12 @@ const emptyRow = (dia) => ({
   observacion: "",
 });
 
-const emptyEmployee = (id) => ({
-  id,
-  nombre: "",
-  rows: DIAS.map((d) => emptyRow(d)),
+const emptyDay = (dia, idStart) => ({
+  dia,
+  entries: [emptyEntry(idStart)],
 });
 
-const STORAGE_KEY = "ritmo-horarios-v1";
+const STORAGE_KEY = "ritmo-horarios-v2";
 
 function calcSaldo(prog, real) {
   const p = parseFloat(prog);
@@ -39,12 +38,11 @@ export default function HorariosApp() {
   const [codigo, setCodigo] = useState("");
   const [fecha, setFecha] = useState("");
   const [supervisor, setSupervisor] = useState("");
-  const [employees, setEmployees] = useState([emptyEmployee(1)]);
-  const [nextId, setNextId] = useState(2);
-  const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
+  const [days, setDays] = useState(() => DIAS.map((d, i) => emptyDay(d, i + 1)));
+  const [nextId, setNextId] = useState(DIAS.length + 1);
+  const [saveState, setSaveState] = useState("idle");
   const [loaded, setLoaded] = useState(false);
 
-  // Load on mount
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -54,8 +52,8 @@ export default function HorariosApp() {
         setCodigo(data.codigo || "");
         setFecha(data.fecha || "");
         setSupervisor(data.supervisor || "");
-        setEmployees(data.employees && data.employees.length ? data.employees : [emptyEmployee(1)]);
-        setNextId(data.nextId || 2);
+        setDays(data.days && data.days.length ? data.days : DIAS.map((d, i) => emptyDay(d, i + 1)));
+        setNextId(data.nextId || DIAS.length + 1);
       }
     } catch (e) {
       // no existing data yet
@@ -77,56 +75,54 @@ export default function HorariosApp() {
   useEffect(() => {
     if (!loaded) return;
     const t = setTimeout(() => {
-      persist({ tienda, codigo, fecha, supervisor, employees, nextId });
+      persist({ tienda, codigo, fecha, supervisor, days, nextId });
     }, 600);
     return () => clearTimeout(t);
-  }, [tienda, codigo, fecha, supervisor, employees, nextId, loaded, persist]);
+  }, [tienda, codigo, fecha, supervisor, days, nextId, loaded, persist]);
 
-  const updateRow = (empId, dia, field, value) => {
-    setEmployees((prev) =>
-      prev.map((emp) => {
-        if (emp.id !== empId) return emp;
-        const rows = emp.rows.map((r) => {
-          if (r.dia !== dia) return r;
-          const updated = { ...r, [field]: value };
+  const updateEntry = (dia, entryId, field, value) => {
+    setDays((prev) =>
+      prev.map((d) => {
+        if (d.dia !== dia) return d;
+        const entries = d.entries.map((e) => {
+          if (e.id !== entryId) return e;
+          const updated = { ...e, [field]: value };
           if (field === "horasProgramadas" || field === "horasReales") {
             updated.saldo = calcSaldo(
-              field === "horasProgramadas" ? value : r.horasProgramadas,
-              field === "horasReales" ? value : r.horasReales
+              field === "horasProgramadas" ? value : e.horasProgramadas,
+              field === "horasReales" ? value : e.horasReales
             );
           }
           return updated;
         });
-        return { ...emp, rows };
+        return { ...d, entries };
       })
     );
   };
 
-  const updateEmpName = (empId, value) => {
-    setEmployees((prev) =>
-      prev.map((emp) =>
-        emp.id === empId
-          ? { ...emp, nombre: value, rows: emp.rows.map((r) => ({ ...r, nombre: value })) }
-          : emp
+  const addEntry = (dia) => {
+    setDays((prev) =>
+      prev.map((d) => (d.dia === dia ? { ...d, entries: [...d.entries, emptyEntry(nextId)] } : d))
+    );
+    setNextId((n) => n + 1);
+  };
+
+  const removeEntry = (dia, entryId) => {
+    setDays((prev) =>
+      prev.map((d) =>
+        d.dia === dia
+          ? { ...d, entries: d.entries.length > 1 ? d.entries.filter((e) => e.id !== entryId) : d.entries }
+          : d
       )
     );
   };
 
-  const addEmployee = () => {
-    setEmployees((prev) => [...prev, emptyEmployee(nextId)]);
-    setNextId((n) => n + 1);
-  };
-
-  const removeEmployee = (empId) => {
-    setEmployees((prev) => (prev.length > 1 ? prev.filter((e) => e.id !== empId) : prev));
-  };
-
-  const totalProgramadas = employees.reduce(
-    (sum, emp) => sum + emp.rows.reduce((s, r) => s + (parseFloat(r.horasProgramadas) || 0), 0),
+  const totalProgramadas = days.reduce(
+    (sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasProgramadas) || 0), 0),
     0
   );
-  const totalReales = employees.reduce(
-    (sum, emp) => sum + emp.rows.reduce((s, r) => s + (parseFloat(r.horasReales) || 0), 0),
+  const totalReales = days.reduce(
+    (sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasReales) || 0), 0),
     0
   );
   const saldoTotal = totalReales - totalProgramadas;
@@ -148,21 +144,21 @@ export default function HorariosApp() {
           background: transparent;
           font-size: 12.5px;
           font-family: inherit;
-          color: #1F2421;
+          color: #241C14;
           padding: 4px 2px;
           outline: none;
         }
         .cell-input:focus {
-          background: #FFF8E7;
+          background: #FFF1DC;
           border-radius: 3px;
         }
-        .day-row:hover { background: #FAFAF7; }
+        .entry-row:hover { background: #FFFBF5; }
       `}</style>
 
       <div className="no-print" style={{ background: "#E85D1F", color: "#FFFFFF", padding: "18px 28px" }}>
         <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.7 }}>Tiendas RITMO</div>
+            <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.85 }}>Tiendas RITMO</div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>Programación de Horarios Semanales</div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -184,42 +180,29 @@ export default function HorariosApp() {
           {/* Store info */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 22 }}>
             <Field label="Nombre Tienda">
-              <input className="field-input" value={tienda} onChange={(e) => setTienda(e.target.value)} style={fieldInputStyle} placeholder="Ej. Santiago Centro" />
+              <input value={tienda} onChange={(e) => setTienda(e.target.value)} style={fieldInputStyle} placeholder="Ej. Santiago Centro" />
             </Field>
             <Field label="Código">
-              <input className="field-input" value={codigo} onChange={(e) => setCodigo(e.target.value)} style={fieldInputStyle} placeholder="Ej. RIT-014" />
+              <input value={codigo} onChange={(e) => setCodigo(e.target.value)} style={fieldInputStyle} placeholder="Ej. RIT-014" />
             </Field>
             <Field label="Fecha">
               <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={fieldInputStyle} />
             </Field>
           </div>
 
-          {/* Employees */}
-          {employees.map((emp, idx) => (
-            <div key={emp.id} style={{ marginBottom: 26, border: "1px solid #E5E3DC", borderRadius: 8, overflow: "hidden" }}>
-              <div style={{ background: "#E6F7F8", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
-                  <Users size={15} color="#1B8388" />
-                  <input
-                    value={emp.nombre}
-                    onChange={(e) => updateEmpName(emp.id, e.target.value)}
-                    placeholder={`Nombre del colaborador ${idx + 1}`}
-                    style={{ ...fieldInputStyle, background: "white", maxWidth: 320, fontWeight: 600 }}
-                  />
-                </div>
-                {employees.length > 1 && (
-                  <button className="no-print" onClick={() => removeEmployee(emp.id)} style={iconBtnStyle}>
-                    <Trash2 size={15} color="#B3261E" />
-                  </button>
-                )}
+          {/* Days */}
+          {days.map((d) => (
+            <div key={d.dia} style={{ marginBottom: 22, border: "1px solid #E5E3DC", borderRadius: 8, overflow: "hidden" }}>
+              <div style={{ background: "#E6F7F8", padding: "10px 14px" }}>
+                <span style={{ fontWeight: 700, color: "#1B8388", fontSize: 13.5 }}>{d.dia}</span>
               </div>
 
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
                   <thead>
                     <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
-                      <Th>Día</Th>
                       <Th>Mes/Día</Th>
+                      <Th>Nombre</Th>
                       <Th>Hora Llegada</Th>
                       <Th>Hora Salida</Th>
                       <Th>Break Inicio</Th>
@@ -229,61 +212,73 @@ export default function HorariosApp() {
                       <Th>Saldo</Th>
                       <Th>Firma</Th>
                       <Th>Observación</Th>
+                      <Th></Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {emp.rows.map((row) => (
-                      <tr key={row.dia} className="day-row" style={{ borderTop: "1px solid #EDEBE4" }}>
-                        <td style={{ ...tdStyle, fontWeight: 600, color: "#E85D1F", whiteSpace: "nowrap" }}>{row.dia}</td>
+                    {d.entries.map((entry) => (
+                      <tr key={entry.id} className="entry-row" style={{ borderTop: "1px solid #EDEBE4" }}>
                         <Td>
-                          <input className="cell-input" value={row.fecha} onChange={(e) => updateRow(emp.id, row.dia, "fecha", e.target.value)} placeholder="06/16" />
+                          <input className="cell-input" value={entry.fecha} onChange={(e) => updateEntry(d.dia, entry.id, "fecha", e.target.value)} placeholder="06/16" />
                         </Td>
                         <Td>
-                          <input type="time" className="cell-input" value={row.llegada} onChange={(e) => updateRow(emp.id, row.dia, "llegada", e.target.value)} />
+                          <input className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} placeholder="Nombre del colaborador" style={{ fontWeight: 600, minWidth: 140 }} />
                         </Td>
                         <Td>
-                          <input type="time" className="cell-input" value={row.salida} onChange={(e) => updateRow(emp.id, row.dia, "salida", e.target.value)} />
+                          <input type="time" className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)} />
                         </Td>
                         <Td>
-                          <input type="time" className="cell-input" value={row.breakInicio} onChange={(e) => updateRow(emp.id, row.dia, "breakInicio", e.target.value)} />
+                          <input type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} />
                         </Td>
                         <Td>
-                          <input type="time" className="cell-input" value={row.breakFin} onChange={(e) => updateRow(emp.id, row.dia, "breakFin", e.target.value)} />
+                          <input type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} />
                         </Td>
                         <Td>
-                          <input className="cell-input" value={row.horasProgramadas} onChange={(e) => updateRow(emp.id, row.dia, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center" }} />
+                          <input type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} />
                         </Td>
                         <Td>
-                          <input className="cell-input" value={row.horasReales} onChange={(e) => updateRow(emp.id, row.dia, "horasReales", e.target.value)} placeholder="0" style={{ textAlign: "center" }} />
+                          <input className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center" }} />
+                        </Td>
+                        <Td>
+                          <input className="cell-input" value={entry.horasReales} onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)} placeholder="0" style={{ textAlign: "center" }} />
                         </Td>
                         <Td>
                           <span
                             style={{
                               fontSize: 12,
                               fontWeight: 700,
-                              color: row.saldo.startsWith("+") ? "#B3261E" : row.saldo.startsWith("-") ? "#946800" : "#5C5F5A",
+                              color: entry.saldo.startsWith("+") ? "#B3261E" : entry.saldo.startsWith("-") ? "#946800" : "#5C5F5A",
                             }}
                           >
-                            {row.saldo}
+                            {entry.saldo}
                           </span>
                         </Td>
                         <Td>
-                          <input className="cell-input" value={row.firma} onChange={(e) => updateRow(emp.id, row.dia, "firma", e.target.value)} />
+                          <input className="cell-input" value={entry.firma} onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)} />
                         </Td>
                         <Td>
-                          <input className="cell-input" value={row.observacion} onChange={(e) => updateRow(emp.id, row.dia, "observacion", e.target.value)} placeholder="—" />
+                          <input className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder="—" />
+                        </Td>
+                        <Td>
+                          {d.entries.length > 1 && (
+                            <button className="no-print" onClick={() => removeEntry(d.dia, entry.id)} style={iconBtnStyle}>
+                              <Trash2 size={14} color="#B3261E" />
+                            </button>
+                          )}
                         </Td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+
+              <div style={{ padding: "8px 14px", background: "#FAFAF7" }}>
+                <button className="no-print" onClick={() => addEntry(d.dia)} style={{ ...btnStyle("transparent", "#E85D1F"), border: "1px dashed #E85D1F", padding: "5px 10px", fontSize: 12 }}>
+                  <Plus size={13} /> Agregar colaborador a {d.dia}
+                </button>
+              </div>
             </div>
           ))}
-
-          <button className="no-print" onClick={addEmployee} style={{ ...btnStyle("#E85D1F", "white"), marginBottom: 28 }}>
-            <Plus size={15} /> Agregar colaborador
-          </button>
 
           {/* Footer: supervisor + totals */}
           <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 24, paddingTop: 20, borderTop: "2px solid #E85D1F" }}>
@@ -334,12 +329,12 @@ function Th({ children }) {
 }
 
 function Td({ children, style }) {
-  return <td style={{ ...tdStyle, ...style }}>{children}</td>;
+  return <td style={{ padding: "6px 8px", fontSize: 12.5, verticalAlign: "middle", ...style }}>{children}</td>;
 }
 
 function SummaryRow({ label, value, bold, color }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", fontSize: bold ? 14 : 12.5, fontWeight: bold ? 700 : 500, padding: "4px 0", color: color || "#1F2421" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", fontSize: bold ? 14 : 12.5, fontWeight: bold ? 700 : 500, padding: "4px 0", color: color || "#241C14" }}>
       <span>{label}</span>
       <span>{Number.isFinite(value) ? value : 0} h</span>
     </div>
@@ -349,14 +344,14 @@ function SummaryRow({ label, value, bold, color }) {
 function SaveIndicator({ state }) {
   const map = {
     idle: { icon: null, text: "" },
-    saving: { icon: <Loader2 size={13} className="spin" style={{ animation: "spin 1s linear infinite" }} />, text: "Guardando..." },
+    saving: { icon: <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />, text: "Guardando..." },
     saved: { icon: <CheckCircle2 size={13} />, text: "Guardado" },
     error: { icon: <AlertCircle size={13} />, text: "Error al guardar" },
   };
   const { icon, text } = map[state] || map.idle;
   if (!text) return null;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, opacity: 0.85 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, opacity: 0.9 }}>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       {icon} {text}
     </div>
@@ -372,13 +367,7 @@ const fieldInputStyle = {
   fontFamily: "inherit",
   background: "#FAFAF8",
   outline: "none",
-  color: "#1F2421",
-};
-
-const tdStyle = {
-  padding: "6px 8px",
-  fontSize: 12.5,
-  verticalAlign: "middle",
+  color: "#241C14",
 };
 
 function btnStyle(bg, color) {
@@ -402,7 +391,7 @@ const iconBtnStyle = {
   background: "transparent",
   border: "none",
   cursor: "pointer",
-  padding: 6,
+  padding: 4,
   borderRadius: 6,
   display: "flex",
   alignItems: "center",
