@@ -112,12 +112,15 @@ export default function HorariosApp() {
         if (d.dia !== dia) return d;
         const entries = d.entries.map((e) => {
           if (e.id !== entryId) return e;
-          const updated = { ...e, [field]: value };
-          if (field === "horasProgramadas" || field === "horasReales") {
-            updated.saldo = calcSaldo(
-              field === "horasProgramadas" ? value : e.horasProgramadas,
-              field === "horasReales" ? value : e.horasReales
-            );
+          let updated = { ...e, [field]: value };
+
+          if (field === "estado" && esNoLaborable(value)) {
+            updated.horasProgramadas = "0";
+            updated.horasReales = "0";
+          }
+
+          if (field === "horasProgramadas" || field === "horasReales" || field === "estado") {
+            updated.saldo = calcSaldo(updated.horasProgramadas, updated.horasReales);
           }
           return updated;
         });
