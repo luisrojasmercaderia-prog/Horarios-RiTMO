@@ -6,6 +6,7 @@ const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "
 
 const emptyEntry = (id) => ({
   id,
+  estado: "trabaja",
   fecha: "",
   nombre: "",
   llegada: "",
@@ -224,6 +225,7 @@ export default function HorariosApp() {
                     <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
                       <Th>Mes/Día</Th>
                       <Th>Nombre</Th>
+                      <Th>Estado</Th>
                       <Th>Hora Llegada</Th>
                       <Th>Hora Salida</Th>
                       <Th>Break Inicio</Th>
@@ -246,22 +248,37 @@ export default function HorariosApp() {
                           <input className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} placeholder="Nombre del colaborador" style={{ fontWeight: 600, minWidth: 140 }} />
                         </Td>
                         <Td>
-                          <input type="time" className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)} />
+                          <select
+                            className="cell-input"
+                            value={entry.estado}
+                            onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
+                            style={{
+                              cursor: "pointer",
+                              fontWeight: entry.estado === "descanso" ? 700 : 400,
+                              color: entry.estado === "descanso" ? "#946800" : "#241C14",
+                            }}
+                          >
+                            <option value="trabaja">Trabaja</option>
+                            <option value="descanso">Descanso</option>
+                          </select>
                         </Td>
                         <Td>
-                          <input type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} />
+                          <input disabled={entry.estado === "descanso"} type="time" className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)} style={entry.estado === "descanso" ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} />
+                          <input disabled={entry.estado === "descanso"} type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} style={entry.estado === "descanso" ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} />
+                          <input disabled={entry.estado === "descanso"} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={entry.estado === "descanso" ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center" }} />
+                          <input disabled={entry.estado === "descanso"} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={entry.estado === "descanso" ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input className="cell-input" value={entry.horasReales} onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)} placeholder="0" style={{ textAlign: "center" }} />
+                          <input disabled={entry.estado === "descanso"} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(entry.estado === "descanso" ? disabledCellStyle : {}) }} />
+                        </Td>
+                        <Td>
+                          <input disabled={entry.estado === "descanso"} className="cell-input" value={entry.horasReales} onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(entry.estado === "descanso" ? disabledCellStyle : {}) }} />
                         </Td>
                         <Td>
                           <span
@@ -278,7 +295,7 @@ export default function HorariosApp() {
                           <input className="cell-input" value={entry.firma} onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)} />
                         </Td>
                         <Td>
-                          <input className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder="—" />
+                          <input className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder={entry.estado === "descanso" ? "Descanso" : "—"} />
                         </Td>
                         <Td>
                           {d.entries.length > 1 && (
@@ -379,8 +396,13 @@ function SaveIndicator({ state }) {
   );
 }
 
-const fieldInputStyle = {
-  width: "100%",
+const disabledCellStyle = {
+  background: "#F2EFE9",
+  color: "#A6A199",
+  cursor: "not-allowed",
+};
+
+const fieldInputStyle = {  width: "100%",
   border: "1px solid #DEDBD2",
   borderRadius: 6,
   padding: "7px 10px",
