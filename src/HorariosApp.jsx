@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import logoRitmo from "./logo-ritmo.png";
 
 const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
@@ -178,7 +179,7 @@ export default function HorariosApp() {
       <div className="no-print" style={{ background: "#E85D1F", color: "#FFFFFF", padding: "18px 28px" }}>
         <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.85 }}>Tiendas RITMO</div>
+            <img src={logoRitmo} alt="Tiendas RITMO" style={{ height: 32, marginBottom: 4 }} />
             <div style={{ fontSize: 20, fontWeight: 700 }}>Programación de Horarios Semanales</div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
