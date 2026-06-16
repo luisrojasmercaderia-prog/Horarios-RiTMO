@@ -35,6 +35,8 @@ function calcSaldo(prog, real) {
   if (isNaN(p) || isNaN(r)) return "";
   const diff = r - p;
   return diff === 0 ? "0" : diff > 0 ? `+${diff}` : `${diff}`;
+}function esNoLaborable(estado) {
+  return ["descanso", "incapacitado", "licencia_maternidad", "luto"].includes(estado);
 }
 
 export default function HorariosApp() {
