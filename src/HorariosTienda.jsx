@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2, FileSpreadsheet, LogOut } from "lucide-react";
+import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2, FileSpreadsheet, LogOut, Users, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase } from "./supabaseClient";
 import logoRitmo from "./logo-ritmo.png";
@@ -137,6 +137,27 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [loaded, setLoaded] = useState(false);
   const [showConsolidado, setShowConsolidado] = useState(false);
   const [semanaActual, setSemanaActual] = useState("semana_1");
+  const [empleados, setEmpleados] = useState([]);
+  const [showEmpleados, setShowEmpleados] = useState(false);
+
+  const cargarEmpleados = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("empleados")
+        .select("id, nombre, cedula")
+        .eq("tienda_codigo", codigoTienda)
+        .order("nombre", { ascending: true });
+      if (!error && data) {
+        setEmpleados(data);
+      }
+    } catch (e) {
+      // sin empleados registrados todavia
+    }
+  }, [codigoTienda]);
+
+  useEffect(() => {
+    cargarEmpleados();
+  }, [cargarEmpleados]);
 
   useEffect(() => {
     let activo = true;
@@ -221,6 +242,16 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         const entries = d.entries.map((e) => {
           if (e.id !== entryId) return e;
           let updated = { ...e, [field]: value };
+
+          if (field === "nombre") {
+            const match = empleados.find((emp) => emp.nombre === value);
+            if (match) updated.cedula = match.cedula;
+          }
+
+          if (field === "cedula") {
+            const match = empleados.find((emp) => emp.cedula === value);
+            if (match) updated.nombre = match.nombre;
+          }
 
           if (field === "estado" && esNoLaborable(value)) {
             updated.horasProgramadas = "";
@@ -428,6 +459,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               ))}
             </select>
             <SaveIndicator state={saveState} />
+            <button onClick={() => setShowEmpleados(true)} className="no-print" style={btnStyle("#FFFFFF", "#E85D1F")}>
+              <Users size={15} /> Empleados
+            </button>
             <button onClick={() => setShowConsolidado(true)} className="no-print" style={btnStyle("#FFFFFF", "#E85D1F")}>
               <Clock size={15} /> Consolidado
             </button>
@@ -496,11 +530,19 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           <input className="cell-input" value={entry.fecha} onChange={(e) => updateEntry(d.dia, entry.id, "fecha", e.target.value)} placeholder="06/16" />
                         </Td>
                         <Td>
-                          <input className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} placeholder="Nombre del colaborador" style={{ fontWeight: 600, minWidth: 140 }} />
+                          <input
+                            className="cell-input"
+                            list="lista-empleados-nombres"
+                            value={entry.nombre}
+                            onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)}
+                            placeholder="Nombre del colaborador"
+                            style={{ fontWeight: 600, minWidth: 140 }}
+                          />
                         </Td>
                         <Td>
                           <input
                             className="cell-input"
+                            list="lista-empleados-cedulas"
                             value={entry.cedula}
                             onChange={(e) => updateEntry(d.dia, entry.id, "cedula", e.target.value)}
                             placeholder="Requerida para habilitar fila"
@@ -736,6 +778,188 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           </div>
         </div>
       )}
+
+      <datalist id="lista-empleados-nombres">
+        {empleados.map((emp) => (
+          <option key={emp.id} value={emp.nombre} />
+        ))}
+      </datalist>
+      <datalist id="lista-empleados-cedulas">
+        {empleados.map((emp) => (
+          <option key={emp.id} value={emp.cedula} />
+        ))}
+      </datalist>
+
+      {showEmpleados && (
+        <ModalEmpleados
+          codigoTienda={codigoTienda}
+          empleados={empleados}
+          onClose={() => setShowEmpleados(false)}
+          onRecargar={cargarEmpleados}
+        />
+      )}
+    </div>
+  );
+}
+
+function ModalEmpleados({ codigoTienda, empleados, onClose, onRecargar }) {
+  const [nombre, setNombre] = useState("");
+  const [cedula, setCedula] = useState("");
+  const [editandoId, setEditandoId] = useState(null);
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const limpiarFormulario = () => {
+    setNombre("");
+    setCedula("");
+    setEditandoId(null);
+    setError("");
+  };
+
+  const handleEditar = (emp) => {
+    setNombre(emp.nombre);
+    setCedula(emp.cedula);
+    setEditandoId(emp.id);
+    setError("");
+  };
+
+  const handleGuardar = async (e) => {
+    e.preventDefault();
+    if (!nombre.trim() || !cedula.trim()) {
+      setError("Completa nombre y cédula.");
+      return;
+    }
+    setGuardando(true);
+    setError("");
+    try {
+      if (editandoId) {
+        const { error: err } = await supabase
+          .from("empleados")
+          .update({ nombre: nombre.trim(), cedula: cedula.trim() })
+          .eq("id", editandoId);
+        if (err) throw err;
+      } else {
+        const { error: err } = await supabase
+          .from("empleados")
+          .insert({ tienda_codigo: codigoTienda, nombre: nombre.trim(), cedula: cedula.trim() });
+        if (err) throw err;
+      }
+      await onRecargar();
+      limpiarFormulario();
+    } catch (err) {
+      setError("Esa cédula ya existe en esta tienda, o ocurrió un error. Intenta de nuevo.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleEliminar = async (id) => {
+    try {
+      await supabase.from("empleados").delete().eq("id", id);
+      await onRecargar();
+      if (editandoId === id) limpiarFormulario();
+    } catch (err) {
+      setError("No se pudo eliminar. Intenta de nuevo.");
+    }
+  };
+
+  return (
+    <div
+      className="no-print"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(36,28,20,0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 50,
+        padding: 20,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "white",
+          borderRadius: 10,
+          padding: 24,
+          maxWidth: 520,
+          width: "100%",
+          maxHeight: "85vh",
+          overflowY: "auto",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#E85D1F" }}>Empleados de la tienda</div>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#5C5F5A" }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleGuardar} style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+          <input
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            placeholder="Nombre completo"
+            style={{ ...fieldInputStyle, flex: "1 1 180px" }}
+          />
+          <input
+            value={cedula}
+            onChange={(e) => setCedula(e.target.value)}
+            placeholder="Cédula"
+            style={{ ...fieldInputStyle, flex: "1 1 140px" }}
+          />
+          <button type="submit" disabled={guardando} style={{ ...btnStyle("#E85D1F", "#FFFFFF"), opacity: guardando ? 0.7 : 1 }}>
+            {editandoId ? "Guardar" : <><Plus size={14} /> Agregar</>}
+          </button>
+          {editandoId && (
+            <button type="button" onClick={limpiarFormulario} style={btnStyle("#FAFAF7", "#5C5F5A")}>
+              Cancelar
+            </button>
+          )}
+        </form>
+
+        {error && (
+          <div style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 12.5, padding: "8px 10px", borderRadius: 6, marginBottom: 14 }}>{error}</div>
+        )}
+
+        {empleados.length === 0 ? (
+          <div style={{ fontSize: 13, color: "#5C5F5A" }}>Todavía no hay empleados registrados para esta tienda.</div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                <Th>Nombre</Th>
+                <Th>Cédula</Th>
+                <Th></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {empleados.map((emp) => (
+                <tr key={emp.id} style={{ borderTop: "1px solid #EDEBE4" }}>
+                  <Td style={{ fontWeight: 600 }}>{emp.nombre}</Td>
+                  <Td>{emp.cedula}</Td>
+                  <Td>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => handleEditar(emp)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#1B8388", fontSize: 12, fontWeight: 600 }}>
+                        Editar
+                      </button>
+                      <button onClick={() => handleEliminar(emp.id)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#791F1F", fontSize: 12, fontWeight: 600 }}>
+                        Eliminar
+                      </button>
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
