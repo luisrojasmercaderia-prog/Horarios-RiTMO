@@ -60,7 +60,7 @@ function estaBloqueado(entry) {
   return esNoLaborable(entry.estado) || esTurnoFijo(entry.estado) || entry.cedula.trim() === "";
 }
 
-function breakBloqueado(entry) {
+function parcialBloqueado(entry) {
   if (esTurnoFijo(entry.estado) && TURNOS_FIJOS[entry.estado].breakEditable) {
     return esNoLaborable(entry.estado) || entry.cedula.trim() === "";
   }
@@ -545,10 +545,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           <input disabled={estaBloqueado(entry)} type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={breakBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={breakBloqueado(entry) ? disabledCellStyle : undefined} />
+                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={breakBloqueado(entry)} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={breakBloqueado(entry) ? disabledCellStyle : undefined} />
+                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
                           <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }} />
@@ -556,14 +556,14 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                         <Td>
                           <div style={{ display: "flex", alignItems: "center", gap: 4, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
                             <input
-                              disabled={estaBloqueado(entry)}
+                              disabled={parcialBloqueado(entry)}
                               className="cell-input"
                               value={entry.horasReales}
                               onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)}
                               placeholder="0"
                               style={{
                                 textAlign: "center",
-                                ...(estaBloqueado(entry) ? disabledCellStyle : {}),
+                                ...(parcialBloqueado(entry) ? disabledCellStyle : {}),
                                 ...(entry.esFestivo ? { background: "transparent", color: "#04342C", fontWeight: 600 } : {}),
                               }}
                             />
