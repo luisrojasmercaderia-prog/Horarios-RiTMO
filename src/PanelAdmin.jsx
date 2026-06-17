@@ -164,6 +164,27 @@ export default function PanelAdmin() {
     .map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.nocturnas)) }));
 
   const exportarExcel = () => {
+    if (tiendaSeleccionada) {
+      const nombreTienda = listaTiendas.find((t) => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada;
+      const filasTienda = filas.filter((f) => f.tiendaCodigo === tiendaSeleccionada);
+      const data = filasTienda.map((f) => ({
+        Semana: f.semana,
+        Operario: f.operario,
+        Cédula: f.cedula,
+        "Hrs Festivas": Number(fmt(f.festivas)),
+        "Hrs Nocturnas": Number(fmt(f.nocturnas)),
+        "Hrs Extras Festivas": Number(fmt(f.extrasFestivas)),
+        "Hrs Extras Normales": Number(fmt(f.extrasNormales)),
+      }));
+      const hoja = XLSX.utils.json_to_sheet(data);
+      hoja["!cols"] = [{ wch: 12 }, { wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 18 }];
+      const libro = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(libro, hoja, "Consolidado");
+      const nombreArchivo = `Consolidado_${nombreTienda}.xlsx`.replace(/\s+/g, "_");
+      XLSX.writeFile(libro, nombreArchivo);
+      return;
+    }
+
     const data = filas.map((f) => ({
       Tienda: f.tiendaNombre,
       "Código Tienda": f.tiendaCodigo,
@@ -195,7 +216,7 @@ export default function PanelAdmin() {
               <RefreshCw size={14} /> Actualizar
             </button>
             <button onClick={exportarExcel} style={btnStyle("#3FBFC4", "#FFFFFF")}>
-              <FileSpreadsheet size={14} /> Exportar a Excel
+              <FileSpreadsheet size={14} /> {tiendaSeleccionada ? "Exportar tienda" : "Exportar a Excel"}
             </button>
           </div>
         </div>
