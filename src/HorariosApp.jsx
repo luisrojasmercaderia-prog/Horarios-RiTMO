@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2, FileSpreadsheet } from "lucide-react";
+import * as XLSX from "xlsx";
 import logoRitmo from "./logo-ritmo.png";
 
 const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -275,6 +276,21 @@ export default function HorariosApp() {
   const fmt = (n) => {
     const r = Math.round(n * 100) / 100;
     return Number.isInteger(r) ? String(r) : String(r);
+  };
+
+  const exportarConsolidadoExcel = () => {
+    const filas = consolidadoPorOperario.map((op) => ({
+      Operario: op.nombre || "(Sin nombre)",
+      Cédula: op.cedula || "",
+      "Hrs Festivas": Number(fmt(op.festivas)),
+      "Hrs Nocturnas": Number(fmt(op.nocturnas)),
+    }));
+    const hoja = XLSX.utils.json_to_sheet(filas);
+    hoja["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 16 }];
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Consolidado");
+    const nombreArchivo = `Consolidado_${tienda || "Tienda"}_${fecha || "sin_fecha"}.xlsx`.replace(/\s+/g, "_");
+    XLSX.writeFile(libro, nombreArchivo);
   };
 
   return (
@@ -579,9 +595,14 @@ export default function HorariosApp() {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#E85D1F" }}>Consolidado Semanal por Operario</div>
-              <button onClick={() => setShowConsolidado(false)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 18, color: "#5C5F5A" }}>
-                ✕
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button onClick={exportarConsolidadoExcel} style={btnStyle("#3FBFC4", "#FFFFFF")}>
+                  <FileSpreadsheet size={15} /> Exportar a Excel
+                </button>
+                <button onClick={() => setShowConsolidado(false)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 18, color: "#5C5F5A" }}>
+                  ✕
+                </button>
+              </div>
             </div>
 
             {consolidadoPorOperario.length === 0 ? (
