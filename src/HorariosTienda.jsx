@@ -60,6 +60,7 @@ function estaBloqueado(entry) {
 
 const HORARIOS_PREDETERMINADOS = {
   "06:00": "14:30",
+  "07:00": "15:30",
   "07:30": "16:00",
   "13:30": "22:00",
 };
@@ -521,6 +522,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           >
                             <option value="">--:-- --</option>
                             <option value="06:00">6:00 AM</option>
+                            <option value="07:00">7:00 AM</option>
                             <option value="07:30">7:30 AM</option>
                             <option value="13:30">1:30 PM</option>
                           </select>
