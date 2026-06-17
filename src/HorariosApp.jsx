@@ -51,6 +51,16 @@ function calcularSalidaAutomatica(horaLlegada) {
   return HORARIOS_PREDETERMINADOS[horaLlegada] || null;
 }
 
+function sumarUnaHora(hora) {
+  if (!hora) return null;
+  const [h, m] = hora.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return null;
+  const totalMin = (h * 60 + m + 60) % (24 * 60);
+  const nuevaH = Math.floor(totalMin / 60);
+  const nuevaM = totalMin % 60;
+  return `${String(nuevaH).padStart(2, "0")}:${String(nuevaM).padStart(2, "0")}`;
+}
+
 export default function HorariosApp() {
   const [tienda, setTienda] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -137,6 +147,13 @@ export default function HorariosApp() {
             const salidaAuto = calcularSalidaAutomatica(value);
             if (salidaAuto) {
               updated.salida = salidaAuto;
+            }
+          }
+
+          if (field === "breakInicio") {
+            const breakFinAuto = sumarUnaHora(value);
+            if (breakFinAuto) {
+              updated.breakFin = breakFinAuto;
             }
           }
 
