@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, RefreshCw, FileSpreadsheet, Loader2 } from "lucide-react";
+import { ShieldCheck, RefreshCw, FileSpreadsheet, Loader2, Store } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase } from "./supabaseClient";
+import HorariosTienda from "./HorariosTienda";
 
 function fmt(n) {
   const r = Math.round(n * 100) / 100;
@@ -36,6 +37,8 @@ export default function PanelAdmin() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [filas, setFilas] = useState([]);
+  const [listaTiendas, setListaTiendas] = useState([]);
+  const [tiendaSeleccionada, setTiendaSeleccionada] = useState("");
 
   const cargarDatos = async () => {
     setCargando(true);
@@ -46,6 +49,8 @@ export default function PanelAdmin() {
         .select("codigo, nombre")
         .order("codigo", { ascending: true });
       if (errTiendas) throw errTiendas;
+
+      setListaTiendas(tiendas || []);
 
       const { data: horarios, error: errHorarios } = await supabase
         .from("horarios_semana")
@@ -177,7 +182,44 @@ export default function PanelAdmin() {
             </table>
           )}
         </div>
+
+        <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 24, marginTop: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            <Store size={16} color="#E85D1F" />
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#E85D1F" }}>Ver planilla de una tienda</div>
+          </div>
+
+          <select
+            value={tiendaSeleccionada}
+            onChange={(e) => setTiendaSeleccionada(e.target.value)}
+            style={{
+              border: "1px solid #DEDBD2",
+              borderRadius: 6,
+              padding: "9px 11px",
+              fontSize: 13.5,
+              fontFamily: "inherit",
+              background: "#FAFAF8",
+              outline: "none",
+              color: "#241C14",
+              minWidth: 260,
+              cursor: "pointer",
+            }}
+          >
+            <option value="">Selecciona una tienda...</option>
+            {listaTiendas.map((t) => (
+              <option key={t.codigo} value={t.codigo}>
+                {t.nombre} ({t.codigo})
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
+
+      {tiendaSeleccionada && (
+        <div style={{ borderTop: "4px solid #E85D1F", marginTop: 8 }}>
+          <HorariosTienda codigoTienda={tiendaSeleccionada} onSalir={() => setTiendaSeleccionada("")} />
+        </div>
+      )}
     </div>
   );
 }
