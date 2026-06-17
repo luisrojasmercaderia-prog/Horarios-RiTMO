@@ -54,37 +54,45 @@ export default function PanelAdmin() {
 
       const { data: horarios, error: errHorarios } = await supabase
         .from("horarios_semana")
-        .select("tienda_codigo, datos, updated_at");
+        .select("tienda_codigo, semana_fecha, datos, updated_at");
       if (errHorarios) throw errHorarios;
 
       const horariosPorTienda = {};
       (horarios || []).forEach((h) => {
-        horariosPorTienda[h.tienda_codigo] = h;
+        if (!horariosPorTienda[h.tienda_codigo]) horariosPorTienda[h.tienda_codigo] = [];
+        horariosPorTienda[h.tienda_codigo].push(h);
       });
+
+      const SEMANA_LABEL = { semana_1: "Semana 1", semana_2: "Semana 2", semana_3: "Semana 3", semana_4: "Semana 4" };
 
       const resultado = [];
       (tiendas || []).forEach((t) => {
-        const registro = horariosPorTienda[t.codigo];
-        const consolidado = registro ? calcularConsolidadoTienda(registro.datos) : [];
-        if (consolidado.length === 0) {
-          resultado.push({
-            tiendaCodigo: t.codigo,
-            tiendaNombre: t.nombre,
-            operario: "(Sin datos registrados)",
-            cedula: "",
-            festivas: 0,
-            nocturnas: 0,
-          });
-        } else {
+        const registros = horariosPorTienda[t.codigo] || [];
+        let huboDatos = false;
+        registros.forEach((registro) => {
+          const consolidado = calcularConsolidadoTienda(registro.datos);
           consolidado.forEach((op) => {
+            huboDatos = true;
             resultado.push({
               tiendaCodigo: t.codigo,
               tiendaNombre: t.nombre,
+              semana: SEMANA_LABEL[registro.semana_fecha] || registro.semana_fecha,
               operario: op.nombre || "(Sin nombre)",
               cedula: op.cedula || "",
               festivas: op.festivas,
               nocturnas: op.nocturnas,
             });
+          });
+        });
+        if (!huboDatos) {
+          resultado.push({
+            tiendaCodigo: t.codigo,
+            tiendaNombre: t.nombre,
+            semana: "—",
+            operario: "(Sin datos registrados)",
+            cedula: "",
+            festivas: 0,
+            nocturnas: 0,
           });
         }
       });
@@ -105,13 +113,14 @@ export default function PanelAdmin() {
     const data = filas.map((f) => ({
       Tienda: f.tiendaNombre,
       "Código Tienda": f.tiendaCodigo,
+      Semana: f.semana,
       Operario: f.operario,
       Cédula: f.cedula,
       "Hrs Festivas": Number(fmt(f.festivas)),
       "Hrs Nocturnas": Number(fmt(f.nocturnas)),
     }));
     const hoja = XLSX.utils.json_to_sheet(data);
-    hoja["!cols"] = [{ wch: 22 }, { wch: 16 }, { wch: 26 }, { wch: 16 }, { wch: 14 }, { wch: 14 }];
+    hoja["!cols"] = [{ wch: 22 }, { wch: 16 }, { wch: 12 }, { wch: 26 }, { wch: 16 }, { wch: 14 }, { wch: 14 }];
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Consolidado General");
     XLSX.writeFile(libro, "Consolidado_General_RITMO.xlsx");
@@ -161,6 +170,7 @@ export default function PanelAdmin() {
                 <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
                   <th style={thStyle}>Tienda</th>
                   <th style={thStyle}>Código</th>
+                  <th style={thStyle}>Semana</th>
                   <th style={thStyle}>Operario</th>
                   <th style={thStyle}>Cédula</th>
                   <th style={thStyle}>Hrs Festivas</th>
@@ -169,9 +179,10 @@ export default function PanelAdmin() {
               </thead>
               <tbody>
                 {filas.map((f, i) => (
-                  <tr key={`${f.tiendaCodigo}-${f.cedula || f.operario}-${i}`} style={{ borderTop: "1px solid #EDEBE4" }}>
+                  <tr key={`${f.tiendaCodigo}-${f.semana}-${f.cedula || f.operario}-${i}`} style={{ borderTop: "1px solid #EDEBE4" }}>
                     <td style={tdStyle}>{f.tiendaNombre}</td>
                     <td style={tdStyle}>{f.tiendaCodigo}</td>
+                    <td style={tdStyle}>{f.semana}</td>
                     <td style={{ ...tdStyle, fontWeight: 600 }}>{f.operario}</td>
                     <td style={tdStyle}>{f.cedula || "—"}</td>
                     <td style={tdStyle}>{fmt(f.festivas)}</td>
