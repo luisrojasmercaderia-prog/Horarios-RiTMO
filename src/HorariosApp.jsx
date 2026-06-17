@@ -147,6 +147,7 @@ export default function HorariosApp() {
             const salidaAuto = calcularSalidaAutomatica(value);
             if (salidaAuto) {
               updated.salida = salidaAuto;
+              updated.horasProgramadas = "7.5";
             }
           }
 
@@ -157,7 +158,7 @@ export default function HorariosApp() {
             }
           }
 
-          if (field === "horasProgramadas" || field === "horasReales" || field === "estado") {
+          if (field === "horasProgramadas" || field === "horasReales" || field === "estado" || field === "llegada") {
             updated.saldo = calcSaldo(updated.horasProgramadas, updated.horasReales);
           }
           return updated;
