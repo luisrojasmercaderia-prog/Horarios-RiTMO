@@ -25,7 +25,7 @@ const emptyEntry = (id) => ({
   observacion: "",
 });
 
-const ROWS_PER_DAY = 8;
+const ROWS_PER_DAY = 5;
 
 const emptyDay = (dia, idStart) => ({
   dia,
