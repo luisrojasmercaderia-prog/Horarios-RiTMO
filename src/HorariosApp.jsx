@@ -9,6 +9,7 @@ const emptyEntry = (id) => ({
   estado: "trabaja",
   fecha: "",
   nombre: "",
+  cedula: "",
   llegada: "",
   salida: "",
   breakInicio: "",
@@ -248,17 +249,20 @@ export default function HorariosApp() {
     days.forEach((d) => {
       d.entries.forEach((e) => {
         const nombre = e.nombre.trim();
-        if (!nombre) return;
-        if (!mapa[nombre]) {
-          mapa[nombre] = { nombre, dominicales: 0, festivas: 0, totalSemanal: 0, nocturnas: 0 };
+        const cedula = e.cedula.trim();
+        if (!nombre && !cedula) return;
+        const clave = cedula || `__sin_cedula__${nombre}`;
+        if (!mapa[clave]) {
+          mapa[clave] = { nombre, cedula, dominicales: 0, festivas: 0, totalSemanal: 0, nocturnas: 0 };
         }
+        if (!mapa[clave].nombre && nombre) mapa[clave].nombre = nombre;
         const reales = parseFloat(e.horasReales) || 0;
         const nocturnas = parseFloat(e.horasNocturnas) || 0;
-        mapa[nombre].totalSemanal += reales;
-        mapa[nombre].nocturnas += nocturnas;
+        mapa[clave].totalSemanal += reales;
+        mapa[clave].nocturnas += nocturnas;
         if (d.dia === "Domingo") {
-          mapa[nombre].dominicales += reales;
-          mapa[nombre].festivas += reales;
+          mapa[clave].dominicales += reales;
+          mapa[clave].festivas += reales;
         }
       });
     });
@@ -363,6 +367,7 @@ export default function HorariosApp() {
                     <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
                       <Th>Mes/Día</Th>
                       <Th>Nombre</Th>
+                      <Th>Cédula</Th>
                       <Th>Estado</Th>
                       <Th>Hora Llegada</Th>
                       <Th>Hora Salida</Th>
@@ -385,6 +390,9 @@ export default function HorariosApp() {
                         </Td>
                         <Td>
                           <input className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} placeholder="Nombre del colaborador" style={{ fontWeight: 600, minWidth: 140 }} />
+                        </Td>
+                        <Td>
+                          <input className="cell-input" value={entry.cedula} onChange={(e) => updateEntry(d.dia, entry.id, "cedula", e.target.value)} placeholder="000-0000000-0" style={{ minWidth: 100 }} />
                         </Td>
                         <Td>
                           <select
@@ -554,6 +562,7 @@ export default function HorariosApp() {
                 <thead>
                   <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
                     <Th>Operario</Th>
+                    <Th>Cédula</Th>
                     <Th>Hrs Dominicales</Th>
                     <Th>Hrs Festivas</Th>
                     <Th>Total Hrs Semanales</Th>
@@ -562,8 +571,9 @@ export default function HorariosApp() {
                 </thead>
                 <tbody>
                   {consolidadoPorOperario.map((op) => (
-                    <tr key={op.nombre} style={{ borderTop: "1px solid #EDEBE4" }}>
-                      <Td style={{ fontWeight: 600 }}>{op.nombre}</Td>
+                    <tr key={op.cedula || op.nombre} style={{ borderTop: "1px solid #EDEBE4" }}>
+                      <Td style={{ fontWeight: 600 }}>{op.nombre || "(Sin nombre)"}</Td>
+                      <Td>{op.cedula || "—"}</Td>
                       <Td>{fmt(op.dominicales)}</Td>
                       <Td>{fmt(op.festivas)}</Td>
                       <Td style={{ fontWeight: 700 }}>{fmt(op.totalSemanal)}</Td>
