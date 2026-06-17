@@ -172,16 +172,19 @@ export default function HorariosApp() {
           @page { size: landscape; margin: 4mm; }
           html, body { width: 100%; height: auto; }
           .print-scale {
-            transform: scale(0.62);
+            transform: scale(0.78);
             transform-origin: top left;
-            width: 161.3%;
+            width: 128.2%;
           }
-          table { font-size: 8px !important; }
+          table { font-size: 9px !important; }
           th, td { padding: 1px 3px !important; }
-          .cell-input { font-size: 8px !important; padding: 1px !important; }
-          h1, .day-title { font-size: 10px !important; }
+          .cell-input { font-size: 9px !important; padding: 1px !important; }
+          h1, .day-title { font-size: 11px !important; }
           .day-block { margin-bottom: 4px !important; }
           .print-table { min-width: 0 !important; }
+          .empty-row { display: none !important; }
+          .day-header { padding: 2px 8px !important; }
+          .sheet { padding: 6px !important; }
         }
         input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
         .cell-input {
@@ -239,7 +242,7 @@ export default function HorariosApp() {
           {/* Days */}
           {days.map((d) => (
             <div key={d.dia} className="day-block" style={{ marginBottom: 22, border: "1px solid #E5E3DC", borderRadius: 8, overflow: "hidden" }}>
-              <div style={{ background: "#E6F7F8", padding: "10px 14px" }}>
+              <div className="day-header" style={{ background: "#E6F7F8", padding: "10px 14px" }}>
                 <span className="day-title" style={{ fontWeight: 700, color: "#1B8388", fontSize: 13.5 }}>{d.dia}</span>
               </div>
 
@@ -264,7 +267,7 @@ export default function HorariosApp() {
                   </thead>
                   <tbody>
                     {d.entries.map((entry) => (
-                      <tr key={entry.id} className="entry-row">
+                      <tr key={entry.id} className={`entry-row ${entry.nombre.trim() === "" ? "empty-row" : ""}`}>
                         <Td>
                           <input className="cell-input" value={entry.fecha} onChange={(e) => updateEntry(d.dia, entry.id, "fecha", e.target.value)} placeholder="06/16" />
                         </Td>
