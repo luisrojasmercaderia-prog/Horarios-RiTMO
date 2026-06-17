@@ -41,6 +41,16 @@ function esNoLaborable(estado) {
   return ["descanso", "incapacitado", "licencia_maternidad", "luto"].includes(estado);
 }
 
+const HORARIOS_PREDETERMINADOS = {
+  "06:00": "14:30",
+  "07:30": "16:00",
+  "13:30": "22:00",
+};
+
+function calcularSalidaAutomatica(horaLlegada) {
+  return HORARIOS_PREDETERMINADOS[horaLlegada] || null;
+}
+
 export default function HorariosApp() {
   const [tienda, setTienda] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -121,6 +131,13 @@ export default function HorariosApp() {
             updated.salida = "";
             updated.breakInicio = "";
             updated.breakFin = "";
+          }
+
+          if (field === "llegada") {
+            const salidaAuto = calcularSalidaAutomatica(value);
+            if (salidaAuto) {
+              updated.salida = salidaAuto;
+            }
           }
 
           if (field === "horasProgramadas" || field === "horasReales" || field === "estado") {
