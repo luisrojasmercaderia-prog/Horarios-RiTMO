@@ -48,8 +48,8 @@ function esNoLaborable(estado) {
 
 const TURNOS_FIJOS = {
   t_inventario_manana: { llegada: "06:00", salida: "14:30", horasProgramadas: "7.5" },
-  domingo_t_manana: { llegada: "07:30", salida: "15:00", horasProgramadas: "6.5" },
-  domingo_t_tarde: { llegada: "12:30", salida: "20:00", horasProgramadas: "6.5" },
+  domingo_t_manana: { llegada: "07:30", salida: "15:00", horasProgramadas: "6.5", breakEditable: true },
+  domingo_t_tarde: { llegada: "12:30", salida: "20:00", horasProgramadas: "6.5", breakEditable: true },
 };
 
 function esTurnoFijo(estado) {
@@ -58,6 +58,13 @@ function esTurnoFijo(estado) {
 
 function estaBloqueado(entry) {
   return esNoLaborable(entry.estado) || esTurnoFijo(entry.estado) || entry.cedula.trim() === "";
+}
+
+function breakBloqueado(entry) {
+  if (esTurnoFijo(entry.estado) && TURNOS_FIJOS[entry.estado].breakEditable) {
+    return esNoLaborable(entry.estado) || entry.cedula.trim() === "";
+  }
+  return estaBloqueado(entry);
 }
 
 const HORARIOS_PREDETERMINADOS = {
@@ -239,9 +246,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           }
 
           if (field === "breakInicio") {
-            const breakFinAuto = sumarUnaHora(value);
-            if (breakFinAuto) {
-              updated.breakFin = breakFinAuto;
+            const turnoConBreakLibre = esTurnoFijo(updated.estado) && TURNOS_FIJOS[updated.estado].breakEditable;
+            if (!turnoConBreakLibre) {
+              const breakFinAuto = sumarUnaHora(value);
+              if (breakFinAuto) {
+                updated.breakFin = breakFinAuto;
+              }
             }
           }
 
@@ -535,10 +545,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           <input disabled={estaBloqueado(entry)} type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={estaBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
+                          <input disabled={breakBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={breakBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={estaBloqueado(entry)} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
+                          <input disabled={breakBloqueado(entry)} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={breakBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
                           <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }} />
