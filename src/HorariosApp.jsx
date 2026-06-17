@@ -167,8 +167,21 @@ export default function HorariosApp() {
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          .sheet { box-shadow: none !important; }
+          .sheet { box-shadow: none !important; padding: 6px !important; }
           body { background: white !important; }
+          @page { size: landscape; margin: 4mm; }
+          html, body { width: 100%; height: auto; }
+          .print-scale {
+            transform: scale(0.62);
+            transform-origin: top left;
+            width: 161.3%;
+          }
+          table { font-size: 8px !important; }
+          th, td { padding: 1px 3px !important; }
+          .cell-input { font-size: 8px !important; padding: 1px !important; }
+          h1, .day-title { font-size: 10px !important; }
+          .day-block { margin-bottom: 4px !important; }
+          .print-table { min-width: 0 !important; }
         }
         input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
         .cell-input {
@@ -203,7 +216,7 @@ export default function HorariosApp() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 28px 60px" }}>
+      <div className="print-scale" style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 28px 60px" }}>
         <div className="sheet" style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 28 }}>
           {/* Header notes */}
           <div style={{ fontSize: 11.5, color: "#6B5A4A", borderBottom: "2px solid #E85D1F", paddingBottom: 14, marginBottom: 18, lineHeight: 1.6 }}>
@@ -225,13 +238,13 @@ export default function HorariosApp() {
 
           {/* Days */}
           {days.map((d) => (
-            <div key={d.dia} style={{ marginBottom: 22, border: "1px solid #E5E3DC", borderRadius: 8, overflow: "hidden" }}>
+            <div key={d.dia} className="day-block" style={{ marginBottom: 22, border: "1px solid #E5E3DC", borderRadius: 8, overflow: "hidden" }}>
               <div style={{ background: "#E6F7F8", padding: "10px 14px" }}>
-                <span style={{ fontWeight: 700, color: "#1B8388", fontSize: 13.5 }}>{d.dia}</span>
+                <span className="day-title" style={{ fontWeight: 700, color: "#1B8388", fontSize: 13.5 }}>{d.dia}</span>
               </div>
 
               <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
+                <table className="print-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
                   <thead>
                     <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
                       <Th>Mes/Día</Th>
