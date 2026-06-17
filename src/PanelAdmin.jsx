@@ -19,14 +19,23 @@ function calcularConsolidadoTienda(datos) {
       if (!nombre && !cedula) return;
       const clave = cedula || `__sin_cedula__${nombre}`;
       if (!mapa[clave]) {
-        mapa[clave] = { nombre, cedula, festivas: 0, nocturnas: 0 };
+        mapa[clave] = { nombre, cedula, festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0 };
       }
       if (!mapa[clave].nombre && nombre) mapa[clave].nombre = nombre;
       const reales = parseFloat(e.horasReales) || 0;
       const nocturnas = parseFloat(e.horasNocturnas) || 0;
+      const saldo = parseFloat(e.saldo) || 0;
+      const esDiaFestivo = d.dia === "Domingo" || e.esFestivo;
       mapa[clave].nocturnas += nocturnas;
-      if (d.dia === "Domingo" || e.esFestivo) {
+      if (esDiaFestivo) {
         mapa[clave].festivas += reales;
+      }
+      if (saldo > 0) {
+        if (esDiaFestivo) {
+          mapa[clave].extrasFestivas += saldo;
+        } else {
+          mapa[clave].extrasNormales += saldo;
+        }
       }
     });
   });
@@ -81,6 +90,8 @@ export default function PanelAdmin() {
               cedula: op.cedula || "",
               festivas: op.festivas,
               nocturnas: op.nocturnas,
+              extrasFestivas: op.extrasFestivas,
+              extrasNormales: op.extrasNormales,
             });
           });
         });
@@ -93,6 +104,8 @@ export default function PanelAdmin() {
             cedula: "",
             festivas: 0,
             nocturnas: 0,
+            extrasFestivas: 0,
+            extrasNormales: 0,
           });
         }
       });
@@ -118,9 +131,11 @@ export default function PanelAdmin() {
       Cédula: f.cedula,
       "Hrs Festivas": Number(fmt(f.festivas)),
       "Hrs Nocturnas": Number(fmt(f.nocturnas)),
+      "Hrs Extras Festivas": Number(fmt(f.extrasFestivas)),
+      "Hrs Extras Normales": Number(fmt(f.extrasNormales)),
     }));
     const hoja = XLSX.utils.json_to_sheet(data);
-    hoja["!cols"] = [{ wch: 22 }, { wch: 16 }, { wch: 12 }, { wch: 26 }, { wch: 16 }, { wch: 14 }, { wch: 14 }];
+    hoja["!cols"] = [{ wch: 22 }, { wch: 16 }, { wch: 12 }, { wch: 26 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 18 }, { wch: 18 }];
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Consolidado General");
     XLSX.writeFile(libro, "Consolidado_General_RITMO.xlsx");
@@ -175,6 +190,8 @@ export default function PanelAdmin() {
                   <th style={thStyle}>Cédula</th>
                   <th style={thStyle}>Hrs Festivas</th>
                   <th style={thStyle}>Hrs Nocturnas</th>
+                  <th style={thStyle}>Extras Festivas</th>
+                  <th style={thStyle}>Extras Normales</th>
                 </tr>
               </thead>
               <tbody>
@@ -187,6 +204,8 @@ export default function PanelAdmin() {
                     <td style={tdStyle}>{f.cedula || "—"}</td>
                     <td style={tdStyle}>{fmt(f.festivas)}</td>
                     <td style={tdStyle}>{fmt(f.nocturnas)}</td>
+                    <td style={tdStyle}>{fmt(f.extrasFestivas)}</td>
+                    <td style={tdStyle}>{fmt(f.extrasNormales)}</td>
                   </tr>
                 ))}
               </tbody>
