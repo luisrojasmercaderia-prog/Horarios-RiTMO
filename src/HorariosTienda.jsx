@@ -95,9 +95,20 @@ function calcularHorasNocturnas(horaSalida) {
   return horas % 1 === 0 ? String(horas) : horas.toFixed(1);
 }
 
-function semanaKeyDesdeFecha(fechaStr) {
-  if (!fechaStr) return "sin-fecha";
-  return fechaStr;
+const SEMANAS = [
+  { key: "semana_1", label: "Semana 1" },
+  { key: "semana_2", label: "Semana 2" },
+  { key: "semana_3", label: "Semana 3" },
+  { key: "semana_4", label: "Semana 4" },
+];
+
+function diasVacios() {
+  let id = 1;
+  return DIAS.map((d) => {
+    const day = emptyDay(d, id);
+    id += ROWS_PER_DAY;
+    return day;
+  });
 }
 
 export default function HorariosTienda({ codigoTienda, onSalir }) {
@@ -105,22 +116,16 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [codigo, setCodigo] = useState(codigoTienda);
   const [fecha, setFecha] = useState("");
   const [supervisor, setSupervisor] = useState("");
-  const [days, setDays] = useState(() => {
-    let id = 1;
-    return DIAS.map((d) => {
-      const day = emptyDay(d, id);
-      id += ROWS_PER_DAY;
-      return day;
-    });
-  });
+  const [days, setDays] = useState(diasVacios);
   const [nextId, setNextId] = useState(DIAS.length * ROWS_PER_DAY + 1);
   const [saveState, setSaveState] = useState("idle");
   const [loaded, setLoaded] = useState(false);
   const [showConsolidado, setShowConsolidado] = useState(false);
-  const [semanaActual, setSemanaActual] = useState("sin-fecha");
+  const [semanaActual, setSemanaActual] = useState("semana_1");
 
   useEffect(() => {
     let activo = true;
+    setLoaded(false);
     (async () => {
       try {
         const { data: tiendaData } = await supabase
@@ -136,7 +141,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           .from("horarios_semana")
           .select("datos")
           .eq("tienda_codigo", codigoTienda)
-          .eq("semana_fecha", "sin-fecha")
+          .eq("semana_fecha", semanaActual)
           .maybeSingle();
 
         if (!activo) return;
@@ -146,19 +151,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           if (saved.tienda) setTienda(saved.tienda);
           setFecha(saved.fecha || "");
           setSupervisor(saved.supervisor || "");
-          setDays(
-            saved.days && saved.days.length
-              ? saved.days
-              : (() => {
-                  let id = 1;
-                  return DIAS.map((d) => {
-                    const day = emptyDay(d, id);
-                    id += ROWS_PER_DAY;
-                    return day;
-                  });
-                })()
-          );
+          setDays(saved.days && saved.days.length ? saved.days : diasVacios());
           setNextId(saved.nextId || DIAS.length * ROWS_PER_DAY + 1);
+        } else {
+          setFecha("");
+          setSupervisor("");
+          setDays(diasVacios());
+          setNextId(DIAS.length * ROWS_PER_DAY + 1);
         }
       } catch (e) {
         // sin datos previos, se continua con valores vacios
@@ -169,9 +168,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     return () => {
       activo = false;
     };
-  }, [codigoTienda]);
+  }, [codigoTienda, semanaActual]);
 
-  const persist = useCallback(async (state) => {
+  const persist = useCallback(async (state, semanaKey) => {
     setSaveState("saving");
     try {
       const { error } = await supabase
@@ -179,7 +178,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         .upsert(
           {
             tienda_codigo: codigoTienda,
-            semana_fecha: "sin-fecha",
+            semana_fecha: semanaKey,
             datos: state,
             updated_at: new Date().toISOString(),
           },
@@ -195,10 +194,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   useEffect(() => {
     if (!loaded) return;
     const t = setTimeout(() => {
-      persist({ tienda, codigo, fecha, supervisor, days, nextId });
+      persist({ tienda, codigo, fecha, supervisor, days, nextId }, semanaActual);
     }, 600);
     return () => clearTimeout(t);
-  }, [tienda, codigo, fecha, supervisor, days, nextId, loaded, persist]);
+  }, [tienda, codigo, fecha, supervisor, days, nextId, loaded, persist, semanaActual]);
 
   const updateEntry = (dia, entryId, field, value) => {
     setDays((prev) =>
@@ -329,7 +328,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     hoja["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 16 }];
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Consolidado");
-    const nombreArchivo = `Consolidado_${tienda || "Tienda"}_${fecha || "sin_fecha"}.xlsx`.replace(/\s+/g, "_");
+    const nombreArchivo = `Consolidado_${tienda || "Tienda"}_${semanaActual}_${fecha || "sin_fecha"}.xlsx`.replace(/\s+/g, "_");
     XLSX.writeFile(libro, nombreArchivo);
   };
 
@@ -382,6 +381,28 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             <div style={{ fontSize: 20, fontWeight: 700 }}>Programación de Horarios Semanales</div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <select
+              value={semanaActual}
+              onChange={(e) => setSemanaActual(e.target.value)}
+              className="no-print"
+              style={{
+                border: "none",
+                borderRadius: 7,
+                padding: "8px 12px",
+                fontSize: 13,
+                fontWeight: 600,
+                fontFamily: "inherit",
+                background: "#FFFFFF",
+                color: "#E85D1F",
+                cursor: "pointer",
+              }}
+            >
+              {SEMANAS.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
             <SaveIndicator state={saveState} />
             <button onClick={() => setShowConsolidado(true)} className="no-print" style={btnStyle("#FFFFFF", "#E85D1F")}>
               <Clock size={15} /> Consolidado
