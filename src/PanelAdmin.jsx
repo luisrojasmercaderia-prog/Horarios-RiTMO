@@ -17,12 +17,11 @@ function calcularConsolidadoTienda(datos) {
     (d.entries || []).forEach((e) => {
       const nombre = (e.nombre || "").trim();
       const cedula = (e.cedula || "").trim();
-      if (!nombre && !cedula) return;
-      const clave = cedula || `__sin_cedula__${nombre}`;
+      if (!nombre || !cedula) return;
+      const clave = cedula;
       if (!mapa[clave]) {
         mapa[clave] = { nombre, cedula, festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0 };
       }
-      if (!mapa[clave].nombre && nombre) mapa[clave].nombre = nombre;
       const reales = parseFloat(e.horasReales) || 0;
       const nocturnas = parseFloat(e.horasNocturnas) || 0;
       const saldo = parseFloat(e.saldo) || 0;
