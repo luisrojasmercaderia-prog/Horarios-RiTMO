@@ -115,12 +115,12 @@ export default function HorariosApp() {
           let updated = { ...e, [field]: value };
 
           if (field === "estado" && esNoLaborable(value)) {
-            updated.horasProgramadas = "0";
-            updated.horasReales = "0";
-            updated.llegada = "00:00";
-            updated.salida = "00:00";
-            updated.breakInicio = "00:00";
-            updated.breakFin = "00:00";
+            updated.horasProgramadas = "";
+            updated.horasReales = "";
+            updated.llegada = "";
+            updated.salida = "";
+            updated.breakInicio = "";
+            updated.breakFin = "";
           }
 
           if (field === "horasProgramadas" || field === "horasReales" || field === "estado") {
