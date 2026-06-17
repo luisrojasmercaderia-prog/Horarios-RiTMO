@@ -117,6 +117,10 @@ export default function HorariosApp() {
           if (field === "estado" && esNoLaborable(value)) {
             updated.horasProgramadas = "0";
             updated.horasReales = "0";
+            updated.llegada = "00:00";
+            updated.salida = "00:00";
+            updated.breakInicio = "00:00";
+            updated.breakFin = "00:00";
           }
 
           if (field === "horasProgramadas" || field === "horasReales" || field === "estado") {
