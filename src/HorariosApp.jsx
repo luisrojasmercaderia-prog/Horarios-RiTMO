@@ -107,6 +107,7 @@ export default function HorariosApp() {
   const [nextId, setNextId] = useState(DIAS.length * ROWS_PER_DAY + 1);
   const [saveState, setSaveState] = useState("idle");
   const [loaded, setLoaded] = useState(false);
+  const [showConsolidado, setShowConsolidado] = useState(false);
 
   useEffect(() => {
     try {
@@ -242,6 +243,33 @@ export default function HorariosApp() {
 
   const handlePrint = () => window.print();
 
+  const consolidadoPorOperario = (() => {
+    const mapa = {};
+    days.forEach((d) => {
+      d.entries.forEach((e) => {
+        const nombre = e.nombre.trim();
+        if (!nombre) return;
+        if (!mapa[nombre]) {
+          mapa[nombre] = { nombre, dominicales: 0, festivas: 0, totalSemanal: 0, nocturnas: 0 };
+        }
+        const reales = parseFloat(e.horasReales) || 0;
+        const nocturnas = parseFloat(e.horasNocturnas) || 0;
+        mapa[nombre].totalSemanal += reales;
+        mapa[nombre].nocturnas += nocturnas;
+        if (d.dia === "Domingo") {
+          mapa[nombre].dominicales += reales;
+          mapa[nombre].festivas += reales;
+        }
+      });
+    });
+    return Object.values(mapa).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  })();
+
+  const fmt = (n) => {
+    const r = Math.round(n * 100) / 100;
+    return Number.isInteger(r) ? String(r) : String(r);
+  };
+
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#FFF6EE", minHeight: "100vh", color: "#241C14" }}>
       <style>{`
@@ -292,6 +320,9 @@ export default function HorariosApp() {
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <SaveIndicator state={saveState} />
+            <button onClick={() => setShowConsolidado(true)} className="no-print" style={btnStyle("#FFFFFF", "#E85D1F")}>
+              <Clock size={15} /> Consolidado
+            </button>
             <button onClick={handlePrint} style={btnStyle("#3FBFC4", "#FFFFFF")}>
               <Printer size={15} /> Imprimir
             </button>
@@ -477,6 +508,74 @@ export default function HorariosApp() {
           </div>
         </div>
       </div>
+
+      {showConsolidado && (
+        <div
+          className="no-print"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(36,28,20,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+            padding: 20,
+          }}
+          onClick={() => setShowConsolidado(false)}
+        >
+          <div
+            style={{
+              background: "white",
+              borderRadius: 10,
+              padding: 24,
+              maxWidth: 720,
+              width: "100%",
+              maxHeight: "85vh",
+              overflowY: "auto",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#E85D1F" }}>Consolidado Semanal por Operario</div>
+              <button onClick={() => setShowConsolidado(false)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 18, color: "#5C5F5A" }}>
+                ✕
+              </button>
+            </div>
+
+            {consolidadoPorOperario.length === 0 ? (
+              <div style={{ fontSize: 13, color: "#5C5F5A" }}>No hay colaboradores con datos registrados todavía.</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                    <Th>Operario</Th>
+                    <Th>Hrs Dominicales</Th>
+                    <Th>Hrs Festivas</Th>
+                    <Th>Total Hrs Semanales</Th>
+                    <Th>Hrs Nocturnas</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {consolidadoPorOperario.map((op) => (
+                    <tr key={op.nombre} style={{ borderTop: "1px solid #EDEBE4" }}>
+                      <Td style={{ fontWeight: 600 }}>{op.nombre}</Td>
+                      <Td>{fmt(op.dominicales)}</Td>
+                      <Td>{fmt(op.festivas)}</Td>
+                      <Td style={{ fontWeight: 700 }}>{fmt(op.totalSemanal)}</Td>
+                      <Td>{fmt(op.nocturnas)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
