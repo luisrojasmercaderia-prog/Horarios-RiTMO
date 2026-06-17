@@ -310,7 +310,18 @@ export default function HorariosApp() {
                           </select>
                         </Td>
                         <Td>
-                          <input disabled={esNoLaborable(entry.estado)} type="time" className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)} style={esNoLaborable(entry.estado) ? disabledCellStyle : undefined} />
+                          <select
+                            disabled={esNoLaborable(entry.estado)}
+                            className="cell-input"
+                            value={entry.llegada}
+                            onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
+                            style={{ cursor: "pointer", ...(esNoLaborable(entry.estado) ? disabledCellStyle : {}) }}
+                          >
+                            <option value="">--:-- --</option>
+                            <option value="06:00">6:00 AM</option>
+                            <option value="07:30">7:30 AM</option>
+                            <option value="13:30">1:30 PM</option>
+                          </select>
                         </Td>
                         <Td>
                           <input disabled={esNoLaborable(entry.estado)} type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} style={esNoLaborable(entry.estado) ? disabledCellStyle : undefined} />
