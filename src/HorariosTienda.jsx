@@ -530,25 +530,32 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           <input className="cell-input" value={entry.fecha} onChange={(e) => updateEntry(d.dia, entry.id, "fecha", e.target.value)} placeholder="06/16" />
                         </Td>
                         <Td>
-                          <input
+                          <select
                             className="cell-input"
-                            list="lista-empleados-nombres"
                             value={entry.nombre}
                             onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)}
-                            placeholder="Nombre del colaborador"
-                            style={{ fontWeight: 600, minWidth: 140 }}
-                          />
+                            style={{ fontWeight: 600, minWidth: 140, cursor: "pointer" }}
+                          >
+                            <option value="">Seleccionar...</option>
+                            {empleados.map((emp) => (
+                              <option key={emp.id} value={emp.nombre}>
+                                {emp.nombre}
+                              </option>
+                            ))}
+                          </select>
                         </Td>
                         <Td>
                           <input
                             className="cell-input"
-                            list="lista-empleados-cedulas"
                             value={entry.cedula}
-                            onChange={(e) => updateEntry(d.dia, entry.id, "cedula", e.target.value)}
-                            placeholder="Requerida para habilitar fila"
+                            readOnly
+                            placeholder="Selecciona un nombre"
                             style={{
                               minWidth: 100,
-                              ...(entry.cedula.trim() === "" ? { background: "#FCEBEB", borderRadius: 4 } : {}),
+                              background: entry.cedula.trim() === "" ? "#FCEBEB" : "#F2EFE9",
+                              borderRadius: 4,
+                              color: "#5C5F5A",
+                              cursor: "default",
                             }}
                           />
                         </Td>
@@ -778,17 +785,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           </div>
         </div>
       )}
-
-      <datalist id="lista-empleados-nombres">
-        {empleados.map((emp) => (
-          <option key={emp.id} value={emp.nombre} />
-        ))}
-      </datalist>
-      <datalist id="lista-empleados-cedulas">
-        {empleados.map((emp) => (
-          <option key={emp.id} value={emp.cedula} />
-        ))}
-      </datalist>
 
       {showEmpleados && (
         <ModalEmpleados
