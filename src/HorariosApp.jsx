@@ -563,7 +563,6 @@ export default function HorariosApp() {
                   <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
                     <Th>Operario</Th>
                     <Th>Cédula</Th>
-                    <Th>Hrs Dominicales</Th>
                     <Th>Hrs Festivas</Th>
                     <Th>Hrs Nocturnas</Th>
                   </tr>
@@ -573,7 +572,6 @@ export default function HorariosApp() {
                     <tr key={op.cedula || op.nombre} style={{ borderTop: "1px solid #EDEBE4" }}>
                       <Td style={{ fontWeight: 600 }}>{op.nombre || "(Sin nombre)"}</Td>
                       <Td>{op.cedula || "—"}</Td>
-                      <Td>{fmt(op.dominicales)}</Td>
                       <Td>{fmt(op.festivas)}</Td>
                       <Td>{fmt(op.nocturnas)}</Td>
                     </tr>
