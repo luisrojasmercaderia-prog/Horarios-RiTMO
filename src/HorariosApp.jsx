@@ -565,7 +565,6 @@ export default function HorariosApp() {
                     <Th>Cédula</Th>
                     <Th>Hrs Dominicales</Th>
                     <Th>Hrs Festivas</Th>
-                    <Th>Total Hrs Semanales</Th>
                     <Th>Hrs Nocturnas</Th>
                   </tr>
                 </thead>
@@ -576,7 +575,6 @@ export default function HorariosApp() {
                       <Td>{op.cedula || "—"}</Td>
                       <Td>{fmt(op.dominicales)}</Td>
                       <Td>{fmt(op.festivas)}</Td>
-                      <Td style={{ fontWeight: 700 }}>{fmt(op.totalSemanal)}</Td>
                       <Td>{fmt(op.nocturnas)}</Td>
                     </tr>
                   ))}
