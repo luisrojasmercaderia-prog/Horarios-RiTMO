@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, RefreshCw, FileSpreadsheet, Loader2, Store } from "lucide-react";
+import { ShieldCheck, RefreshCw, FileSpreadsheet, Loader2, Store, BarChart3 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "./supabaseClient";
 import HorariosTienda from "./HorariosTienda";
 
@@ -123,6 +124,31 @@ export default function PanelAdmin() {
     cargarDatos();
   }, []);
 
+  const totalesPorTienda = (() => {
+    const mapa = {};
+    filas.forEach((f) => {
+      if (!mapa[f.tiendaCodigo]) {
+        mapa[f.tiendaCodigo] = { tienda: f.tiendaNombre, extrasNormales: 0, extrasFestivas: 0, nocturnas: 0 };
+      }
+      mapa[f.tiendaCodigo].extrasNormales += f.extrasNormales;
+      mapa[f.tiendaCodigo].extrasFestivas += f.extrasFestivas;
+      mapa[f.tiendaCodigo].nocturnas += f.nocturnas;
+    });
+    return Object.values(mapa);
+  })();
+
+  const datosExtrasNormales = [...totalesPorTienda]
+    .sort((a, b) => b.extrasNormales - a.extrasNormales)
+    .map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.extrasNormales)) }));
+
+  const datosExtrasFestivas = [...totalesPorTienda]
+    .sort((a, b) => b.extrasFestivas - a.extrasFestivas)
+    .map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.extrasFestivas)) }));
+
+  const datosNocturnas = [...totalesPorTienda]
+    .sort((a, b) => b.nocturnas - a.nocturnas)
+    .map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.nocturnas)) }));
+
   const exportarExcel = () => {
     const data = filas.map((f) => ({
       Tienda: f.tiendaNombre,
@@ -162,6 +188,14 @@ export default function PanelAdmin() {
       </div>
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 28px 60px" }}>
+        {!cargando && !error && totalesPorTienda.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginBottom: 24 }}>
+            <GraficaBarras titulo="Mayor horas extras normales" datos={datosExtrasNormales} color="#3FBFC4" />
+            <GraficaBarras titulo="Mayor horas festivas / dominicales" datos={datosExtrasFestivas} color="#E85D1F" />
+            <GraficaBarras titulo="Mayor horas nocturnas" datos={datosNocturnas} color="#7C5CFF" />
+          </div>
+        )}
+
         <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 24 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "#E85D1F", marginBottom: 16 }}>Consolidado por tienda</div>
 
@@ -294,6 +328,29 @@ export default function PanelAdmin() {
 
 const thStyle = { padding: "9px 8px", textAlign: "left", fontWeight: 600 };
 const tdStyle = { padding: "8px", fontSize: 12.5, verticalAlign: "middle" };
+
+function GraficaBarras({ titulo, datos, color }) {
+  return (
+    <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, color: "#241C14", fontWeight: 700, fontSize: 13 }}>
+        <BarChart3 size={15} color={color} /> {titulo}
+      </div>
+      {datos.every((d) => d.valor === 0) ? (
+        <div style={{ fontSize: 12.5, color: "#5C5F5A" }}>Todavía no hay horas registradas para graficar.</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={Math.max(160, datos.length * 34)}>
+          <BarChart data={datos} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#EDEBE4" />
+            <XAxis type="number" tick={{ fontSize: 11, fill: "#5C5F5A" }} />
+            <YAxis type="category" dataKey="tienda" width={110} tick={{ fontSize: 11, fill: "#241C14" }} />
+            <Tooltip formatter={(value) => [`${value} h`, "Horas"]} />
+            <Bar dataKey="valor" fill={color} radius={[0, 4, 4, 0]} barSize={16} />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
+}
 
 function btnStyle(bg, color) {
   return {
