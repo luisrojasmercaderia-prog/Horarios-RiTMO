@@ -135,24 +135,21 @@ export default function PanelAdmin() {
     return Object.values(mapa);
   })();
 
-  const totalesPorOperarioTienda = (() => {
+  const totalTiendaSeleccionada = (() => {
     if (!tiendaSeleccionada) return [];
-    const mapa = {};
+    const nombreTienda = listaTiendas.find((t) => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada;
+    const total = { tienda: nombreTienda, extrasNormales: 0, extrasFestivas: 0, nocturnas: 0 };
     filas
       .filter((f) => f.tiendaCodigo === tiendaSeleccionada)
       .forEach((f) => {
-        const clave = f.cedula || `__sin_cedula__${f.operario}`;
-        if (!mapa[clave]) {
-          mapa[clave] = { tienda: f.operario, extrasNormales: 0, extrasFestivas: 0, nocturnas: 0 };
-        }
-        mapa[clave].extrasNormales += f.extrasNormales;
-        mapa[clave].extrasFestivas += f.extrasFestivas;
-        mapa[clave].nocturnas += f.nocturnas;
+        total.extrasNormales += f.extrasNormales;
+        total.extrasFestivas += f.extrasFestivas;
+        total.nocturnas += f.nocturnas;
       });
-    return Object.values(mapa);
+    return [total];
   })();
 
-  const totalesParaGraficas = tiendaSeleccionada ? totalesPorOperarioTienda : totalesPorTienda;
+  const totalesParaGraficas = tiendaSeleccionada ? totalTiendaSeleccionada : totalesPorTienda;
 
   const datosExtrasNormales = [...totalesParaGraficas]
     .sort((a, b) => b.extrasNormales - a.extrasNormales)
@@ -297,17 +294,17 @@ export default function PanelAdmin() {
         {!cargando && !error && totalesParaGraficas.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginTop: 24 }}>
             <GraficaBarras
-              titulo={tiendaSeleccionada ? "Mayor horas extras normales (por operario)" : "Mayor horas extras normales"}
+              titulo={tiendaSeleccionada ? "Horas extras normales (total de la tienda)" : "Mayor horas extras normales"}
               datos={datosExtrasNormales}
               color="#3FBFC4"
             />
             <GraficaBarras
-              titulo={tiendaSeleccionada ? "Mayor horas festivas / dominicales (por operario)" : "Mayor horas festivas / dominicales"}
+              titulo={tiendaSeleccionada ? "Horas festivas / dominicales (total de la tienda)" : "Mayor horas festivas / dominicales"}
               datos={datosExtrasFestivas}
               color="#E85D1F"
             />
             <GraficaBarras
-              titulo={tiendaSeleccionada ? "Mayor horas nocturnas (por operario)" : "Mayor horas nocturnas"}
+              titulo={tiendaSeleccionada ? "Horas nocturnas (total de la tienda)" : "Mayor horas nocturnas"}
               datos={datosNocturnas}
               color="#7C5CFF"
             />
