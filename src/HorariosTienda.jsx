@@ -294,18 +294,23 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         if (!nombre && !cedula) return;
         const clave = cedula || `__sin_cedula__${nombre}`;
         if (!mapa[clave]) {
-          mapa[clave] = { nombre, cedula, dominicales: 0, festivas: 0, totalSemanal: 0, nocturnas: 0 };
+          mapa[clave] = { nombre, cedula, festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0 };
         }
         if (!mapa[clave].nombre && nombre) mapa[clave].nombre = nombre;
         const reales = parseFloat(e.horasReales) || 0;
         const nocturnas = parseFloat(e.horasNocturnas) || 0;
-        mapa[clave].totalSemanal += reales;
+        const saldo = parseFloat(e.saldo) || 0;
+        const esDiaFestivo = d.dia === "Domingo" || e.esFestivo;
         mapa[clave].nocturnas += nocturnas;
-        if (d.dia === "Domingo") {
-          mapa[clave].dominicales += reales;
-        }
-        if (d.dia === "Domingo" || e.esFestivo) {
+        if (esDiaFestivo) {
           mapa[clave].festivas += reales;
+        }
+        if (saldo > 0) {
+          if (esDiaFestivo) {
+            mapa[clave].extrasFestivas += saldo;
+          } else {
+            mapa[clave].extrasNormales += saldo;
+          }
         }
       });
     });
@@ -323,9 +328,11 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       Cédula: op.cedula || "",
       "Hrs Festivas": Number(fmt(op.festivas)),
       "Hrs Nocturnas": Number(fmt(op.nocturnas)),
+      "Hrs Extras Festivas": Number(fmt(op.extrasFestivas)),
+      "Hrs Extras Normales": Number(fmt(op.extrasNormales)),
     }));
     const hoja = XLSX.utils.json_to_sheet(filas);
-    hoja["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 16 }];
+    hoja["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 18 }];
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Consolidado");
     const nombreArchivo = `Consolidado_${tienda || "Tienda"}_${semanaActual}_${fecha || "sin_fecha"}.xlsx`.replace(/\s+/g, "_");
@@ -679,6 +686,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                     <Th>Cédula</Th>
                     <Th>Hrs Festivas</Th>
                     <Th>Hrs Nocturnas</Th>
+                    <Th>Extras Festivas</Th>
+                    <Th>Extras Normales</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -688,6 +697,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <Td>{op.cedula || "—"}</Td>
                       <Td>{fmt(op.festivas)}</Td>
                       <Td>{fmt(op.nocturnas)}</Td>
+                      <Td>{fmt(op.extrasFestivas)}</Td>
+                      <Td>{fmt(op.extrasNormales)}</Td>
                     </tr>
                   ))}
                 </tbody>
