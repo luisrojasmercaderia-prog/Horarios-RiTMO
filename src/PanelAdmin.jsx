@@ -48,6 +48,7 @@ export default function PanelAdmin() {
   const [filas, setFilas] = useState([]);
   const [listaTiendas, setListaTiendas] = useState([]);
   const [tiendaSeleccionada, setTiendaSeleccionada] = useState("");
+  const [tiendaConsolidadoVer, setTiendaConsolidadoVer] = useState("");
 
   const cargarDatos = async () => {
     setCargando(true);
@@ -162,7 +163,7 @@ export default function PanelAdmin() {
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 28px 60px" }}>
         <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 24 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#E85D1F", marginBottom: 16 }}>Consolidado de todas las tiendas</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#E85D1F", marginBottom: 16 }}>Consolidado por tienda</div>
 
           {cargando && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#5C5F5A", fontSize: 13 }}>
@@ -175,42 +176,79 @@ export default function PanelAdmin() {
             <div style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 13, padding: "10px 12px", borderRadius: 6 }}>{error}</div>
           )}
 
-          {!cargando && !error && filas.length === 0 && (
+          {!cargando && !error && listaTiendas.length === 0 && (
             <div style={{ fontSize: 13, color: "#5C5F5A" }}>Todavía no hay tiendas registradas.</div>
           )}
 
-          {!cargando && !error && filas.length > 0 && (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
-                  <th style={thStyle}>Tienda</th>
-                  <th style={thStyle}>Código</th>
-                  <th style={thStyle}>Semana</th>
-                  <th style={thStyle}>Operario</th>
-                  <th style={thStyle}>Cédula</th>
-                  <th style={thStyle}>Hrs Festivas</th>
-                  <th style={thStyle}>Hrs Nocturnas</th>
-                  <th style={thStyle}>Extras Festivas</th>
-                  <th style={thStyle}>Extras Normales</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filas.map((f, i) => (
-                  <tr key={`${f.tiendaCodigo}-${f.semana}-${f.cedula || f.operario}-${i}`} style={{ borderTop: "1px solid #EDEBE4" }}>
-                    <td style={tdStyle}>{f.tiendaNombre}</td>
-                    <td style={tdStyle}>{f.tiendaCodigo}</td>
-                    <td style={tdStyle}>{f.semana}</td>
-                    <td style={{ ...tdStyle, fontWeight: 600 }}>{f.operario}</td>
-                    <td style={tdStyle}>{f.cedula || "—"}</td>
-                    <td style={tdStyle}>{fmt(f.festivas)}</td>
-                    <td style={tdStyle}>{fmt(f.nocturnas)}</td>
-                    <td style={tdStyle}>{fmt(f.extrasFestivas)}</td>
-                    <td style={tdStyle}>{fmt(f.extrasNormales)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {!cargando && !error && listaTiendas.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {listaTiendas.map((t) => {
+                const activo = tiendaConsolidadoVer === t.codigo;
+                return (
+                  <button
+                    key={t.codigo}
+                    onClick={() => setTiendaConsolidadoVer(activo ? "" : t.codigo)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: activo ? "#E85D1F" : "#FFF6EE",
+                      color: activo ? "#FFFFFF" : "#E85D1F",
+                      border: "1px solid #E85D1F",
+                      borderRadius: 7,
+                      padding: "9px 14px",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    <Store size={14} /> {t.nombre} ({t.codigo})
+                  </button>
+                );
+              })}
+            </div>
           )}
+
+          {tiendaConsolidadoVer && (() => {
+            const filasTienda = filas.filter((f) => f.tiendaCodigo === tiendaConsolidadoVer);
+            const nombreTienda = listaTiendas.find((t) => t.codigo === tiendaConsolidadoVer)?.nombre || tiendaConsolidadoVer;
+            return (
+              <div style={{ marginTop: 18, borderTop: "1px solid #EDEBE4", paddingTop: 18 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>{nombreTienda}</div>
+                {filasTienda.length === 0 ? (
+                  <div style={{ fontSize: 13, color: "#5C5F5A" }}>Sin datos registrados todavía.</div>
+                ) : (
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                        <th style={thStyle}>Semana</th>
+                        <th style={thStyle}>Operario</th>
+                        <th style={thStyle}>Cédula</th>
+                        <th style={thStyle}>Hrs Festivas</th>
+                        <th style={thStyle}>Hrs Nocturnas</th>
+                        <th style={thStyle}>Extras Festivas</th>
+                        <th style={thStyle}>Extras Normales</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filasTienda.map((f, i) => (
+                        <tr key={`${f.semana}-${f.cedula || f.operario}-${i}`} style={{ borderTop: "1px solid #EDEBE4" }}>
+                          <td style={tdStyle}>{f.semana}</td>
+                          <td style={{ ...tdStyle, fontWeight: 600 }}>{f.operario}</td>
+                          <td style={tdStyle}>{f.cedula || "—"}</td>
+                          <td style={tdStyle}>{fmt(f.festivas)}</td>
+                          <td style={tdStyle}>{fmt(f.nocturnas)}</td>
+                          <td style={tdStyle}>{fmt(f.extrasFestivas)}</td>
+                          <td style={tdStyle}>{fmt(f.extrasNormales)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 24, marginTop: 24 }}>
