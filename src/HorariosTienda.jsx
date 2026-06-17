@@ -48,6 +48,8 @@ function esNoLaborable(estado) {
 
 const TURNOS_FIJOS = {
   t_inventario_manana: { llegada: "06:00", salida: "14:30", horasProgramadas: "7.5" },
+  domingo_t_manana: { llegada: "07:30", salida: "15:00", horasProgramadas: "6.5" },
+  domingo_t_tarde: { llegada: "12:30", salida: "20:00", horasProgramadas: "6.5" },
 };
 
 function esTurnoFijo(estado) {
@@ -506,6 +508,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           >
                             <option value="trabaja">Trabaja</option>
                             <option value="t_inventario_manana">T.Inventario mañana</option>
+                            <option value="domingo_t_manana">Domingo T. mañana</option>
+                            <option value="domingo_t_tarde">Domingo T. tarde</option>
                             <option value="descanso">Descanso</option>
                             <option value="incapacitado">Incapacitado</option>
                             <option value="licencia_maternidad">Licencia de maternidad</option>
