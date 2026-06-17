@@ -49,7 +49,6 @@ export default function PanelAdmin() {
   const [filas, setFilas] = useState([]);
   const [listaTiendas, setListaTiendas] = useState([]);
   const [tiendaSeleccionada, setTiendaSeleccionada] = useState("");
-  const [tiendaConsolidadoVer, setTiendaConsolidadoVer] = useState("");
 
   const cargarDatos = async () => {
     setCargando(true);
@@ -137,15 +136,34 @@ export default function PanelAdmin() {
     return Object.values(mapa);
   })();
 
-  const datosExtrasNormales = [...totalesPorTienda]
+  const totalesPorOperarioTienda = (() => {
+    if (!tiendaSeleccionada) return [];
+    const mapa = {};
+    filas
+      .filter((f) => f.tiendaCodigo === tiendaSeleccionada)
+      .forEach((f) => {
+        const clave = f.cedula || `__sin_cedula__${f.operario}`;
+        if (!mapa[clave]) {
+          mapa[clave] = { tienda: f.operario, extrasNormales: 0, extrasFestivas: 0, nocturnas: 0 };
+        }
+        mapa[clave].extrasNormales += f.extrasNormales;
+        mapa[clave].extrasFestivas += f.extrasFestivas;
+        mapa[clave].nocturnas += f.nocturnas;
+      });
+    return Object.values(mapa);
+  })();
+
+  const totalesParaGraficas = tiendaSeleccionada ? totalesPorOperarioTienda : totalesPorTienda;
+
+  const datosExtrasNormales = [...totalesParaGraficas]
     .sort((a, b) => b.extrasNormales - a.extrasNormales)
     .map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.extrasNormales)) }));
 
-  const datosExtrasFestivas = [...totalesPorTienda]
+  const datosExtrasFestivas = [...totalesParaGraficas]
     .sort((a, b) => b.extrasFestivas - a.extrasFestivas)
     .map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.extrasFestivas)) }));
 
-  const datosNocturnas = [...totalesPorTienda]
+  const datosNocturnas = [...totalesParaGraficas]
     .sort((a, b) => b.nocturnas - a.nocturnas)
     .map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.nocturnas)) }));
 
@@ -209,11 +227,11 @@ export default function PanelAdmin() {
           {!cargando && !error && listaTiendas.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
               {listaTiendas.map((t) => {
-                const activo = tiendaConsolidadoVer === t.codigo;
+                const activo = tiendaSeleccionada === t.codigo;
                 return (
                   <button
                     key={t.codigo}
-                    onClick={() => setTiendaConsolidadoVer(activo ? "" : t.codigo)}
+                    onClick={() => setTiendaSeleccionada(activo ? "" : t.codigo)}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -236,9 +254,9 @@ export default function PanelAdmin() {
             </div>
           )}
 
-          {tiendaConsolidadoVer && (() => {
-            const filasTienda = filas.filter((f) => f.tiendaCodigo === tiendaConsolidadoVer);
-            const nombreTienda = listaTiendas.find((t) => t.codigo === tiendaConsolidadoVer)?.nombre || tiendaConsolidadoVer;
+          {tiendaSeleccionada && (() => {
+            const filasTienda = filas.filter((f) => f.tiendaCodigo === tiendaSeleccionada);
+            const nombreTienda = listaTiendas.find((t) => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada;
             return (
               <div style={{ marginTop: 18, borderTop: "1px solid #EDEBE4", paddingTop: 18 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>{nombreTienda}</div>
@@ -277,42 +295,23 @@ export default function PanelAdmin() {
           })()}
         </div>
 
-        <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 24, marginTop: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-            <Store size={16} color="#E85D1F" />
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#E85D1F" }}>Ver planilla de una tienda</div>
-          </div>
-
-          <select
-            value={tiendaSeleccionada}
-            onChange={(e) => setTiendaSeleccionada(e.target.value)}
-            style={{
-              border: "1px solid #DEDBD2",
-              borderRadius: 6,
-              padding: "9px 11px",
-              fontSize: 13.5,
-              fontFamily: "inherit",
-              background: "#FAFAF8",
-              outline: "none",
-              color: "#241C14",
-              minWidth: 260,
-              cursor: "pointer",
-            }}
-          >
-            <option value="">Selecciona una tienda...</option>
-            {listaTiendas.map((t) => (
-              <option key={t.codigo} value={t.codigo}>
-                {t.nombre} ({t.codigo})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {!cargando && !error && totalesPorTienda.length > 0 && (
+        {!cargando && !error && totalesParaGraficas.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginTop: 24 }}>
-            <GraficaBarras titulo="Mayor horas extras normales" datos={datosExtrasNormales} color="#3FBFC4" />
-            <GraficaBarras titulo="Mayor horas festivas / dominicales" datos={datosExtrasFestivas} color="#E85D1F" />
-            <GraficaBarras titulo="Mayor horas nocturnas" datos={datosNocturnas} color="#7C5CFF" />
+            <GraficaBarras
+              titulo={tiendaSeleccionada ? "Mayor horas extras normales (por operario)" : "Mayor horas extras normales"}
+              datos={datosExtrasNormales}
+              color="#3FBFC4"
+            />
+            <GraficaBarras
+              titulo={tiendaSeleccionada ? "Mayor horas festivas / dominicales (por operario)" : "Mayor horas festivas / dominicales"}
+              datos={datosExtrasFestivas}
+              color="#E85D1F"
+            />
+            <GraficaBarras
+              titulo={tiendaSeleccionada ? "Mayor horas nocturnas (por operario)" : "Mayor horas nocturnas"}
+              datos={datosNocturnas}
+              color="#7C5CFF"
+            />
           </div>
         )}
       </div>
