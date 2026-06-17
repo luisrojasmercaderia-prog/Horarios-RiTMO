@@ -41,6 +41,18 @@ function esNoLaborable(estado) {
   return ["descanso", "incapacitado", "licencia_maternidad", "luto"].includes(estado);
 }
 
+const TURNOS_FIJOS = {
+  t_inventario_manana: { llegada: "06:00", salida: "14:30", horasProgramadas: "7.5" },
+};
+
+function esTurnoFijo(estado) {
+  return Object.prototype.hasOwnProperty.call(TURNOS_FIJOS, estado);
+}
+
+function estaBloqueado(estado) {
+  return esNoLaborable(estado) || esTurnoFijo(estado);
+}
+
 const HORARIOS_PREDETERMINADOS = {
   "06:00": "14:30",
   "07:30": "16:00",
@@ -139,6 +151,16 @@ export default function HorariosApp() {
             updated.horasReales = "";
             updated.llegada = "";
             updated.salida = "";
+            updated.breakInicio = "";
+            updated.breakFin = "";
+          }
+
+          if (field === "estado" && esTurnoFijo(value)) {
+            const turno = TURNOS_FIJOS[value];
+            updated.llegada = turno.llegada;
+            updated.salida = turno.salida;
+            updated.horasProgramadas = turno.horasProgramadas;
+            updated.horasReales = "";
             updated.breakInicio = "";
             updated.breakFin = "";
           }
@@ -316,11 +338,12 @@ export default function HorariosApp() {
                             onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
                             style={{
                               cursor: "pointer",
-                              fontWeight: esNoLaborable(entry.estado) ? 700 : 400,
-                              color: esNoLaborable(entry.estado) ? "#946800" : "#241C14",
+                              fontWeight: estaBloqueado(entry.estado) ? 700 : 400,
+                              color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14",
                             }}
                           >
                             <option value="trabaja">Trabaja</option>
+                            <option value="t_inventario_manana">T.Inventario mañana</option>
                             <option value="descanso">Descanso</option>
                             <option value="incapacitado">Incapacitado</option>
                             <option value="licencia_maternidad">Licencia de maternidad</option>
@@ -329,11 +352,11 @@ export default function HorariosApp() {
                         </Td>
                         <Td>
                           <select
-                            disabled={esNoLaborable(entry.estado)}
+                            disabled={estaBloqueado(entry.estado)}
                             className="cell-input"
                             value={entry.llegada}
                             onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
-                            style={{ cursor: "pointer", ...(esNoLaborable(entry.estado) ? disabledCellStyle : {}) }}
+                            style={{ cursor: "pointer", ...(estaBloqueado(entry.estado) ? disabledCellStyle : {}) }}
                           >
                             <option value="">--:-- --</option>
                             <option value="06:00">6:00 AM</option>
@@ -342,19 +365,19 @@ export default function HorariosApp() {
                           </select>
                         </Td>
                         <Td>
-                          <input disabled={esNoLaborable(entry.estado)} type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} style={esNoLaborable(entry.estado) ? disabledCellStyle : undefined} />
+                          <input disabled={estaBloqueado(entry.estado)} type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} style={estaBloqueado(entry.estado) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={esNoLaborable(entry.estado)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={esNoLaborable(entry.estado) ? disabledCellStyle : undefined} />
+                          <input disabled={estaBloqueado(entry.estado)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={estaBloqueado(entry.estado) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={esNoLaborable(entry.estado)} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={esNoLaborable(entry.estado) ? disabledCellStyle : undefined} />
+                          <input disabled={estaBloqueado(entry.estado)} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={estaBloqueado(entry.estado) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={esNoLaborable(entry.estado)} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(esNoLaborable(entry.estado) ? disabledCellStyle : {}) }} />
+                          <input disabled={estaBloqueado(entry.estado)} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(estaBloqueado(entry.estado) ? disabledCellStyle : {}) }} />
                         </Td>
                         <Td>
-                          <input disabled={esNoLaborable(entry.estado)} className="cell-input" value={entry.horasReales} onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(esNoLaborable(entry.estado) ? disabledCellStyle : {}) }} />
+                          <input disabled={estaBloqueado(entry.estado)} className="cell-input" value={entry.horasReales} onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(estaBloqueado(entry.estado) ? disabledCellStyle : {}) }} />
                         </Td>
                         <Td>
                           <span
@@ -371,7 +394,7 @@ export default function HorariosApp() {
                           <input className="cell-input" value={entry.firma} onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)} />
                         </Td>
                         <Td>
-                          <input className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder={esNoLaborable(entry.estado) ? "—" : "—"} />
+                          <input className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder="—" />
                         </Td>
                         <Td>
                           {d.entries.length > 1 && (
