@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2, FileSpreadsheet } from "lucide-react";
+import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2, FileSpreadsheet, LogOut } from "lucide-react";
 import * as XLSX from "xlsx";
+import { supabase } from "./supabaseClient";
 import logoRitmo from "./logo-ritmo.png";
 
 const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -53,8 +54,8 @@ function esTurnoFijo(estado) {
   return Object.prototype.hasOwnProperty.call(TURNOS_FIJOS, estado);
 }
 
-function estaBloqueado(estado) {
-  return esNoLaborable(estado) || esTurnoFijo(estado);
+function estaBloqueado(entry) {
+  return esNoLaborable(entry.estado) || esTurnoFijo(entry.estado) || entry.cedula.trim() === "";
 }
 
 const HORARIOS_PREDETERMINADOS = {
@@ -94,71 +95,109 @@ function calcularHorasNocturnas(horaSalida) {
   return horas % 1 === 0 ? String(horas) : horas.toFixed(1);
 }
 
-export default function HorariosApp() {
+const SEMANAS = [
+  { key: "semana_1", label: "Semana 1" },
+  { key: "semana_2", label: "Semana 2" },
+  { key: "semana_3", label: "Semana 3" },
+  { key: "semana_4", label: "Semana 4" },
+];
+
+function diasVacios() {
+  let id = 1;
+  return DIAS.map((d) => {
+    const day = emptyDay(d, id);
+    id += ROWS_PER_DAY;
+    return day;
+  });
+}
+
+export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [tienda, setTienda] = useState("");
-  const [codigo, setCodigo] = useState("");
+  const [codigo, setCodigo] = useState(codigoTienda);
   const [fecha, setFecha] = useState("");
   const [supervisor, setSupervisor] = useState("");
-  const [days, setDays] = useState(() => {
-    let id = 1;
-    return DIAS.map((d) => {
-      const day = emptyDay(d, id);
-      id += ROWS_PER_DAY;
-      return day;
-    });
-  });
+  const [days, setDays] = useState(diasVacios);
   const [nextId, setNextId] = useState(DIAS.length * ROWS_PER_DAY + 1);
   const [saveState, setSaveState] = useState("idle");
   const [loaded, setLoaded] = useState(false);
   const [showConsolidado, setShowConsolidado] = useState(false);
+  const [semanaActual, setSemanaActual] = useState("semana_1");
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const data = JSON.parse(raw);
-        setTienda(data.tienda || "");
-        setCodigo(data.codigo || "");
-        setFecha(data.fecha || "");
-        setSupervisor(data.supervisor || "");
-        setDays(
-          data.days && data.days.length
-            ? data.days
-            : (() => {
-                let id = 1;
-                return DIAS.map((d) => {
-                  const day = emptyDay(d, id);
-                  id += ROWS_PER_DAY;
-                  return day;
-                });
-              })()
-        );
-        setNextId(data.nextId || DIAS.length * ROWS_PER_DAY + 1);
-      }
-    } catch (e) {
-      // no existing data yet
-    } finally {
-      setLoaded(true);
-    }
-  }, []);
+    let activo = true;
+    setLoaded(false);
+    (async () => {
+      try {
+        const { data: tiendaData } = await supabase
+          .from("tiendas")
+          .select("nombre")
+          .eq("codigo", codigoTienda)
+          .maybeSingle();
+        if (activo && tiendaData) {
+          setTienda(tiendaData.nombre || "");
+        }
 
-  const persist = useCallback(async (state) => {
+        const { data, error } = await supabase
+          .from("horarios_semana")
+          .select("datos")
+          .eq("tienda_codigo", codigoTienda)
+          .eq("semana_fecha", semanaActual)
+          .maybeSingle();
+
+        if (!activo) return;
+
+        if (!error && data && data.datos) {
+          const saved = data.datos;
+          if (saved.tienda) setTienda(saved.tienda);
+          setFecha(saved.fecha || "");
+          setSupervisor(saved.supervisor || "");
+          setDays(saved.days && saved.days.length ? saved.days : diasVacios());
+          setNextId(saved.nextId || DIAS.length * ROWS_PER_DAY + 1);
+        } else {
+          setFecha("");
+          setSupervisor("");
+          setDays(diasVacios());
+          setNextId(DIAS.length * ROWS_PER_DAY + 1);
+        }
+      } catch (e) {
+        // sin datos previos, se continua con valores vacios
+      } finally {
+        if (activo) setLoaded(true);
+      }
+    })();
+    return () => {
+      activo = false;
+    };
+  }, [codigoTienda, semanaActual]);
+
+  const persist = useCallback(async (state, semanaKey) => {
     setSaveState("saving");
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const { error } = await supabase
+        .from("horarios_semana")
+        .upsert(
+          {
+            tienda_codigo: codigoTienda,
+            semana_fecha: semanaKey,
+            datos: state,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "tienda_codigo,semana_fecha" }
+        );
+      if (error) throw error;
       setSaveState("saved");
     } catch (e) {
       setSaveState("error");
     }
-  }, []);
+  }, [codigoTienda]);
 
   useEffect(() => {
     if (!loaded) return;
     const t = setTimeout(() => {
-      persist({ tienda, codigo, fecha, supervisor, days, nextId });
+      persist({ tienda, codigo, fecha, supervisor, days, nextId }, semanaActual);
     }, 600);
     return () => clearTimeout(t);
-  }, [tienda, codigo, fecha, supervisor, days, nextId, loaded, persist]);
+  }, [tienda, codigo, fecha, supervisor, days, nextId, loaded, persist, semanaActual]);
 
   const updateEntry = (dia, entryId, field, value) => {
     setDays((prev) =>
@@ -255,18 +294,23 @@ export default function HorariosApp() {
         if (!nombre && !cedula) return;
         const clave = cedula || `__sin_cedula__${nombre}`;
         if (!mapa[clave]) {
-          mapa[clave] = { nombre, cedula, dominicales: 0, festivas: 0, totalSemanal: 0, nocturnas: 0 };
+          mapa[clave] = { nombre, cedula, festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0 };
         }
         if (!mapa[clave].nombre && nombre) mapa[clave].nombre = nombre;
         const reales = parseFloat(e.horasReales) || 0;
         const nocturnas = parseFloat(e.horasNocturnas) || 0;
-        mapa[clave].totalSemanal += reales;
+        const saldo = parseFloat(e.saldo) || 0;
+        const esDiaFestivo = d.dia === "Domingo" || e.esFestivo;
         mapa[clave].nocturnas += nocturnas;
-        if (d.dia === "Domingo") {
-          mapa[clave].dominicales += reales;
-        }
-        if (d.dia === "Domingo" || e.esFestivo) {
+        if (esDiaFestivo) {
           mapa[clave].festivas += reales;
+        }
+        if (saldo > 0) {
+          if (esDiaFestivo) {
+            mapa[clave].extrasFestivas += saldo;
+          } else {
+            mapa[clave].extrasNormales += saldo;
+          }
         }
       });
     });
@@ -284,12 +328,14 @@ export default function HorariosApp() {
       Cédula: op.cedula || "",
       "Hrs Festivas": Number(fmt(op.festivas)),
       "Hrs Nocturnas": Number(fmt(op.nocturnas)),
+      "Hrs Extras Festivas": Number(fmt(op.extrasFestivas)),
+      "Hrs Extras Normales": Number(fmt(op.extrasNormales)),
     }));
     const hoja = XLSX.utils.json_to_sheet(filas);
-    hoja["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 16 }];
+    hoja["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 18 }];
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Consolidado");
-    const nombreArchivo = `Consolidado_${tienda || "Tienda"}_${fecha || "sin_fecha"}.xlsx`.replace(/\s+/g, "_");
+    const nombreArchivo = `Consolidado_${tienda || "Tienda"}_${semanaActual}_${fecha || "sin_fecha"}.xlsx`.replace(/\s+/g, "_");
     XLSX.writeFile(libro, nombreArchivo);
   };
 
@@ -342,12 +388,37 @@ export default function HorariosApp() {
             <div style={{ fontSize: 20, fontWeight: 700 }}>Programación de Horarios Semanales</div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <select
+              value={semanaActual}
+              onChange={(e) => setSemanaActual(e.target.value)}
+              className="no-print"
+              style={{
+                border: "none",
+                borderRadius: 7,
+                padding: "8px 12px",
+                fontSize: 13,
+                fontWeight: 600,
+                fontFamily: "inherit",
+                background: "#FFFFFF",
+                color: "#E85D1F",
+                cursor: "pointer",
+              }}
+            >
+              {SEMANAS.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
             <SaveIndicator state={saveState} />
             <button onClick={() => setShowConsolidado(true)} className="no-print" style={btnStyle("#FFFFFF", "#E85D1F")}>
               <Clock size={15} /> Consolidado
             </button>
             <button onClick={handlePrint} style={btnStyle("#3FBFC4", "#FFFFFF")}>
               <Printer size={15} /> Imprimir
+            </button>
+            <button onClick={onSalir} className="no-print" title="Salir" style={{ ...btnStyle("transparent", "#FFFFFF"), padding: 8 }}>
+              <LogOut size={16} />
             </button>
           </div>
         </div>
@@ -366,7 +437,7 @@ export default function HorariosApp() {
               <input value={tienda} onChange={(e) => setTienda(e.target.value)} style={fieldInputStyle} placeholder="Ej. Santiago Centro" />
             </Field>
             <Field label="Código">
-              <input value={codigo} onChange={(e) => setCodigo(e.target.value)} style={fieldInputStyle} placeholder="Ej. RIT-014" />
+              <input value={codigo} disabled style={{ ...fieldInputStyle, background: "#F2EFE9", color: "#5C5F5A", cursor: "not-allowed" }} />
             </Field>
             <Field label="Fecha">
               <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={fieldInputStyle} />
@@ -411,7 +482,16 @@ export default function HorariosApp() {
                           <input className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} placeholder="Nombre del colaborador" style={{ fontWeight: 600, minWidth: 140 }} />
                         </Td>
                         <Td>
-                          <input className="cell-input" value={entry.cedula} onChange={(e) => updateEntry(d.dia, entry.id, "cedula", e.target.value)} placeholder="000-0000000-0" style={{ minWidth: 100 }} />
+                          <input
+                            className="cell-input"
+                            value={entry.cedula}
+                            onChange={(e) => updateEntry(d.dia, entry.id, "cedula", e.target.value)}
+                            placeholder="Requerida para habilitar fila"
+                            style={{
+                              minWidth: 100,
+                              ...(entry.cedula.trim() === "" ? { background: "#FCEBEB", borderRadius: 4 } : {}),
+                            }}
+                          />
                         </Td>
                         <Td>
                           <select
@@ -420,7 +500,7 @@ export default function HorariosApp() {
                             onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
                             style={{
                               cursor: "pointer",
-                              fontWeight: estaBloqueado(entry.estado) ? 700 : 400,
+                              fontWeight: estaBloqueado(entry) ? 700 : 400,
                               color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14",
                             }}
                           >
@@ -434,11 +514,11 @@ export default function HorariosApp() {
                         </Td>
                         <Td>
                           <select
-                            disabled={estaBloqueado(entry.estado)}
+                            disabled={estaBloqueado(entry)}
                             className="cell-input"
                             value={entry.llegada}
                             onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
-                            style={{ cursor: "pointer", ...(estaBloqueado(entry.estado) ? disabledCellStyle : {}) }}
+                            style={{ cursor: "pointer", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }}
                           >
                             <option value="">--:-- --</option>
                             <option value="06:00">6:00 AM</option>
@@ -447,42 +527,42 @@ export default function HorariosApp() {
                           </select>
                         </Td>
                         <Td>
-                          <input disabled={estaBloqueado(entry.estado)} type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} style={estaBloqueado(entry.estado) ? disabledCellStyle : undefined} />
+                          <input disabled={estaBloqueado(entry)} type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={estaBloqueado(entry.estado)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={estaBloqueado(entry.estado) ? disabledCellStyle : undefined} />
+                          <input disabled={estaBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={estaBloqueado(entry.estado)} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={estaBloqueado(entry.estado) ? disabledCellStyle : undefined} />
+                          <input disabled={estaBloqueado(entry)} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={estaBloqueado(entry.estado)} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(estaBloqueado(entry.estado) ? disabledCellStyle : {}) }} />
+                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }} />
                         </Td>
                         <Td>
                           <div style={{ display: "flex", alignItems: "center", gap: 4, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
                             <input
-                              disabled={estaBloqueado(entry.estado)}
+                              disabled={estaBloqueado(entry)}
                               className="cell-input"
                               value={entry.horasReales}
                               onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)}
                               placeholder="0"
                               style={{
                                 textAlign: "center",
-                                ...(estaBloqueado(entry.estado) ? disabledCellStyle : {}),
+                                ...(estaBloqueado(entry) ? disabledCellStyle : {}),
                                 ...(entry.esFestivo ? { background: "transparent", color: "#04342C", fontWeight: 600 } : {}),
                               }}
                             />
                             <label
                               className="no-print"
                               title="Marcar como festivo"
-                              style={{ display: "flex", alignItems: "center", cursor: estaBloqueado(entry.estado) ? "not-allowed" : "pointer", paddingRight: 3 }}
+                              style={{ display: "flex", alignItems: "center", cursor: estaBloqueado(entry) ? "not-allowed" : "pointer", paddingRight: 3 }}
                             >
                               <input
                                 type="checkbox"
-                                disabled={estaBloqueado(entry.estado)}
+                                disabled={estaBloqueado(entry)}
                                 checked={entry.esFestivo}
                                 onChange={(e) => updateEntry(d.dia, entry.id, "esFestivo", e.target.checked)}
-                                style={{ cursor: estaBloqueado(entry.estado) ? "not-allowed" : "pointer" }}
+                                style={{ cursor: estaBloqueado(entry) ? "not-allowed" : "pointer" }}
                               />
                             </label>
                           </div>
@@ -504,10 +584,10 @@ export default function HorariosApp() {
                           </span>
                         </Td>
                         <Td>
-                          <input className="cell-input" value={entry.firma} onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)} />
+                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.firma} onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder="—" />
+                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder="—" style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
                           {d.entries.length > 1 && (
@@ -615,6 +695,8 @@ export default function HorariosApp() {
                     <Th>Cédula</Th>
                     <Th>Hrs Festivas</Th>
                     <Th>Hrs Nocturnas</Th>
+                    <Th>Extras Festivas</Th>
+                    <Th>Extras Normales</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -624,6 +706,8 @@ export default function HorariosApp() {
                       <Td>{op.cedula || "—"}</Td>
                       <Td>{fmt(op.festivas)}</Td>
                       <Td>{fmt(op.nocturnas)}</Td>
+                      <Td>{fmt(op.extrasFestivas)}</Td>
+                      <Td>{fmt(op.extrasNormales)}</Td>
                     </tr>
                   ))}
                 </tbody>
