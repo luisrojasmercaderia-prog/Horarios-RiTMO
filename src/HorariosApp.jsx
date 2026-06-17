@@ -16,6 +16,7 @@ const emptyEntry = (id) => ({
   breakFin: "",
   horasProgramadas: "",
   horasReales: "",
+  esFestivo: false,
   horasNocturnas: "",
   saldo: "",
   firma: "",
@@ -262,6 +263,8 @@ export default function HorariosApp() {
         mapa[clave].nocturnas += nocturnas;
         if (d.dia === "Domingo") {
           mapa[clave].dominicales += reales;
+        }
+        if (d.dia === "Domingo" || e.esFestivo) {
           mapa[clave].festivas += reales;
         }
       });
@@ -440,7 +443,33 @@ export default function HorariosApp() {
                           <input disabled={estaBloqueado(entry.estado)} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(estaBloqueado(entry.estado) ? disabledCellStyle : {}) }} />
                         </Td>
                         <Td>
-                          <input disabled={estaBloqueado(entry.estado)} className="cell-input" value={entry.horasReales} onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(estaBloqueado(entry.estado) ? disabledCellStyle : {}) }} />
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
+                            <input
+                              disabled={estaBloqueado(entry.estado)}
+                              className="cell-input"
+                              value={entry.horasReales}
+                              onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)}
+                              placeholder="0"
+                              style={{
+                                textAlign: "center",
+                                ...(estaBloqueado(entry.estado) ? disabledCellStyle : {}),
+                                ...(entry.esFestivo ? { background: "transparent", color: "#04342C", fontWeight: 600 } : {}),
+                              }}
+                            />
+                            <label
+                              className="no-print"
+                              title="Marcar como festivo"
+                              style={{ display: "flex", alignItems: "center", cursor: estaBloqueado(entry.estado) ? "not-allowed" : "pointer", paddingRight: 3 }}
+                            >
+                              <input
+                                type="checkbox"
+                                disabled={estaBloqueado(entry.estado)}
+                                checked={entry.esFestivo}
+                                onChange={(e) => updateEntry(d.dia, entry.id, "esFestivo", e.target.checked)}
+                                style={{ cursor: estaBloqueado(entry.estado) ? "not-allowed" : "pointer" }}
+                              />
+                            </label>
+                          </div>
                         </Td>
                         <Td>
                           <span style={{ fontSize: 12, color: "#5C5F5A", display: "block", textAlign: "center" }}>
