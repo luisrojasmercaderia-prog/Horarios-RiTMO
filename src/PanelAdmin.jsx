@@ -188,14 +188,6 @@ export default function PanelAdmin() {
       </div>
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 28px 60px" }}>
-        {!cargando && !error && totalesPorTienda.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginBottom: 24 }}>
-            <GraficaBarras titulo="Mayor horas extras normales" datos={datosExtrasNormales} color="#3FBFC4" />
-            <GraficaBarras titulo="Mayor horas festivas / dominicales" datos={datosExtrasFestivas} color="#E85D1F" />
-            <GraficaBarras titulo="Mayor horas nocturnas" datos={datosNocturnas} color="#7C5CFF" />
-          </div>
-        )}
-
         <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 24 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "#E85D1F", marginBottom: 16 }}>Consolidado por tienda</div>
 
@@ -315,6 +307,14 @@ export default function PanelAdmin() {
             ))}
           </select>
         </div>
+
+        {!cargando && !error && totalesPorTienda.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginTop: 24 }}>
+            <GraficaBarras titulo="Mayor horas extras normales" datos={datosExtrasNormales} color="#3FBFC4" />
+            <GraficaBarras titulo="Mayor horas festivas / dominicales" datos={datosExtrasFestivas} color="#E85D1F" />
+            <GraficaBarras titulo="Mayor horas nocturnas" datos={datosNocturnas} color="#7C5CFF" />
+          </div>
+        )}
       </div>
 
       {tiendaSeleccionada && (
