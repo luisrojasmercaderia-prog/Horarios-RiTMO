@@ -54,8 +54,8 @@ function esTurnoFijo(estado) {
   return Object.prototype.hasOwnProperty.call(TURNOS_FIJOS, estado);
 }
 
-function estaBloqueado(estado) {
-  return esNoLaborable(estado) || esTurnoFijo(estado);
+function estaBloqueado(entry) {
+  return esNoLaborable(entry.estado) || esTurnoFijo(entry.estado) || entry.cedula.trim() === "";
 }
 
 const HORARIOS_PREDETERMINADOS = {
@@ -482,7 +482,16 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           <input className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} placeholder="Nombre del colaborador" style={{ fontWeight: 600, minWidth: 140 }} />
                         </Td>
                         <Td>
-                          <input className="cell-input" value={entry.cedula} onChange={(e) => updateEntry(d.dia, entry.id, "cedula", e.target.value)} placeholder="000-0000000-0" style={{ minWidth: 100 }} />
+                          <input
+                            className="cell-input"
+                            value={entry.cedula}
+                            onChange={(e) => updateEntry(d.dia, entry.id, "cedula", e.target.value)}
+                            placeholder="Requerida para habilitar fila"
+                            style={{
+                              minWidth: 100,
+                              ...(entry.cedula.trim() === "" ? { background: "#FCEBEB", borderRadius: 4 } : {}),
+                            }}
+                          />
                         </Td>
                         <Td>
                           <select
@@ -491,7 +500,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
                             style={{
                               cursor: "pointer",
-                              fontWeight: estaBloqueado(entry.estado) ? 700 : 400,
+                              fontWeight: estaBloqueado(entry) ? 700 : 400,
                               color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14",
                             }}
                           >
@@ -505,11 +514,11 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                         </Td>
                         <Td>
                           <select
-                            disabled={estaBloqueado(entry.estado)}
+                            disabled={estaBloqueado(entry)}
                             className="cell-input"
                             value={entry.llegada}
                             onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
-                            style={{ cursor: "pointer", ...(estaBloqueado(entry.estado) ? disabledCellStyle : {}) }}
+                            style={{ cursor: "pointer", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }}
                           >
                             <option value="">--:-- --</option>
                             <option value="06:00">6:00 AM</option>
@@ -518,42 +527,42 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           </select>
                         </Td>
                         <Td>
-                          <input disabled={estaBloqueado(entry.estado)} type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} style={estaBloqueado(entry.estado) ? disabledCellStyle : undefined} />
+                          <input disabled={estaBloqueado(entry)} type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={estaBloqueado(entry.estado)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={estaBloqueado(entry.estado) ? disabledCellStyle : undefined} />
+                          <input disabled={estaBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={estaBloqueado(entry.estado)} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={estaBloqueado(entry.estado) ? disabledCellStyle : undefined} />
+                          <input disabled={estaBloqueado(entry)} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={estaBloqueado(entry.estado)} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(estaBloqueado(entry.estado) ? disabledCellStyle : {}) }} />
+                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }} />
                         </Td>
                         <Td>
                           <div style={{ display: "flex", alignItems: "center", gap: 4, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
                             <input
-                              disabled={estaBloqueado(entry.estado)}
+                              disabled={estaBloqueado(entry)}
                               className="cell-input"
                               value={entry.horasReales}
                               onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)}
                               placeholder="0"
                               style={{
                                 textAlign: "center",
-                                ...(estaBloqueado(entry.estado) ? disabledCellStyle : {}),
+                                ...(estaBloqueado(entry) ? disabledCellStyle : {}),
                                 ...(entry.esFestivo ? { background: "transparent", color: "#04342C", fontWeight: 600 } : {}),
                               }}
                             />
                             <label
                               className="no-print"
                               title="Marcar como festivo"
-                              style={{ display: "flex", alignItems: "center", cursor: estaBloqueado(entry.estado) ? "not-allowed" : "pointer", paddingRight: 3 }}
+                              style={{ display: "flex", alignItems: "center", cursor: estaBloqueado(entry) ? "not-allowed" : "pointer", paddingRight: 3 }}
                             >
                               <input
                                 type="checkbox"
-                                disabled={estaBloqueado(entry.estado)}
+                                disabled={estaBloqueado(entry)}
                                 checked={entry.esFestivo}
                                 onChange={(e) => updateEntry(d.dia, entry.id, "esFestivo", e.target.checked)}
-                                style={{ cursor: estaBloqueado(entry.estado) ? "not-allowed" : "pointer" }}
+                                style={{ cursor: estaBloqueado(entry) ? "not-allowed" : "pointer" }}
                               />
                             </label>
                           </div>
@@ -575,10 +584,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           </span>
                         </Td>
                         <Td>
-                          <input className="cell-input" value={entry.firma} onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)} />
+                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.firma} onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder="—" />
+                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder="—" style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
                           {d.entries.length > 1 && (
