@@ -15,6 +15,7 @@ const emptyEntry = (id) => ({
   breakFin: "",
   horasProgramadas: "",
   horasReales: "",
+  horasNocturnas: "",
   saldo: "",
   firma: "",
   observacion: "",
@@ -71,6 +72,23 @@ function sumarUnaHora(hora) {
   const nuevaH = Math.floor(totalMin / 60);
   const nuevaM = totalMin % 60;
   return `${String(nuevaH).padStart(2, "0")}:${String(nuevaM).padStart(2, "0")}`;
+}
+
+const INICIO_NOCTURNO_MIN = 21 * 60; // 9:00 p.m.
+
+function calcularHorasNocturnas(horaSalida) {
+  if (!horaSalida) return "";
+  const [h, m] = horaSalida.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return "";
+  let salidaMin = h * 60 + m;
+  // Si la salida cae en la madrugada (ej. 00:30), se asume que es despues de medianoche
+  if (salidaMin < INICIO_NOCTURNO_MIN && salidaMin < 6 * 60) {
+    salidaMin += 24 * 60;
+  }
+  if (salidaMin <= INICIO_NOCTURNO_MIN) return "0";
+  const minutosNocturnos = salidaMin - INICIO_NOCTURNO_MIN;
+  const horas = minutosNocturnos / 60;
+  return horas % 1 === 0 ? String(horas) : horas.toFixed(1);
 }
 
 export default function HorariosApp() {
@@ -153,6 +171,7 @@ export default function HorariosApp() {
             updated.salida = "";
             updated.breakInicio = "";
             updated.breakFin = "";
+            updated.horasNocturnas = "";
           }
 
           if (field === "estado" && esTurnoFijo(value)) {
@@ -178,6 +197,10 @@ export default function HorariosApp() {
             if (breakFinAuto) {
               updated.breakFin = breakFinAuto;
             }
+          }
+
+          if (field === "salida" || field === "llegada" || field === "estado") {
+            updated.horasNocturnas = calcularHorasNocturnas(updated.salida);
           }
 
           if (field === "horasProgramadas" || field === "horasReales" || field === "estado" || field === "llegada") {
@@ -316,6 +339,7 @@ export default function HorariosApp() {
                       <Th>Break Fin</Th>
                       <Th>Hrs Programadas</Th>
                       <Th>Hrs Reales</Th>
+                      <Th>Hrs Nocturnas</Th>
                       <Th>Saldo</Th>
                       <Th>Firma</Th>
                       <Th>Observación</Th>
@@ -378,6 +402,11 @@ export default function HorariosApp() {
                         </Td>
                         <Td>
                           <input disabled={estaBloqueado(entry.estado)} className="cell-input" value={entry.horasReales} onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(estaBloqueado(entry.estado) ? disabledCellStyle : {}) }} />
+                        </Td>
+                        <Td>
+                          <span style={{ fontSize: 12, color: "#5C5F5A", display: "block", textAlign: "center" }}>
+                            {entry.horasNocturnas || "0"}
+                          </span>
                         </Td>
                         <Td>
                           <span
