@@ -256,13 +256,13 @@ export default function HorariosApp() {
           mapa[clave] = { nombre, cedula, dominicales: 0, festivas: 0, totalSemanal: 0, nocturnas: 0 };
         }
         if (!mapa[clave].nombre && nombre) mapa[clave].nombre = nombre;
-        const reales = parseFloat(e.horasReales) || 0;
+        const saldo = parseFloat(e.saldo) || 0;
         const nocturnas = parseFloat(e.horasNocturnas) || 0;
-        mapa[clave].totalSemanal += reales;
+        mapa[clave].totalSemanal += saldo;
         mapa[clave].nocturnas += nocturnas;
         if (d.dia === "Domingo") {
-          mapa[clave].dominicales += reales;
-          mapa[clave].festivas += reales;
+          mapa[clave].dominicales += saldo;
+          mapa[clave].festivas += saldo;
         }
       });
     });
