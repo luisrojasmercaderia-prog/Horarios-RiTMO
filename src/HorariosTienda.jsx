@@ -249,6 +249,49 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   }, [tienda, codigo, fecha, supervisor, days, nextId, loaded, persist, semanaActual]);
 
   const updateEntry = (dia, entryId, field, value) => {
+    if (field === "estado" && value === "trabaja") {
+      const diaActualIdx = DIAS.indexOf(dia);
+      const entryActual = days
+        .find((d) => d.dia === dia)
+        ?.entries.find((e) => e.id === entryId);
+
+      if (entryActual && entryActual.cedula.trim()) {
+        const cedula = entryActual.cedula.trim();
+        let ultimaSalidaMin = null;
+        let ultimoDiaNombre = "";
+
+        for (let i = 0; i < diaActualIdx; i++) {
+          const diaAnterior = days[i];
+          diaAnterior.entries.forEach((e) => {
+            if (e.cedula.trim() === cedula && !esNoLaborable(e.estado) && !esTurnoFijo(e.estado) || (esTurnoFijo(e.estado))) {
+              if (e.salida) {
+                const [h, m] = e.salida.split(":").map(Number);
+                if (!isNaN(h) && !isNaN(m)) {
+                  const minutos = i * 24 * 60 + h * 60 + m;
+                  if (ultimaSalidaMin === null || minutos > ultimaSalidaMin) {
+                    ultimaSalidaMin = minutos;
+                    ultimoDiaNombre = diaAnterior.dia;
+                  }
+                }
+              }
+            }
+          });
+        }
+
+        if (ultimaSalidaMin !== null && entryActual.llegada) {
+          const [lh, lm] = entryActual.llegada.split(":").map(Number);
+          if (!isNaN(lh) && !isNaN(lm)) {
+            const llegadaMin = diaActualIdx * 24 * 60 + lh * 60 + lm;
+            const horasDescanso = (llegadaMin - ultimaSalidaMin) / 60;
+            if (horasDescanso < 36) {
+              alert(`⚠️ No se puede programar a este operario el día ${dia}.\n\nDesde su última salida el ${ultimoDiaNombre} solo habría ${horasDescanso.toFixed(1)} horas de descanso, y se requieren mínimo 36 horas continuas.`);
+              return;
+            }
+          }
+        }
+      }
+    }
+
     setDays((prev) =>
       prev.map((d) => {
         if (d.dia !== dia) return d;
