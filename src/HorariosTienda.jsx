@@ -679,9 +679,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             </div>
           ))}
 
-          {/* Footer: supervisor + totals */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 24, paddingTop: 20, borderTop: "2px solid #E85D1F" }}>
-            <div>
+          {/* Footer: supervisor */}
+          <div style={{ paddingTop: 20, borderTop: "2px solid #E85D1F" }}>
+            <div style={{ maxWidth: 420 }}>
               <Field label="Nombre Supervisor">
                 <input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} style={fieldInputStyle} placeholder="Nombre del supervisor" />
               </Field>
@@ -691,21 +691,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               <div style={{ marginTop: 28, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>
                 Aprobado por JDZ
               </div>
-            </div>
-
-            <div style={{ background: "#E6F7F8", borderRadius: 8, padding: 18 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, color: "#1B8388", fontWeight: 700, fontSize: 12.5, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                <Clock size={14} /> Resumen Semanal
-              </div>
-              <SummaryRow label="Total Horas Programadas" value={totalProgramadas} />
-              <SummaryRow label="Total Horas Cumplidas" value={totalReales} />
-              <div style={{ height: 1, background: "#C9C6BC", margin: "10px 0" }} />
-              <SummaryRow
-                label="SALDO"
-                value={saldoTotal}
-                bold
-                color={saldoTotal > 0 ? "#B3261E" : saldoTotal < 0 ? "#946800" : "#1B8388"}
-              />
             </div>
           </div>
         </div>
