@@ -92,6 +92,23 @@ const HORARIOS_PREDETERMINADOS = {
   "13:30": "22:00",
 };
 
+const TURNO_MANANA_SALIDAS = ["14:30", "15:30", "16:00"];
+const TURNO_TARDE_SALIDAS = ["22:00"];
+const TURNO_MANANA_LLEGADAS = ["06:00", "07:00", "07:30"];
+const TURNO_TARDE_LLEGADAS = ["13:30"];
+
+function getTurnoDesdeSalida(salida) {
+  if (TURNO_MANANA_SALIDAS.includes(salida)) return "manana";
+  if (TURNO_TARDE_SALIDAS.includes(salida)) return "tarde";
+  return null;
+}
+
+function getLlegadasValidasDesdeTurno(turno) {
+  if (turno === "manana") return TURNO_MANANA_LLEGADAS;
+  if (turno === "tarde") return TURNO_TARDE_LLEGADAS;
+  return [];
+}
+
 function calcularSalidaAutomatica(horaLlegada) {
   return HORARIOS_PREDETERMINADOS[horaLlegada] || null;
 }
@@ -287,6 +304,50 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               alert(`⚠️ No se puede programar a este operario el día ${dia}.\n\nDesde su última salida el ${ultimoDiaNombre} solo habría ${horasDescanso.toFixed(1)} horas de descanso, y se requieren mínimo 36 horas continuas.`);
               return;
             }
+          }
+        }
+      }
+    }
+
+    if (field === "llegada" && value) {
+      const diaActualIdx = DIAS.indexOf(dia);
+      const entryActual = days
+        .find((d) => d.dia === dia)
+        ?.entries.find((e) => e.id === entryId);
+
+      if (entryActual && entryActual.cedula.trim()) {
+        const cedula = entryActual.cedula.trim();
+        let ultimaSalida = null;
+        let ultimoDiaNombre = "";
+
+        for (let i = 0; i < diaActualIdx; i++) {
+          const diaAnterior = days[i];
+          diaAnterior.entries.forEach((e) => {
+            if (e.cedula.trim() === cedula && e.salida && !esNoLaborable(e.estado)) {
+              const [h, m] = e.salida.split(":").map(Number);
+              if (!isNaN(h) && !isNaN(m)) {
+                const minutos = i * 24 * 60 + h * 60 + m;
+                if (ultimaSalida === null || minutos > ultimaSalida.minutos) {
+                  ultimaSalida = { minutos, salida: e.salida };
+                  ultimoDiaNombre = diaAnterior.dia;
+                }
+              }
+            }
+          });
+        }
+
+        if (ultimaSalida) {
+          const turnoAnterior = getTurnoDesdeSalida(ultimaSalida.salida);
+          const llegadasValidas = getLlegadasValidasDesdeTurno(turnoAnterior);
+          if (turnoAnterior && llegadasValidas.length > 0 && !llegadasValidas.includes(value)) {
+            const turnoNombre = turnoAnterior === "manana" ? "mañana" : "tarde";
+            const llegadasTexto = llegadasValidas.map((h) => {
+              const [hh, mm] = h.split(":");
+              const hora = parseInt(hh);
+              return `${hora > 12 ? hora - 12 : hora}:${mm} ${hora >= 12 ? "PM" : "AM"}`;
+            }).join(" o ");
+            alert(`⚠️ Este operario debe regresar al turno de ${turnoNombre}.\n\nSu última salida el ${ultimoDiaNombre} fue a las ${ultimaSalida.salida.replace(":", ":")}. Debe volver con entrada: ${llegadasTexto}.`);
+            return;
           }
         }
       }
