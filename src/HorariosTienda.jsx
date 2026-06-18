@@ -168,7 +168,25 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [showConsolidado, setShowConsolidado] = useState(false);
   const [semanaActual, setSemanaActual] = useState("semana_1");
   const [empleados, setEmpleados] = useState([]);
+  const [aprobaciones, setAprobaciones] = useState({});
   const [showEmpleados, setShowEmpleados] = useState(false);
+
+  const cargarAprobaciones = useCallback(async (semana) => {
+    try {
+      const { data } = await supabase
+        .from("aprobaciones")
+        .select("entry_id, estado")
+        .eq("tienda_codigo", codigoTienda)
+        .eq("semana_fecha", semana);
+      const mapa = {};
+      (data || []).forEach((a) => {
+        mapa[a.entry_id] = a.estado;
+      });
+      setAprobaciones(mapa);
+    } catch (e) {
+      // sin aprobaciones
+    }
+  }, [codigoTienda]);
 
   const cargarEmpleados = useCallback(async () => {
     try {
@@ -229,12 +247,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         // sin datos previos, se continua con valores vacios
       } finally {
         if (activo) setLoaded(true);
+        if (activo) cargarAprobaciones(semanaActual);
       }
     })();
     return () => {
       activo = false;
     };
-  }, [codigoTienda, semanaActual]);
+  }, [codigoTienda, semanaActual, cargarAprobaciones]);
 
   const persist = useCallback(async (state, semanaKey) => {
     setSaveState("saving");
@@ -647,7 +666,17 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                   </thead>
                   <tbody>
                     {d.entries.map((entry) => (
-                      <tr key={entry.id} className={`entry-row ${entry.nombre.trim() === "" ? "empty-row" : ""}`}>
+                      <tr
+                        key={entry.id}
+                        className={`entry-row ${entry.nombre.trim() === "" ? "empty-row" : ""}`}
+                        style={{
+                          background: aprobaciones[entry.id] === "aprobado"
+                            ? "#E8F5E9"
+                            : aprobaciones[entry.id] === "rechazado"
+                            ? "#FDECEA"
+                            : undefined,
+                        }}
+                      >
                         <Td>
                           <input className="cell-input" value={entry.fecha} onChange={(e) => updateEntry(d.dia, entry.id, "fecha", e.target.value)} placeholder="06/16" />
                         </Td>
