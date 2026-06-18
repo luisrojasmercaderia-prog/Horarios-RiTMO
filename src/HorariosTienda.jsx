@@ -671,9 +671,14 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                         className={`entry-row ${entry.nombre.trim() === "" ? "empty-row" : ""}`}
                         style={{
                           background: aprobaciones[entry.id] === "aprobado"
-                            ? "#E8F5E9"
+                            ? "#C8E6C9"
                             : aprobaciones[entry.id] === "rechazado"
-                            ? "#FDECEA"
+                            ? "#FFCDD2"
+                            : undefined,
+                          borderLeft: aprobaciones[entry.id] === "aprobado"
+                            ? "4px solid #2E7D32"
+                            : aprobaciones[entry.id] === "rechazado"
+                            ? "4px solid #C62828"
                             : undefined,
                         }}
                       >
