@@ -297,12 +297,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           }
 
           if (field === "breakInicio") {
-            const turnoConBreakLibre = esTurnoFijo(updated.estado) && TURNOS_FIJOS[updated.estado].breakEditable;
-            if (!turnoConBreakLibre) {
-              const breakFinAuto = sumarUnaHora(value);
-              if (breakFinAuto) {
-                updated.breakFin = breakFinAuto;
-              }
+            const breakFinAuto = sumarUnaHora(value);
+            if (breakFinAuto) {
+              updated.breakFin = breakFinAuto;
             }
           }
 
@@ -630,7 +627,14 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
+                          <input
+                            disabled
+                            readOnly
+                            type="time"
+                            className="cell-input"
+                            value={entry.breakFin}
+                            style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }}
+                          />
                         </Td>
                         <Td>
                           <input
