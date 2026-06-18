@@ -108,7 +108,7 @@ function sumarUnaHora(hora) {
 
 const INICIO_NOCTURNO_MIN = 21 * 60; // 9:00 p.m.
 
-function calcularHorasNocturnas(horaSalida, saldoStr) {
+function calcularHorasNocturnas(horaSalida) {
   if (!horaSalida) return "";
   const [h, m] = horaSalida.split(":").map(Number);
   if (isNaN(h) || isNaN(m)) return "";
@@ -117,13 +117,8 @@ function calcularHorasNocturnas(horaSalida, saldoStr) {
   if (salidaMin < INICIO_NOCTURNO_MIN && salidaMin < 6 * 60) {
     salidaMin += 24 * 60;
   }
-
-  const saldo = parseFloat(saldoStr);
-  const extraMin = !isNaN(saldo) && saldo > 0 ? Math.round(saldo * 60) : 0;
-  const salidaEfectivaMin = salidaMin + extraMin;
-
-  if (salidaEfectivaMin <= INICIO_NOCTURNO_MIN) return "0";
-  const minutosNocturnos = salidaEfectivaMin - INICIO_NOCTURNO_MIN;
+  if (salidaMin <= INICIO_NOCTURNO_MIN) return "0";
+  const minutosNocturnos = salidaMin - INICIO_NOCTURNO_MIN;
   const horas = minutosNocturnos / 60;
   return horas % 1 === 0 ? String(horas) : horas.toFixed(1);
 }
@@ -320,7 +315,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           }
 
           if (field === "salida" || field === "llegada" || field === "estado" || field === "horasProgramadas" || field === "horasReales" || field === "llegadaReal" || field === "salidaReal") {
-            updated.horasNocturnas = calcularHorasNocturnas(updated.salida, updated.saldo);
+            updated.horasNocturnas = calcularHorasNocturnas(updated.salidaReal || updated.salida);
           }
           return updated;
         });
