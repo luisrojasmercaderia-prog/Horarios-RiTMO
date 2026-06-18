@@ -622,7 +622,14 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           </select>
                         </Td>
                         <Td>
-                          <input disabled={estaBloqueado(entry)} type="time" className="cell-input" value={entry.salida} onChange={(e) => updateEntry(d.dia, entry.id, "salida", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
+                          <input
+                            disabled
+                            readOnly
+                            type="time"
+                            className="cell-input"
+                            value={entry.salida}
+                            style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }}
+                          />
                         </Td>
                         <Td>
                           <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
