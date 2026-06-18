@@ -296,11 +296,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           }
 
           if (field === "llegada") {
-            const salidaAuto = calcularSalidaAutomatica(value);
-            if (salidaAuto) {
-              updated.salida = salidaAuto;
-              updated.horasProgramadas = "7.5";
-            }
+            const salidaAuto = HORARIOS_PREDETERMINADOS[value];
+            updated.salida = salidaAuto || "";
+            updated.horasProgramadas = salidaAuto ? "7.5" : "";
           }
 
           if (field === "breakInicio") {
