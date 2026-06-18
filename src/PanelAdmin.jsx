@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, RefreshCw, FileSpreadsheet, Loader2, Store, BarChart3 } from "lucide-react";
+import { ShieldCheck, RefreshCw, FileSpreadsheet, Loader2, Store, BarChart3, CheckCircle, XCircle } from "lucide-react";
 import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "./supabaseClient";
@@ -42,12 +42,44 @@ function calcularConsolidadoTienda(datos) {
   return Object.values(mapa);
 }
 
+function extraerFilasConExtras(datos, tiendaCodigo, semanaFecha) {
+  const resultado = [];
+  const days = (datos && datos.days) || [];
+  days.forEach((d) => {
+    (d.entries || []).forEach((e) => {
+      const nombre = (e.nombre || "").trim();
+      const cedula = (e.cedula || "").trim();
+      if (!nombre || !cedula) return;
+      const saldo = parseFloat(e.saldo) || 0;
+      if (saldo <= 0) return;
+      resultado.push({
+        entryId: e.id,
+        tiendaCodigo,
+        semanaFecha,
+        dia: d.dia,
+        nombre,
+        cedula,
+        llegada: e.llegada || "",
+        salida: e.salida || "",
+        horasProgramadas: e.horasProgramadas || "",
+        horasReales: e.horasReales || "",
+        saldo: e.saldo || "",
+        esFestivo: d.dia === "Domingo" || e.esFestivo,
+        aprobacionEstado: null,
+      });
+    });
+  });
+  return resultado;
+}
+
 export default function PanelAdmin() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [filas, setFilas] = useState([]);
   const [listaTiendas, setListaTiendas] = useState([]);
   const [tiendaSeleccionada, setTiendaSeleccionada] = useState("");
+  const [filasExtras, setFilasExtras] = useState([]);
+  const [aprobaciones, setAprobaciones] = useState({});
 
   const cargarDatos = async () => {
     setCargando(true);
@@ -111,6 +143,30 @@ export default function PanelAdmin() {
       });
 
       setFilas(resultado);
+
+      const todasFilasExtras = [];
+      (horarios || []).forEach((h) => {
+        const filas = extraerFilasConExtras(h.datos, h.tienda_codigo, h.semana_fecha);
+        todasFilasExtras.push(...filas);
+      });
+
+      const { data: aprobacionesData } = await supabase
+        .from("aprobaciones")
+        .select("tienda_codigo, semana_fecha, entry_id, estado");
+
+      const mapaAprobaciones = {};
+      (aprobacionesData || []).forEach((a) => {
+        const key = `${a.tienda_codigo}__${a.semana_fecha}__${a.entry_id}`;
+        mapaAprobaciones[key] = a.estado;
+      });
+
+      todasFilasExtras.forEach((f) => {
+        const key = `${f.tiendaCodigo}__${f.semanaFecha}__${f.entryId}`;
+        f.aprobacionEstado = mapaAprobaciones[key] || null;
+      });
+
+      setFilasExtras(todasFilasExtras);
+      setAprobaciones(mapaAprobaciones);
     } catch (e) {
       setError("No se pudieron cargar los datos. Intenta de nuevo.");
     } finally {
@@ -121,6 +177,37 @@ export default function PanelAdmin() {
   useEffect(() => {
     cargarDatos();
   }, []);
+
+  const handleAprobacion = async (fila, nuevoEstado) => {
+    const key = `${fila.tiendaCodigo}__${fila.semanaFecha}__${fila.entryId}`;
+    try {
+      const { error } = await supabase
+        .from("aprobaciones")
+        .upsert(
+          {
+            tienda_codigo: fila.tiendaCodigo,
+            semana_fecha: fila.semanaFecha,
+            entry_id: fila.entryId,
+            estado: nuevoEstado,
+          },
+          { onConflict: "tienda_codigo,semana_fecha,entry_id" }
+        );
+      if (error) throw error;
+
+      setAprobaciones((prev) => ({ ...prev, [key]: nuevoEstado }));
+      setFilasExtras((prev) =>
+        prev.map((f) =>
+          f.tiendaCodigo === fila.tiendaCodigo &&
+          f.semanaFecha === fila.semanaFecha &&
+          f.entryId === fila.entryId
+            ? { ...f, aprobacionEstado: nuevoEstado }
+            : f
+        )
+      );
+    } catch (e) {
+      alert("Error al guardar la aprobación. Intenta de nuevo.");
+    }
+  };
 
   const totalesPorTienda = (() => {
     const mapa = {};
@@ -274,6 +361,7 @@ export default function PanelAdmin() {
           {tiendaSeleccionada && (() => {
             const filasTienda = filas.filter((f) => f.tiendaCodigo === tiendaSeleccionada);
             const nombreTienda = listaTiendas.find((t) => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada;
+            const filasExtrasTienda = filasExtras.filter((f) => f.tiendaCodigo === tiendaSeleccionada);
             return (
               <div style={{ marginTop: 18, borderTop: "1px solid #EDEBE4", paddingTop: 18 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>{nombreTienda}</div>
@@ -306,6 +394,88 @@ export default function PanelAdmin() {
                       ))}
                     </tbody>
                   </table>
+                )}
+
+                {filasExtrasTienda.length > 0 && (
+                  <div style={{ marginTop: 20 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#E85D1F", marginBottom: 10 }}>
+                      Aprobación de horas extras
+                    </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                          <th style={thStyle}>Semana</th>
+                          <th style={thStyle}>Día</th>
+                          <th style={thStyle}>Operario</th>
+                          <th style={thStyle}>Cédula</th>
+                          <th style={thStyle}>Entrada</th>
+                          <th style={thStyle}>Salida</th>
+                          <th style={thStyle}>Saldo</th>
+                          <th style={thStyle}>Tipo</th>
+                          <th style={thStyle}>Estado</th>
+                          <th style={thStyle}>Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filasExtrasTienda.map((f, i) => {
+                          const SEMANA_LABEL = { semana_1: "Semana 1", semana_2: "Semana 2", semana_3: "Semana 3", semana_4: "Semana 4" };
+                          const aprobado = f.aprobacionEstado === "aprobado";
+                          const rechazado = f.aprobacionEstado === "rechazado";
+                          return (
+                            <tr
+                              key={`${f.tiendaCodigo}-${f.semanaFecha}-${f.entryId}-${i}`}
+                              style={{
+                                borderTop: "1px solid #EDEBE4",
+                                background: aprobado ? "#E8F5E9" : rechazado ? "#FDECEA" : "white",
+                              }}
+                            >
+                              <td style={tdStyle}>{SEMANA_LABEL[f.semanaFecha] || f.semanaFecha}</td>
+                              <td style={tdStyle}>{f.dia}</td>
+                              <td style={{ ...tdStyle, fontWeight: 600 }}>{f.nombre}</td>
+                              <td style={tdStyle}>{f.cedula}</td>
+                              <td style={tdStyle}>{f.llegada}</td>
+                              <td style={tdStyle}>{f.salida}</td>
+                              <td style={{ ...tdStyle, color: "#E85D1F", fontWeight: 700 }}>{f.saldo}</td>
+                              <td style={tdStyle}>{f.esFestivo ? "Festivo" : "Normal"}</td>
+                              <td style={tdStyle}>
+                                {aprobado && <span style={{ color: "#2E7D32", fontWeight: 600 }}>✓ Aprobado</span>}
+                                {rechazado && <span style={{ color: "#C62828", fontWeight: 600 }}>✗ Rechazado</span>}
+                                {!f.aprobacionEstado && <span style={{ color: "#5C5F5A" }}>Pendiente</span>}
+                              </td>
+                              <td style={tdStyle}>
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <button
+                                    onClick={() => handleAprobacion(f, "aprobado")}
+                                    style={{
+                                      display: "inline-flex", alignItems: "center", gap: 4,
+                                      background: aprobado ? "#2E7D32" : "#E8F5E9",
+                                      color: aprobado ? "white" : "#2E7D32",
+                                      border: "1px solid #2E7D32", borderRadius: 5,
+                                      padding: "4px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                                    }}
+                                  >
+                                    <CheckCircle size={12} /> Aprobar
+                                  </button>
+                                  <button
+                                    onClick={() => handleAprobacion(f, "rechazado")}
+                                    style={{
+                                      display: "inline-flex", alignItems: "center", gap: 4,
+                                      background: rechazado ? "#C62828" : "#FDECEA",
+                                      color: rechazado ? "white" : "#C62828",
+                                      border: "1px solid #C62828", borderRadius: 5,
+                                      padding: "4px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                                    }}
+                                  >
+                                    <XCircle size={12} /> Rechazar
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             );
