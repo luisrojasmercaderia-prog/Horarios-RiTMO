@@ -17,6 +17,8 @@ const emptyEntry = (id) => ({
   breakInicio: "",
   breakFin: "",
   horasProgramadas: "",
+  llegadaReal: "",
+  salidaReal: "",
   horasReales: "",
   esFestivo: false,
   horasNocturnas: "",
@@ -40,6 +42,22 @@ function calcSaldo(prog, real) {
   if (isNaN(p) || isNaN(r)) return "";
   const diff = r - p;
   return diff === 0 ? "0" : diff > 0 ? `+${diff}` : `${diff}`;
+}
+
+function calcularHorasRealesDesdeLlegadaSalida(llegadaReal, salidaReal) {
+  if (!llegadaReal || !salidaReal) return "";
+  const [lh, lm] = llegadaReal.split(":").map(Number);
+  const [sh, sm] = salidaReal.split(":").map(Number);
+  if (isNaN(lh) || isNaN(lm) || isNaN(sh) || isNaN(sm)) return "";
+  let llegadaMin = lh * 60 + lm;
+  let salidaMin = sh * 60 + sm;
+  if (salidaMin < llegadaMin) {
+    salidaMin += 24 * 60;
+  }
+  const minutosTotales = salidaMin - llegadaMin - 60;
+  if (minutosTotales <= 0) return "0";
+  const horas = minutosTotales / 60;
+  return horas % 1 === 0 ? String(horas) : horas.toFixed(1);
 }
 
 function esNoLaborable(estado) {
@@ -255,6 +273,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
 
           if (field === "estado" && esNoLaborable(value)) {
             updated.horasProgramadas = "";
+            updated.llegadaReal = "";
+            updated.salidaReal = "";
             updated.horasReales = "";
             updated.llegada = "";
             updated.salida = "";
@@ -268,6 +288,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             updated.llegada = turno.llegada;
             updated.salida = turno.salida;
             updated.horasProgramadas = turno.horasProgramadas;
+            updated.llegadaReal = "";
+            updated.salidaReal = "";
             updated.horasReales = "";
             updated.breakInicio = "";
             updated.breakFin = "";
@@ -291,11 +313,15 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             }
           }
 
-          if (field === "horasProgramadas" || field === "horasReales" || field === "estado" || field === "llegada") {
+          if (field === "llegadaReal" || field === "salidaReal") {
+            updated.horasReales = calcularHorasRealesDesdeLlegadaSalida(updated.llegadaReal, updated.salidaReal);
+          }
+
+          if (field === "horasProgramadas" || field === "horasReales" || field === "estado" || field === "llegada" || field === "llegadaReal" || field === "salidaReal") {
             updated.saldo = calcSaldo(updated.horasProgramadas, updated.horasReales);
           }
 
-          if (field === "salida" || field === "llegada" || field === "estado" || field === "horasProgramadas" || field === "horasReales") {
+          if (field === "salida" || field === "llegada" || field === "estado" || field === "horasProgramadas" || field === "horasReales" || field === "llegadaReal" || field === "salidaReal") {
             updated.horasNocturnas = calcularHorasNocturnas(updated.salida, updated.saldo);
           }
           return updated;
@@ -515,6 +541,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <Th>Break Inicio</Th>
                       <Th>Break Fin</Th>
                       <Th>Hrs Programadas</Th>
+                      <Th>Llegada Real</Th>
+                      <Th>Salida Real</Th>
                       <Th>Hrs Reales</Th>
                       <Th>Hrs Nocturnas</Th>
                       <Th>Saldo</Th>
@@ -608,17 +636,25 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }} />
                         </Td>
                         <Td>
+                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.llegadaReal} onChange={(e) => updateEntry(d.dia, entry.id, "llegadaReal", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
+                        </Td>
+                        <Td>
+                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.salidaReal} onChange={(e) => updateEntry(d.dia, entry.id, "salidaReal", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
+                        </Td>
+                        <Td>
                           <div style={{ display: "flex", alignItems: "center", gap: 4, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
                             <input
-                              disabled={parcialBloqueado(entry)}
+                              disabled
+                              readOnly
                               className="cell-input"
                               value={entry.horasReales}
-                              onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value)}
                               placeholder="0"
                               style={{
                                 textAlign: "center",
-                                ...(parcialBloqueado(entry) ? disabledCellStyle : {}),
-                                ...(entry.esFestivo ? { background: "transparent", color: "#04342C", fontWeight: 600 } : {}),
+                                background: entry.esFestivo ? "transparent" : "#F2EFE9",
+                                color: entry.esFestivo ? "#04342C" : "#5C5F5A",
+                                fontWeight: entry.esFestivo ? 600 : 400,
+                                cursor: "default",
                               }}
                             />
                             <label
