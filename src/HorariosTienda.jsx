@@ -631,7 +631,19 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.breakFin} onChange={(e) => updateEntry(d.dia, entry.id, "breakFin", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
-                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.horasProgramadas} onChange={(e) => updateEntry(d.dia, entry.id, "horasProgramadas", e.target.value)} placeholder="0" style={{ textAlign: "center", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }} />
+                          <input
+                            disabled
+                            readOnly
+                            className="cell-input"
+                            value={entry.horasProgramadas}
+                            placeholder="0"
+                            style={{
+                              textAlign: "center",
+                              background: "#F2EFE9",
+                              color: "#5C5F5A",
+                              cursor: "default",
+                            }}
+                          />
                         </Td>
                         <Td>
                           <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.llegadaReal} onChange={(e) => updateEntry(d.dia, entry.id, "llegadaReal", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
