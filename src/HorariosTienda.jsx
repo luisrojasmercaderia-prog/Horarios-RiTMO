@@ -110,6 +110,20 @@ function calcSaldo(prog, real) {
   return diff === 0 ? "0" : diff > 0 ? `+${diff}` : `${diff}`;
 }
 
+const LIMITE_HORAS_FERIADO = 8;
+
+// Calcula cuánto de "Extra Feriada" corresponde a una fila (entry) de un día (dia).
+// Regla: en Domingo o en día marcado manualmente como festivo, todo lo que
+// exceda las 8 horas REALES trabajadas se considera extra feriada.
+function calcularExtraFeriada(dia, entry) {
+  const esDomingo = dia === "Domingo";
+  const esDiaFeriado = esDomingo || entry.esFestivo;
+  if (!esDiaFeriado) return 0;
+  const realesNum = parseFloat(entry.horasReales) || 0;
+  const excedente = realesNum - LIMITE_HORAS_FERIADO;
+  return excedente > 0 ? excedente : 0;
+}
+
 function calcularHorasRealesDesdeLlegadaSalida(llegadaReal, salidaReal) {
   if (!llegadaReal || !salidaReal) return "";
   const [lh, lm] = llegadaReal.split(":").map(Number);
@@ -517,17 +531,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         const reales = parseFloat(e.horasReales) || 0;
         const nocturnas = parseFloat(e.horasNocturnas) || 0;
         const saldo = parseFloat(e.saldo) || 0;
-        const esDomingo = d.dia === "Domingo";
-        const esFestivoManual = e.esFestivo && !esDomingo;
-        const esDiaFestivo = esDomingo || esFestivoManual;
+        const esDiaFeriado = d.dia === "Domingo" || e.esFestivo;
+        const extraFeriada = calcularExtraFeriada(d.dia, e);
         mapa[cedula].nocturnas += nocturnas;
-        if (esDiaFestivo) mapa[cedula].festivas += reales;
-        if (esDomingo) {
-          // Domingo: solo el excedente sobre lo programado cuenta como extra festiva.
-          if (saldo > 0) mapa[cedula].extrasFestivas += saldo;
-        } else if (esFestivoManual) {
-          // Festivo marcado manualmente entre semana: TODAS las horas reales cuentan como extra festiva.
-          if (reales > 0) mapa[cedula].extrasFestivas += reales;
+        if (esDiaFeriado) mapa[cedula].festivas += reales;
+        if (esDiaFeriado) {
+          // Domingo o festivo marcado: el excedente sobre 8h reales es extra feriada.
+          if (extraFeriada > 0) mapa[cedula].extrasFestivas += extraFeriada;
         } else if (saldo > 0) {
           mapa[cedula].extrasNormales += saldo;
         }
@@ -547,7 +557,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       Cédula: op.cedula || "",
       "Hrs Festivas": Number(fmt(op.festivas)),
       "Hrs Nocturnas": Number(fmt(op.nocturnas)),
-      "Hrs Extras Festivas": Number(fmt(op.extrasFestivas)),
+      "Hrs Extras Feriadas": Number(fmt(op.extrasFestivas)),
       "Hrs Extras Normales": Number(fmt(op.extrasNormales)),
     }));
     const hoja = XLSX.utils.json_to_sheet(filas);
@@ -760,7 +770,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <th style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
                       <th className="col-nocturnas no-print" style={thStyle}>Hrs Noct.</th>
                       <th className="col-saldo no-print" style={thStyle}>Extra</th>
-                      <th className="col-saldo-festiva no-print" style={thStyle}>Extra Festiva</th>
+                      <th className="col-saldo-festiva no-print" style={thStyle}>Extra Feriada</th>
                       <th className="col-firma-screen" style={thStyle}>Firma</th>
                       <th className="col-obs no-print" style={thStyle}>Observación</th>
                       <th className="col-acciones no-print" style={thStyle}></th>
@@ -860,13 +870,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                         <td className="col-saldo no-print" style={tdStyle}>
                           <span style={{ fontSize: 12, fontWeight: 700, color: entry.saldo.startsWith("+") ? "#B3261E" : entry.saldo.startsWith("-") ? "#946800" : "#5C5F5A" }}>
                             {(() => {
-                              const esDomingo = d.dia === "Domingo";
-                              const esFestivoManual = entry.esFestivo && !esDomingo;
-                              const saldoNum = parseFloat(entry.saldo) || 0;
-                              // Domingo: solo el excedente sobre lo programado va a "Extra Festiva", aquí se oculta.
-                              if (esDomingo && saldoNum > 0) return entry.saldo.startsWith("-") ? entry.saldo : "0";
-                              // Festivo marcado manualmente (día de semana): TODAS las horas reales van a "Extra Festiva", aquí se oculta.
-                              if (esFestivoManual) return "0";
+                              const esDiaFeriado = d.dia === "Domingo" || entry.esFestivo;
+                              // Día feriado/domingo: el excedente sobre 8h reales se muestra en "Extra Feriada", aquí se oculta.
+                              if (esDiaFeriado) {
+                                const extraFeriada = calcularExtraFeriada(d.dia, entry);
+                                if (extraFeriada > 0) return entry.saldo.startsWith("-") ? entry.saldo : "0";
+                              }
                               return entry.saldo;
                             })()}
                           </span>
@@ -874,15 +883,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                         <td className="col-saldo-festiva no-print" style={tdStyle}>
                           <span style={{ fontSize: 12, fontWeight: 700, color: "#B3261E" }}>
                             {(() => {
-                              const esDomingo = d.dia === "Domingo";
-                              const esFestivoManual = entry.esFestivo && !esDomingo;
-                              const saldoNum = parseFloat(entry.saldo) || 0;
-                              const realesNum = parseFloat(entry.horasReales) || 0;
-                              // Domingo: solo el excedente sobre lo programado.
-                              if (esDomingo && saldoNum > 0) return `+${saldoNum}`;
-                              // Festivo marcado manualmente: TODAS las horas reales trabajadas ese día.
-                              if (esFestivoManual && realesNum > 0) return `+${realesNum}`;
-                              return "0";
+                              const extraFeriada = calcularExtraFeriada(d.dia, entry);
+                              return extraFeriada > 0 ? `+${extraFeriada}` : "0";
                             })()}
                           </span>
                         </td>
@@ -957,7 +959,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                   <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
                     <th style={thStyle}>Operario</th><th style={thStyle}>Cédula</th>
                     <th style={thStyle}>Hrs Festivas</th><th style={thStyle}>Hrs Nocturnas</th>
-                    <th style={thStyle}>Extras Festivas</th><th style={thStyle}>Extras Normales</th>
+                    <th style={thStyle}>Extras Feriadas</th><th style={thStyle}>Extras Normales</th>
                   </tr>
                 </thead>
                 <tbody>
