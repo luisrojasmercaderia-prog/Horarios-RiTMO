@@ -740,7 +740,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <th style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
                       <th className="col-nocturnas no-print" style={thStyle}>Hrs Noct.</th>
                       <th className="col-saldo no-print" style={thStyle}>Saldo</th>
-                      <th style={thStyle}>Firma</th>
+                      <th className="col-firma-screen" style={thStyle}>Firma</th>
                       <th className="col-obs no-print" style={thStyle}>Observación</th>
                       <th className="col-acciones no-print" style={thStyle}></th>
                     </tr>
@@ -783,12 +783,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           </select>
                         </td>
                         <td style={tdStyle}>
-                          <select disabled={estaBloqueado(entry)} className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
+                          <select key={`${entry.id}-${entry.estado}`} disabled={estaBloqueado(entry)} className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
                             style={{ cursor: "pointer", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }}>
                             <option value="">--:-- --</option>
                             <option value="06:00">6:00 AM</option>
                             <option value="07:00">7:00 AM</option>
                             <option value="07:30">7:30 AM</option>
+                            <option value="12:30">12:30 PM</option>
                             <option value="13:30">1:30 PM</option>
                           </select>
                         </td>
@@ -839,7 +840,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             {entry.saldo}
                           </span>
                         </td>
-                        <td style={tdStyle}>
+                        <td className="col-firma-screen" style={tdStyle}>
                           <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.firma}
                             onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)}
                             style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
