@@ -384,7 +384,35 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const totalProgramadas = days.reduce((sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasProgramadas) || 0), 0), 0);
   const totalReales = days.reduce((sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasReales) || 0), 0), 0);
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    // Auto-escala el contenido para que siempre quepa en una sola página
+    const style = document.createElement("style");
+    style.id = "print-autoscale";
+    style.innerHTML = `
+      @media print {
+        html, body { zoom: 1 !important; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Calculamos el zoom necesario basado en la altura real del contenido
+    const wrapper = document.querySelector(".print-wrapper");
+    if (wrapper) {
+      // Tamaño de página landscape A4 en px a 96dpi: 1122 x 793
+      const pageH = 793;
+      const contentH = wrapper.scrollHeight;
+      const ratio = Math.min(pageH / contentH, 1);
+      const zoomVal = (ratio * 0.95).toFixed(3); // 5% de margen de seguridad
+      style.innerHTML = `@media print { html, body { zoom: ${zoomVal} !important; min-height: 0 !important; height: auto !important; } .root-wrap, #root, body > div { min-height: 0 !important; height: auto !important; } }`;
+    }
+
+    window.print();
+
+    setTimeout(() => {
+      const s = document.getElementById("print-autoscale");
+      if (s) s.remove();
+    }, 1000);
+  };
 
   const consolidadoPorOperario = (() => {
     const mapa = {};
@@ -443,7 +471,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
 
           /* Zoom para llenar toda la hoja */
           html, body {
-            zoom: 0.75;
+            zoom: 0.62;
             width: 100%;
             overflow: visible;
             min-height: 0 !important;
