@@ -475,12 +475,21 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
 
           /* Tipografía compacta */
           table { font-size: 8px !important; border-collapse: collapse !important; width: 100% !important; }
-          th, td { padding: 1px 3px !important; line-height: 1.2 !important; }
-          .cell-input { font-size: 8px !important; padding: 0 !important; height: auto !important; width: 100% !important; }
-          .day-title { font-size: 9px !important; }
-          .day-block { margin-bottom: 2px !important; padding: 0 !important; }
+          th, td { padding: 0px 3px !important; line-height: 1.05 !important; height: 10px !important; }
+          .cell-input { font-size: 8px !important; padding: 0 !important; height: 10px !important; width: 100% !important; line-height: 1.05 !important; }
+          .day-title { font-size: 8px !important; line-height: 1 !important; }
+          .day-block { margin-bottom: 1px !important; padding: 0 !important; border-radius: 0 !important; }
           .print-table { min-width: 0 !important; width: 100% !important; }
-          .day-header { padding: 2px 5px !important; }
+          .day-header { padding: 1px 4px !important; min-height: 0 !important; }
+          
+          /* Eliminar todos los márgenes y paddings internos */
+          .sheet > * { margin-bottom: 3px !important; }
+          .print-nota { margin-bottom: 3px !important; padding-bottom: 2px !important; }
+          .store-info-grid { margin-bottom: 3px !important; }
+          
+          /* Filas de tabla sin altura fija del navegador */
+          tr { height: auto !important; min-height: 0 !important; }
+          input, select { height: 10px !important; min-height: 0 !important; line-height: 1 !important; }
 
           /* Filas vacías ocultas */
           .empty-row { display: none !important; }
