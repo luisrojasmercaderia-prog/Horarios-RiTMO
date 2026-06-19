@@ -384,35 +384,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const totalProgramadas = days.reduce((sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasProgramadas) || 0), 0), 0);
   const totalReales = days.reduce((sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasReales) || 0), 0), 0);
 
-  const handlePrint = () => {
-    // Auto-escala el contenido para que siempre quepa en una sola página
-    const style = document.createElement("style");
-    style.id = "print-autoscale";
-    style.innerHTML = `
-      @media print {
-        html, body { zoom: 1 !important; }
-      }
-    `;
-    document.head.appendChild(style);
-
-    // Calculamos el zoom necesario basado en la altura real del contenido
-    const wrapper = document.querySelector(".print-wrapper");
-    if (wrapper) {
-      // Tamaño de página landscape A4 en px a 96dpi: 1122 x 793
-      const pageH = 793;
-      const contentH = wrapper.scrollHeight;
-      const ratio = Math.min(pageH / contentH, 1);
-      const zoomVal = (ratio * 0.95).toFixed(3); // 5% de margen de seguridad
-      style.innerHTML = `@media print { html, body { zoom: ${zoomVal} !important; min-height: 0 !important; height: auto !important; } .root-wrap, #root, body > div { min-height: 0 !important; height: auto !important; } }`;
-    }
-
-    window.print();
-
-    setTimeout(() => {
-      const s = document.getElementById("print-autoscale");
-      if (s) s.remove();
-    }, 1000);
-  };
+  const handlePrint = () => window.print();
 
   const consolidadoPorOperario = (() => {
     const mapa = {};
@@ -471,7 +443,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
 
           /* Zoom para llenar toda la hoja */
           html, body {
-            zoom: 0.62;
+            zoom: 0.58;
             width: 100%;
             overflow: visible;
             min-height: 0 !important;
@@ -502,21 +474,19 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           }
 
           /* Tipografía compacta pero legible */
-          table { font-size: 9px !important; border-collapse: collapse !important; width: 100% !important; }
-          th, td { padding: 3px 4px !important; line-height: 1.4 !important; }
-          .cell-input { font-size: 9px !important; padding: 0 !important; height: auto !important; width: 100% !important; }
-          .day-title { font-size: 10px !important; }
-          .day-block { margin-bottom: 4px !important; padding: 0 !important; border-radius: 0 !important; }
+          table { font-size: 8.5px !important; border-collapse: collapse !important; width: 100% !important; }
+          th, td { padding: 2px 4px !important; line-height: 1.3 !important; }
+          .cell-input { font-size: 8.5px !important; padding: 0 !important; height: auto !important; width: 100% !important; }
+          .day-title { font-size: 9px !important; }
+          .day-block { margin-bottom: 3px !important; padding: 0 !important; border-radius: 0 !important; }
           .print-table { min-width: 0 !important; width: 100% !important; }
-          .day-header { padding: 4px 6px !important; }
+          .day-header { padding: 3px 5px !important; }
 
-          /* Márgenes internos normales */
-          .sheet > * { margin-bottom: 6px !important; }
-          .print-nota { margin-bottom: 6px !important; padding-bottom: 4px !important; }
-          .store-info-grid { margin-bottom: 8px !important; }
+          .print-nota { margin-bottom: 4px !important; padding-bottom: 3px !important; }
+          .store-info-grid { margin-bottom: 5px !important; }
 
           tr { height: auto !important; }
-          input, select { height: auto !important; line-height: 1.4 !important; }
+          input, select { height: auto !important; line-height: 1.3 !important; }
 
           /* Filas vacías ocultas */
           .empty-row { display: none !important; }
