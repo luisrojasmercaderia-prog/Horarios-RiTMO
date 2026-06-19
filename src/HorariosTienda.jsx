@@ -751,7 +751,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <th className="col-salida-real no-print" style={thStyle}>Salida Real</th>
                       <th style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
                       <th className="col-nocturnas no-print" style={thStyle}>Hrs Noct.</th>
-                      <th className="col-saldo no-print" style={thStyle}>Saldo</th>
+                      <th className="col-saldo no-print" style={thStyle}>Extra</th>
                       <th className="col-firma-screen" style={thStyle}>Firma</th>
                       <th className="col-obs no-print" style={thStyle}>Observación</th>
                       <th className="col-acciones no-print" style={thStyle}></th>
