@@ -654,6 +654,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           .footer-supervisor { padding-top: 5px !important; }
           .firma-line { margin-top: 12px !important; }
 
+          /* Mostrar la columna Firma solo al imprimir */
+          .col-firma-screen { display: table-cell !important; }
+
           /* Header de pantalla oculto */
           .top-bar { display: none !important; }
 
@@ -664,6 +667,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             background: white !important;
           }
         }
+
+        /* Columna Firma oculta en pantalla, solo visible al imprimir (ver regla @media print arriba) */
+        .col-firma-screen { display: none; }
 
         input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
         .cell-input {
