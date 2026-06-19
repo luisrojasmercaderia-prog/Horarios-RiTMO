@@ -657,6 +657,14 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           /* Mostrar la columna Firma solo al imprimir */
           .col-firma-screen { display: table-cell !important; }
 
+          /* La celda de Firma se ve como un espacio en blanco con línea inferior para firmar a mano */
+          .firma-line-print {
+            display: block !important;
+            border-bottom: 1px solid #C9C6BC !important;
+            min-height: 14px !important;
+            width: 100% !important;
+          }
+
           /* Header de pantalla oculto */
           .top-bar { display: none !important; }
 
@@ -895,9 +903,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           </span>
                         </td>
                         <td className="col-firma-screen" style={tdStyle}>
-                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.firma}
-                            onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)}
-                            style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
+                          <span className="firma-line-print" />
                         </td>
                         <td className="col-obs no-print" style={tdStyle}>
                           <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.observacion}
