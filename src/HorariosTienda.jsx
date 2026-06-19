@@ -197,6 +197,35 @@ function calcularHorasNocturnas(horaSalida) {
   return horas % 1 === 0 ? String(horas) : horas.toFixed(1);
 }
 
+// Dada una fecha (por defecto hoy), determina a qué periodo de nómina pertenece
+// y qué semana del periodo le corresponde. El periodo de corte 20 funciona así:
+// si el día es 21 o posterior, el periodo pertenece al MES SIGUIENTE (cierra el 20 de ese mes).
+// si el día es 20 o anterior, el periodo pertenece al MES ACTUAL.
+function getPeriodoActual(fechaRef) {
+  const ref = fechaRef || new Date();
+  const dia = ref.getDate();
+  let anio = ref.getFullYear();
+  let mes = ref.getMonth() + 1; // mes calendario 1-12
+
+  if (dia >= 21) {
+    // Pertenece al periodo que cierra el 20 del mes siguiente
+    mes += 1;
+    if (mes > 12) { mes = 1; anio += 1; }
+  }
+  // Si dia <= 20, pertenece al periodo que cierra el 20 de este mismo mes
+
+  const semanas = getSemanasDelPeriodo(anio, mes);
+  // Buscamos en qué semana cae la fecha de referencia
+  const refSinHora = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  let semanaIdx = 0;
+  for (let i = 0; i < semanas.length; i++) {
+    const tieneFecha = semanas[i].some((d) => d && d.getTime() === refSinHora.getTime());
+    if (tieneFecha) { semanaIdx = i; break; }
+  }
+
+  return { anio, mes, semanaIdx };
+}
+
 function diasVacios(semanaFechas) {
   let id = 1;
   return DIAS.map((d, idx) => {
@@ -218,11 +247,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [loaded, setLoaded] = useState(false);
   const [showConsolidado, setShowConsolidado] = useState(false);
 
-  // Periodo de nómina: corte el día 20. anioPeriodo/mesPeriodo definen el mes de CIERRE.
+  // Periodo de nómina: corte el día 20. Se detecta automáticamente según la fecha de hoy,
+  // así la tienda no tiene que seleccionar nada manualmente al entrar.
   const hoy = new Date();
-  const [anioPeriodo, setAnioPeriodo] = useState(hoy.getFullYear());
-  const [mesPeriodo, setMesPeriodo] = useState(hoy.getMonth() + 1);
-  const [semanaIdx, setSemanaIdx] = useState(0);
+  const periodoInicial = getPeriodoActual(hoy);
+  const [anioPeriodo, setAnioPeriodo] = useState(periodoInicial.anio);
+  const [mesPeriodo, setMesPeriodo] = useState(periodoInicial.mes);
+  const [semanaIdx, setSemanaIdx] = useState(periodoInicial.semanaIdx);
 
   const semanasDelPeriodo = getSemanasDelPeriodo(anioPeriodo, mesPeriodo);
   // Si el índice quedó fuera de rango (ej. al cambiar de periodo), lo corregimos
@@ -624,38 +655,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             <div style={{ fontSize: 20, fontWeight: 700 }}>Programación de Horarios Semanales</div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <select
-              value={mesPeriodo}
-              onChange={(e) => { setMesPeriodo(Number(e.target.value)); setSemanaIdx(0); }}
-              title="Mes de corte de nómina (cierra el día 20)"
-              style={{ border: "none", borderRadius: 7, padding: "8px 12px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", background: "#FFFFFF", color: "#E85D1F", cursor: "pointer" }}
-            >
-              {NOMBRES_MESES.map((nombre, i) => (
-                <option key={i} value={i + 1}>{nombre}</option>
-              ))}
-            </select>
-            <select
-              value={anioPeriodo}
-              onChange={(e) => { setAnioPeriodo(Number(e.target.value)); setSemanaIdx(0); }}
-              style={{ border: "none", borderRadius: 7, padding: "8px 12px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", background: "#FFFFFF", color: "#E85D1F", cursor: "pointer" }}
-            >
-              {[hoy.getFullYear() - 1, hoy.getFullYear(), hoy.getFullYear() + 1].map((a) => (
-                <option key={a} value={a}>{a}</option>
-              ))}
-            </select>
-            <select
-              value={semanaIdxSegura}
-              onChange={(e) => setSemanaIdx(Number(e.target.value))}
-              title="Semana dentro del periodo de nómina"
-              style={{ border: "none", borderRadius: 7, padding: "8px 12px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", background: "#FFFFFF", color: "#E85D1F", cursor: "pointer" }}
-            >
-              {semanasDelPeriodo.map((semana, i) => {
-                const primerDia = semana.find((d) => d !== null);
-                const ultimoDia = [...semana].reverse().find((d) => d !== null);
-                const rango = primerDia && ultimoDia ? ` (${formatFechaCorta(primerDia)}–${formatFechaCorta(ultimoDia)})` : "";
-                return <option key={i} value={i}>Semana {i + 1}{rango}</option>;
-              })}
-            </select>
             <SaveIndicator state={saveState} />
             <button onClick={() => setShowEmpleados(true)} style={btnStyle("#FFFFFF", "#E85D1F")}><Users size={15} /> Empleados</button>
             <button onClick={() => setShowConsolidado(true)} style={btnStyle("#FFFFFF", "#E85D1F")}><Clock size={15} /> Consolidado</button>
@@ -665,6 +664,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         </div>
         <div style={{ maxWidth: 1400, margin: "8px auto 0", fontSize: 12, opacity: 0.9 }}>
           Periodo de nómina: <strong>{getPeriodoLabel(anioPeriodo, mesPeriodo)}</strong> (21 de {NOMBRES_MESES[(mesPeriodo - 2 + 12) % 12]} – 20 de {NOMBRES_MESES[mesPeriodo - 1]})
+          {semanaFechas.some((d) => d) && (
+            <> · Semana actual: {formatFechaCorta(semanaFechas.find((d) => d))} – {formatFechaCorta([...semanaFechas].reverse().find((d) => d))}</>
+          )}
         </div>
       </div>
 
