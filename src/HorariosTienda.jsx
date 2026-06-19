@@ -432,7 +432,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   };
 
   return (
-    <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#FFF6EE", minHeight: "100vh", color: "#241C14" }}>
+    <div className="root-wrap" style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#FFF6EE", minHeight: "100vh", color: "#241C14" }}>
       <style>{`
         @media print {
           .no-print { display: none !important; }
@@ -446,6 +446,15 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             zoom: 0.42;
             width: 100%;
             overflow: visible;
+            min-height: 0 !important;
+            height: auto !important;
+          }
+
+          /* Eliminar minHeight: 100vh que genera el espacio vacío */
+          body > div, #root, #root > div {
+            min-height: 0 !important;
+            height: auto !important;
+            background: white !important;
           }
 
           .print-wrapper {
@@ -453,6 +462,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             margin: 0 !important;
             max-width: 100% !important;
             width: 100% !important;
+            min-height: 0 !important;
+            height: auto !important;
           }
 
           .sheet {
@@ -501,6 +512,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
 
           /* Header de pantalla oculto */
           .top-bar { display: none !important; }
+
+          /* Eliminar altura mínima del contenedor raíz */
+          .root-wrap {
+            min-height: 0 !important;
+            height: auto !important;
+            background: white !important;
+          }
         }
 
         input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
