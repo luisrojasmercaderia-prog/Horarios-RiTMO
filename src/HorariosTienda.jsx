@@ -729,7 +729,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <th style={thStyle}>Mes/Día</th>
                       <th style={thStyle}>Nombre</th>
                       <th style={thStyle}>Cédula</th>
-                      <th style={{ ...thStyle, minWidth: 170 }}>Estado</th>
+                      <th style={{ ...thStyle, width: 195, minWidth: 195 }}>Estado</th>
                       <th style={thStyle}>Hora Llegada</th>
                       <th style={thStyle}>Hora Salida</th>
                       <th className="col-break-inicio no-print" style={thStyle}>Break Inicio</th>
@@ -769,9 +769,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           <input className="cell-input" value={entry.cedula} readOnly placeholder="Selecciona un nombre"
                             style={{ minWidth: 100, background: entry.cedula.trim() === "" ? "#FCEBEB" : "#F2EFE9", borderRadius: 4, color: "#5C5F5A", cursor: "default" }} />
                         </td>
-                        <td style={{ ...tdStyle, minWidth: 170 }}>
+                        <td style={{ ...tdStyle, width: 195, minWidth: 195, maxWidth: 195 }}>
                           <select className="cell-input" value={entry.estado} onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
-                            style={{ cursor: "pointer", width: "100%", minWidth: 160, whiteSpace: "nowrap", fontWeight: estaBloqueado(entry) ? 700 : 400, color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14" }}>
+                            style={{ cursor: "pointer", width: "100%", whiteSpace: "nowrap", fontWeight: estaBloqueado(entry) ? 700 : 400, color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14" }}>
                             <option value="trabaja">Trabaja</option>
                             <option value="t_inventario_manana">T.Inventario mañana</option>
                             <option value="domingo_t_manana">Domingo T. mañana</option>
