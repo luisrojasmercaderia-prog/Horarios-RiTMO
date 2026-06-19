@@ -531,26 +531,28 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          .sheet { box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
+          .sheet { box-shadow: none !important; padding: 4px !important; margin: 0 !important; }
           body { background: white !important; margin: 0 !important; padding: 0 !important; }
-          @page { size: landscape; margin: 3mm; }
+          @page { size: landscape; margin: 5mm; }
           html, body { width: 100%; height: auto; overflow: visible; }
           * { page-break-inside: avoid !important; page-break-before: avoid !important; page-break-after: avoid !important; }
           .print-scale {
-            transform: scale(0.62);
-            transform-origin: top left;
-            width: 161%;
+            transform: none !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
           }
-          table { font-size: 8px !important; border-collapse: collapse !important; }
-          th, td { padding: 1px 3px !important; line-height: 1.2 !important; }
-          .cell-input { font-size: 8px !important; padding: 0 !important; height: 16px !important; min-height: 0 !important; }
+          table { font-size: 8px !important; border-collapse: collapse !important; width: 100% !important; table-layout: fixed !important; }
+          th, td { padding: 2px 3px !important; line-height: 1.3 !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+          .cell-input { font-size: 8px !important; padding: 0 !important; height: auto !important; width: 100% !important; }
           h1, .day-title { font-size: 9px !important; margin: 0 !important; }
-          .day-block { margin-bottom: 2px !important; padding: 0 !important; }
-          .print-table { min-width: 0 !important; }
+          .day-block { margin-bottom: 3px !important; padding: 0 !important; }
+          .print-table { min-width: 0 !important; width: 100% !important; }
           .empty-row { display: none !important; }
-          .day-header { padding: 1px 4px !important; font-size: 8px !important; }
-          input, select { border: none !important; background: transparent !important; font-size: 8px !important; }
-          select { -webkit-appearance: none; appearance: none; }
+          .day-header { padding: 2px 4px !important; font-size: 8px !important; }
+          input, select { border: none !important; background: transparent !important; font-size: 8px !important; width: 100% !important; }
+          select { -webkit-appearance: none !important; appearance: none !important; }
         }
         input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
         .cell-input {
