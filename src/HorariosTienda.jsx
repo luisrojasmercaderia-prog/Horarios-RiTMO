@@ -533,25 +533,24 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           .no-print { display: none !important; }
           .sheet { box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
           body { background: white !important; margin: 0 !important; padding: 0 !important; }
-          @page { size: landscape; margin: 2mm; }
+          @page { size: landscape; margin: 3mm; }
           html, body { width: 100%; height: auto; overflow: visible; }
           * { page-break-inside: avoid !important; page-break-before: avoid !important; page-break-after: avoid !important; }
           .print-scale {
-            transform: scale(0.42);
+            transform: scale(0.62);
             transform-origin: top left;
-            width: 238%;
+            width: 161%;
           }
-          table { font-size: 6.5px !important; border-collapse: collapse !important; }
-          th, td { padding: 0.5px 2px !important; line-height: 1.1 !important; }
-          .cell-input { font-size: 6.5px !important; padding: 0 !important; height: 14px !important; min-height: 0 !important; }
-          h1, .day-title { font-size: 8px !important; margin: 0 !important; }
-          .day-block { margin-bottom: 1px !important; padding: 0 !important; }
+          table { font-size: 8px !important; border-collapse: collapse !important; }
+          th, td { padding: 1px 3px !important; line-height: 1.2 !important; }
+          .cell-input { font-size: 8px !important; padding: 0 !important; height: 16px !important; min-height: 0 !important; }
+          h1, .day-title { font-size: 9px !important; margin: 0 !important; }
+          .day-block { margin-bottom: 2px !important; padding: 0 !important; }
           .print-table { min-width: 0 !important; }
           .empty-row { display: none !important; }
-          .day-header { padding: 1px 3px !important; font-size: 7px !important; }
-          input, select { border: none !important; background: transparent !important; font-size: 6.5px !important; }
+          .day-header { padding: 1px 4px !important; font-size: 8px !important; }
+          input, select { border: none !important; background: transparent !important; font-size: 8px !important; }
           select { -webkit-appearance: none; appearance: none; }
-          div, section { margin: 0 !important; padding: 0 !important; }
         }
         input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
         .cell-input {
@@ -654,17 +653,17 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <Th>Estado</Th>
                       <Th>Hora Llegada</Th>
                       <Th>Hora Salida</Th>
-                      <Th>Break Inicio</Th>
-                      <Th>Break Fin</Th>
+                      <Th printHide>Break Inicio</Th>
+                      <Th printHide>Break Fin</Th>
                       <Th>Hrs Programadas</Th>
-                      <Th>Llegada Real</Th>
-                      <Th>Salida Real</Th>
+                      <Th printHide>Llegada Real</Th>
+                      <Th printHide>Salida Real</Th>
                       <Th>Hrs Reales</Th>
-                      <Th>Hrs Nocturnas</Th>
-                      <Th>Saldo</Th>
-                      <Th>Firma</Th>
-                      <Th>Observación</Th>
-                      <Th></Th>
+                      <Th printHide>Hrs Nocturnas</Th>
+                      <Th printHide>Saldo</Th>
+                      <Th printHide>Firma</Th>
+                      <Th printHide>Observación</Th>
+                      <Th printHide></Th>
                     </tr>
                   </thead>
                   <tbody>
@@ -765,10 +764,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }}
                           />
                         </Td>
-                        <Td>
+                        <Td printHide>
                           <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
-                        <Td>
+                        <Td printHide>
                           <input
                             disabled
                             readOnly
@@ -793,10 +792,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             }}
                           />
                         </Td>
-                        <Td>
+                        <Td printHide>
                           <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.llegadaReal} onChange={(e) => updateEntry(d.dia, entry.id, "llegadaReal", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
-                        <Td>
+                        <Td printHide>
                           <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.salidaReal} onChange={(e) => updateEntry(d.dia, entry.id, "salidaReal", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td>
@@ -830,12 +829,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             </label>
                           </div>
                         </Td>
-                        <Td>
+                        <Td printHide>
                           <span style={{ fontSize: 12, color: "#5C5F5A", display: "block", textAlign: "center" }}>
                             {entry.horasNocturnas || "0"}
                           </span>
                         </Td>
-                        <Td>
+                        <Td printHide>
                           <span
                             style={{
                               fontSize: 12,
@@ -846,13 +845,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             {entry.saldo}
                           </span>
                         </Td>
-                        <Td>
+                        <Td printHide>
                           <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.firma} onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
-                        <Td>
+                        <Td printHide>
                           <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder="—" style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
-                        <Td>
+                        <Td printHide>
                           {d.entries.length > 1 && (
                             <button className="no-print" onClick={() => removeEntry(d.dia, entry.id)} style={iconBtnStyle}>
                               <Trash2 size={14} color="#B3261E" />
@@ -1148,12 +1147,12 @@ function Field({ label, children }) {
   );
 }
 
-function Th({ children }) {
-  return <th style={{ padding: "9px 8px", textAlign: "left", fontWeight: 600 }}>{children}</th>;
+function Th({ children, printHide }) {
+  return <th className={printHide ? "no-print" : ""} style={{ padding: "9px 8px", textAlign: "left", fontWeight: 600 }}>{children}</th>;
 }
 
-function Td({ children, style }) {
-  return <td style={{ padding: "4px 8px", fontSize: 12.5, verticalAlign: "middle", borderTop: "1px solid #EDEBE4", ...style }}>{children}</td>;
+function Td({ children, style, printHide }) {
+  return <td className={printHide ? "no-print" : ""} style={{ padding: "4px 8px", fontSize: 12.5, verticalAlign: "middle", borderTop: "1px solid #EDEBE4", ...style }}>{children}</td>;
 }
 
 function SummaryRow({ label, value, bold, color }) {
