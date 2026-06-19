@@ -655,6 +655,19 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             <div style={{ fontSize: 20, fontWeight: 700 }}>Programación de Horarios Semanales</div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value={semanaIdxSegura}
+              onChange={(e) => setSemanaIdx(Number(e.target.value))}
+              title="Semana dentro del periodo de nómina actual"
+              style={{ border: "none", borderRadius: 7, padding: "8px 12px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", background: "#FFFFFF", color: "#E85D1F", cursor: "pointer" }}
+            >
+              {semanasDelPeriodo.map((semana, i) => {
+                const primerDia = semana.find((d) => d !== null);
+                const ultimoDia = [...semana].reverse().find((d) => d !== null);
+                const rango = primerDia && ultimoDia ? ` (${formatFechaCorta(primerDia)}–${formatFechaCorta(ultimoDia)})` : "";
+                return <option key={i} value={i}>Semana {i + 1}{rango}</option>;
+              })}
+            </select>
             <SaveIndicator state={saveState} />
             <button onClick={() => setShowEmpleados(true)} style={btnStyle("#FFFFFF", "#E85D1F")}><Users size={15} /> Empleados</button>
             <button onClick={() => setShowConsolidado(true)} style={btnStyle("#FFFFFF", "#E85D1F")}><Clock size={15} /> Consolidado</button>
@@ -664,9 +677,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         </div>
         <div style={{ maxWidth: 1400, margin: "8px auto 0", fontSize: 12, opacity: 0.9 }}>
           Periodo de nómina: <strong>{getPeriodoLabel(anioPeriodo, mesPeriodo)}</strong> (21 de {NOMBRES_MESES[(mesPeriodo - 2 + 12) % 12]} – 20 de {NOMBRES_MESES[mesPeriodo - 1]})
-          {semanaFechas.some((d) => d) && (
-            <> · Semana actual: {formatFechaCorta(semanaFechas.find((d) => d))} – {formatFechaCorta([...semanaFechas].reverse().find((d) => d))}</>
-          )}
         </div>
       </div>
 
