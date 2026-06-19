@@ -34,8 +34,6 @@ const emptyDay = (dia, idStart) => ({
   entries: Array.from({ length: ROWS_PER_DAY }, (_, i) => emptyEntry(idStart + i)),
 });
 
-const STORAGE_KEY = "ritmo-horarios-v2";
-
 function calcSaldo(prog, real) {
   const p = parseFloat(prog);
   const r = parseFloat(real);
@@ -51,9 +49,7 @@ function calcularHorasRealesDesdeLlegadaSalida(llegadaReal, salidaReal) {
   if (isNaN(lh) || isNaN(lm) || isNaN(sh) || isNaN(sm)) return "";
   let llegadaMin = lh * 60 + lm;
   let salidaMin = sh * 60 + sm;
-  if (salidaMin < llegadaMin) {
-    salidaMin += 24 * 60;
-  }
+  if (salidaMin < llegadaMin) salidaMin += 24 * 60;
   const minutosTotales = salidaMin - llegadaMin - 60;
   if (minutosTotales <= 0) return "0";
   const horas = minutosTotales / 60;
@@ -109,10 +105,6 @@ function getLlegadasValidasDesdeTurno(turno) {
   return [];
 }
 
-function calcularSalidaAutomatica(horaLlegada) {
-  return HORARIOS_PREDETERMINADOS[horaLlegada] || null;
-}
-
 function sumarUnaHora(hora) {
   if (!hora) return null;
   const [h, m] = hora.split(":").map(Number);
@@ -123,17 +115,14 @@ function sumarUnaHora(hora) {
   return `${String(nuevaH).padStart(2, "0")}:${String(nuevaM).padStart(2, "0")}`;
 }
 
-const INICIO_NOCTURNO_MIN = 21 * 60; // 9:00 p.m.
+const INICIO_NOCTURNO_MIN = 21 * 60;
 
 function calcularHorasNocturnas(horaSalida) {
   if (!horaSalida) return "";
   const [h, m] = horaSalida.split(":").map(Number);
   if (isNaN(h) || isNaN(m)) return "";
   let salidaMin = h * 60 + m;
-  // Si la salida cae en la madrugada (ej. 00:30), se asume que es despues de medianoche
-  if (salidaMin < INICIO_NOCTURNO_MIN && salidaMin < 6 * 60) {
-    salidaMin += 24 * 60;
-  }
+  if (salidaMin < INICIO_NOCTURNO_MIN && salidaMin < 6 * 60) salidaMin += 24 * 60;
   if (salidaMin <= INICIO_NOCTURNO_MIN) return "0";
   const minutosNocturnos = salidaMin - INICIO_NOCTURNO_MIN;
   const horas = minutosNocturnos / 60;
@@ -179,13 +168,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         .eq("tienda_codigo", codigoTienda)
         .eq("semana_fecha", semana);
       const mapa = {};
-      (data || []).forEach((a) => {
-        mapa[a.entry_id] = a.estado;
-      });
+      (data || []).forEach((a) => { mapa[a.entry_id] = a.estado; });
       setAprobaciones(mapa);
-    } catch (e) {
-      // sin aprobaciones
-    }
+    } catch (e) {}
   }, [codigoTienda]);
 
   const cargarEmpleados = useCallback(async () => {
@@ -195,17 +180,11 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         .select("id, nombre, cedula")
         .eq("tienda_codigo", codigoTienda)
         .order("nombre", { ascending: true });
-      if (!error && data) {
-        setEmpleados(data);
-      }
-    } catch (e) {
-      // sin empleados registrados todavia
-    }
+      if (!error && data) setEmpleados(data);
+    } catch (e) {}
   }, [codigoTienda]);
 
-  useEffect(() => {
-    cargarEmpleados();
-  }, [cargarEmpleados]);
+  useEffect(() => { cargarEmpleados(); }, [cargarEmpleados]);
 
   useEffect(() => {
     let activo = true;
@@ -213,20 +192,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     (async () => {
       try {
         const { data: tiendaData } = await supabase
-          .from("tiendas")
-          .select("nombre")
-          .eq("codigo", codigoTienda)
-          .maybeSingle();
-        if (activo && tiendaData) {
-          setTienda(tiendaData.nombre || "");
-        }
+          .from("tiendas").select("nombre").eq("codigo", codigoTienda).maybeSingle();
+        if (activo && tiendaData) setTienda(tiendaData.nombre || "");
 
         const { data, error } = await supabase
-          .from("horarios_semana")
-          .select("datos")
-          .eq("tienda_codigo", codigoTienda)
-          .eq("semana_fecha", semanaActual)
-          .maybeSingle();
+          .from("horarios_semana").select("datos")
+          .eq("tienda_codigo", codigoTienda).eq("semana_fecha", semanaActual).maybeSingle();
 
         if (!activo) return;
 
@@ -238,42 +209,28 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           setDays(saved.days && saved.days.length ? saved.days : diasVacios());
           setNextId(saved.nextId || DIAS.length * ROWS_PER_DAY + 1);
         } else {
-          setFecha("");
-          setSupervisor("");
-          setDays(diasVacios());
+          setFecha(""); setSupervisor(""); setDays(diasVacios());
           setNextId(DIAS.length * ROWS_PER_DAY + 1);
         }
-      } catch (e) {
-        // sin datos previos, se continua con valores vacios
-      } finally {
+      } catch (e) {}
+      finally {
         if (activo) setLoaded(true);
         if (activo) cargarAprobaciones(semanaActual);
       }
     })();
-    return () => {
-      activo = false;
-    };
+    return () => { activo = false; };
   }, [codigoTienda, semanaActual, cargarAprobaciones]);
 
   const persist = useCallback(async (state, semanaKey) => {
     setSaveState("saving");
     try {
-      const { error } = await supabase
-        .from("horarios_semana")
-        .upsert(
-          {
-            tienda_codigo: codigoTienda,
-            semana_fecha: semanaKey,
-            datos: state,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "tienda_codigo,semana_fecha" }
-        );
+      const { error } = await supabase.from("horarios_semana").upsert(
+        { tienda_codigo: codigoTienda, semana_fecha: semanaKey, datos: state, updated_at: new Date().toISOString() },
+        { onConflict: "tienda_codigo,semana_fecha" }
+      );
       if (error) throw error;
       setSaveState("saved");
-    } catch (e) {
-      setSaveState("error");
-    }
+    } catch (e) { setSaveState("error"); }
   }, [codigoTienda]);
 
   useEffect(() => {
@@ -287,33 +244,26 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const updateEntry = (dia, entryId, field, value) => {
     if (field === "estado" && value === "trabaja") {
       const diaActualIdx = DIAS.indexOf(dia);
-      const entryActual = days
-        .find((d) => d.dia === dia)
-        ?.entries.find((e) => e.id === entryId);
-
+      const entryActual = days.find((d) => d.dia === dia)?.entries.find((e) => e.id === entryId);
       if (entryActual && entryActual.cedula.trim()) {
         const cedula = entryActual.cedula.trim();
         let ultimaSalidaMin = null;
         let ultimoDiaNombre = "";
-
         for (let i = 0; i < diaActualIdx; i++) {
           const diaAnterior = days[i];
           diaAnterior.entries.forEach((e) => {
-            if (e.cedula.trim() === cedula && !esNoLaborable(e.estado) && !esTurnoFijo(e.estado) || (esTurnoFijo(e.estado))) {
-              if (e.salida) {
-                const [h, m] = e.salida.split(":").map(Number);
-                if (!isNaN(h) && !isNaN(m)) {
-                  const minutos = i * 24 * 60 + h * 60 + m;
-                  if (ultimaSalidaMin === null || minutos > ultimaSalidaMin) {
-                    ultimaSalidaMin = minutos;
-                    ultimoDiaNombre = diaAnterior.dia;
-                  }
+            if (e.cedula.trim() === cedula && e.salida) {
+              const [h, m] = e.salida.split(":").map(Number);
+              if (!isNaN(h) && !isNaN(m)) {
+                const minutos = i * 24 * 60 + h * 60 + m;
+                if (ultimaSalidaMin === null || minutos > ultimaSalidaMin) {
+                  ultimaSalidaMin = minutos;
+                  ultimoDiaNombre = diaAnterior.dia;
                 }
               }
             }
           });
         }
-
         if (ultimaSalidaMin !== null && entryActual.llegada) {
           const [lh, lm] = entryActual.llegada.split(":").map(Number);
           if (!isNaN(lh) && !isNaN(lm)) {
@@ -330,15 +280,11 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
 
     if (field === "llegada" && value) {
       const diaActualIdx = DIAS.indexOf(dia);
-      const entryActual = days
-        .find((d) => d.dia === dia)
-        ?.entries.find((e) => e.id === entryId);
-
+      const entryActual = days.find((d) => d.dia === dia)?.entries.find((e) => e.id === entryId);
       if (entryActual && entryActual.cedula.trim()) {
         const cedula = entryActual.cedula.trim();
         let ultimaSalida = null;
         let ultimoDiaNombre = "";
-
         for (let i = 0; i < diaActualIdx; i++) {
           const diaAnterior = days[i];
           diaAnterior.entries.forEach((e) => {
@@ -354,7 +300,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             }
           });
         }
-
         if (ultimaSalida) {
           const turnoAnterior = getTurnoDesdeSalida(ultimaSalida.salida);
           const llegadasValidas = getLlegadasValidasDesdeTurno(turnoAnterior);
@@ -365,7 +310,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               const hora = parseInt(hh);
               return `${hora > 12 ? hora - 12 : hora}:${mm} ${hora >= 12 ? "PM" : "AM"}`;
             }).join(" o ");
-            alert(`⚠️ Este operario debe regresar al turno de ${turnoNombre}.\n\nSu última salida el ${ultimoDiaNombre} fue a las ${ultimaSalida.salida.replace(":", ":")}. Debe volver con entrada: ${llegadasTexto}.`);
+            alert(`⚠️ Este operario debe regresar al turno de ${turnoNombre}.\n\nSu última salida el ${ultimoDiaNombre} fue a las ${ultimaSalida.salida}. Debe volver con entrada: ${llegadasTexto}.`);
             return;
           }
         }
@@ -383,58 +328,33 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             const match = empleados.find((emp) => emp.nombre === value);
             if (match) updated.cedula = match.cedula;
           }
-
           if (field === "cedula") {
             const match = empleados.find((emp) => emp.cedula === value);
             if (match) updated.nombre = match.nombre;
           }
-
           if (field === "estado" && esNoLaborable(value)) {
-            updated.horasProgramadas = "";
-            updated.llegadaReal = "";
-            updated.salidaReal = "";
-            updated.horasReales = "";
-            updated.llegada = "";
-            updated.salida = "";
-            updated.breakInicio = "";
-            updated.breakFin = "";
-            updated.horasNocturnas = "";
+            updated = { ...updated, horasProgramadas: "", llegadaReal: "", salidaReal: "", horasReales: "", llegada: "", salida: "", breakInicio: "", breakFin: "", horasNocturnas: "" };
           }
-
           if (field === "estado" && esTurnoFijo(value)) {
             const turno = TURNOS_FIJOS[value];
-            updated.llegada = turno.llegada;
-            updated.salida = turno.salida;
-            updated.horasProgramadas = turno.horasProgramadas;
-            updated.llegadaReal = "";
-            updated.salidaReal = "";
-            updated.horasReales = "";
-            updated.breakInicio = "";
-            updated.breakFin = "";
+            updated = { ...updated, llegada: turno.llegada, salida: turno.salida, horasProgramadas: turno.horasProgramadas, llegadaReal: "", salidaReal: "", horasReales: "", breakInicio: "", breakFin: "" };
           }
-
           if (field === "llegada") {
             const salidaAuto = HORARIOS_PREDETERMINADOS[value];
             updated.salida = salidaAuto || "";
             updated.horasProgramadas = salidaAuto ? "7.5" : "";
           }
-
           if (field === "breakInicio") {
             const breakFinAuto = sumarUnaHora(value);
-            if (breakFinAuto) {
-              updated.breakFin = breakFinAuto;
-            }
+            if (breakFinAuto) updated.breakFin = breakFinAuto;
           }
-
           if (field === "llegadaReal" || field === "salidaReal") {
             updated.horasReales = calcularHorasRealesDesdeLlegadaSalida(updated.llegadaReal, updated.salidaReal);
           }
-
-          if (field === "horasProgramadas" || field === "horasReales" || field === "estado" || field === "llegada" || field === "llegadaReal" || field === "salidaReal") {
+          if (["horasProgramadas", "horasReales", "estado", "llegada", "llegadaReal", "salidaReal"].includes(field)) {
             updated.saldo = calcSaldo(updated.horasProgramadas, updated.horasReales);
           }
-
-          if (field === "salida" || field === "llegada" || field === "estado" || field === "horasProgramadas" || field === "horasReales" || field === "llegadaReal" || field === "salidaReal") {
+          if (["salida", "llegada", "estado", "horasProgramadas", "horasReales", "llegadaReal", "salidaReal"].includes(field)) {
             updated.horasNocturnas = calcularHorasNocturnas(updated.salidaReal || updated.salida);
           }
           return updated;
@@ -461,15 +381,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     );
   };
 
-  const totalProgramadas = days.reduce(
-    (sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasProgramadas) || 0), 0),
-    0
-  );
-  const totalReales = days.reduce(
-    (sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasReales) || 0), 0),
-    0
-  );
-  const saldoTotal = totalReales - totalProgramadas;
+  const totalProgramadas = days.reduce((sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasProgramadas) || 0), 0), 0);
+  const totalReales = days.reduce((sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasReales) || 0), 0), 0);
 
   const handlePrint = () => window.print();
 
@@ -480,24 +393,16 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         const nombre = e.nombre.trim();
         const cedula = e.cedula.trim();
         if (!nombre || !cedula) return;
-        const clave = cedula;
-        if (!mapa[clave]) {
-          mapa[clave] = { nombre, cedula, festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0 };
-        }
+        if (!mapa[cedula]) mapa[cedula] = { nombre, cedula, festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0 };
         const reales = parseFloat(e.horasReales) || 0;
         const nocturnas = parseFloat(e.horasNocturnas) || 0;
         const saldo = parseFloat(e.saldo) || 0;
         const esDiaFestivo = d.dia === "Domingo" || e.esFestivo;
-        mapa[clave].nocturnas += nocturnas;
-        if (esDiaFestivo) {
-          mapa[clave].festivas += reales;
-        }
+        mapa[cedula].nocturnas += nocturnas;
+        if (esDiaFestivo) mapa[cedula].festivas += reales;
         if (saldo > 0) {
-          if (esDiaFestivo) {
-            mapa[clave].extrasFestivas += saldo;
-          } else {
-            mapa[clave].extrasNormales += saldo;
-          }
+          if (esDiaFestivo) mapa[cedula].extrasFestivas += saldo;
+          else mapa[cedula].extrasNormales += saldo;
         }
       });
     });
@@ -531,23 +436,71 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          .sheet { box-shadow: none !important; padding: 2px !important; margin: 0 !important; }
           body { background: white !important; margin: 0 !important; padding: 0 !important; }
-          @page { size: landscape; margin: 4mm; }
-          html, body { width: 100%; height: auto; overflow: visible; zoom: 0.52; }
-          * { page-break-inside: avoid !important; page-break-before: avoid !important; page-break-after: avoid !important; }
-          .print-scale { width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
-          table { font-size: 9px !important; border-collapse: collapse !important; width: 100% !important; }
-          th, td { padding: 2px 4px !important; line-height: 1.3 !important; }
-          .cell-input { font-size: 9px !important; padding: 0 !important; height: auto !important; width: 100% !important; }
-          h1, .day-title { font-size: 10px !important; margin: 0 !important; }
-          .day-block { margin-bottom: 3px !important; padding: 0 !important; }
+
+          /* Página landscape con márgenes mínimos */
+          @page { size: landscape; margin: 3mm; }
+
+          /* Contenedor raíz ocupa todo */
+          html, body { width: 100%; overflow: visible; }
+
+          /* Escalar todo el sheet para que quepa en una sola página */
+          .print-wrapper {
+            transform: scale(0.54);
+            transform-origin: top left;
+            width: calc(100% / 0.54) !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+
+          .sheet {
+            box-shadow: none !important;
+            padding: 4px 6px !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+          }
+
+          /* Tipografía compacta */
+          table { font-size: 7px !important; border-collapse: collapse !important; width: 100% !important; }
+          th, td { padding: 1px 3px !important; line-height: 1.15 !important; }
+          .cell-input { font-size: 7px !important; padding: 0 !important; height: auto !important; width: 100% !important; }
+          .day-title { font-size: 8px !important; }
+          .day-block { margin-bottom: 2px !important; padding: 0 !important; }
           .print-table { min-width: 0 !important; width: 100% !important; }
+          .day-header { padding: 2px 5px !important; }
+
+          /* Filas vacías ocultas */
           .empty-row { display: none !important; }
-          .day-header { padding: 2px 5px !important; font-size: 9px !important; }
-          input, select { border: none !important; background: transparent !important; font-size: 9px !important; }
-          select { -webkit-appearance: none !important; appearance: none !important; }
+
+          /* Inputs y selects sin bordes */
+          input, select {
+            border: none !important;
+            background: transparent !important;
+            font-size: 7px !important;
+            -webkit-appearance: none !important;
+            appearance: none !important;
+          }
+
+          /* Ocultar columnas no esenciales en impresión */
+          .col-break-inicio,
+          .col-break-fin,
+          .col-llegada-real,
+          .col-salida-real,
+          .col-nocturnas,
+          .col-saldo,
+          .col-obs,
+          .col-acciones { display: none !important; }
+
+          /* Notas del encabezado compactas */
+          .print-nota { font-size: 6.5px !important; padding-bottom: 4px !important; margin-bottom: 5px !important; line-height: 1.3 !important; }
+          .store-info-grid { margin-bottom: 6px !important; gap: 8px !important; }
+          .footer-supervisor { padding-top: 6px !important; }
+          .firma-line { margin-top: 16px !important; }
+
+          /* Header de pantalla oculto */
+          .top-bar { display: none !important; }
         }
+
         input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
         .cell-input {
           width: 100%;
@@ -559,14 +512,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           padding: 4px 2px;
           outline: none;
         }
-        .cell-input:focus {
-          background: #FFF1DC;
-          border-radius: 3px;
-        }
+        .cell-input:focus { background: #FFF1DC; border-radius: 3px; }
         .entry-row:hover { background: #FFFBF5; }
       `}</style>
 
-      <div className="no-print" style={{ background: "#E85D1F", color: "#FFFFFF", padding: "18px 28px" }}>
+      {/* Barra superior (oculta al imprimir) */}
+      <div className="top-bar no-print" style={{ background: "#E85D1F", color: "#FFFFFF", padding: "18px 28px" }}>
         <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div>
             <img src={logoRitmo} alt="Tiendas RITMO" style={{ height: 32, marginBottom: 4 }} />
@@ -576,51 +527,30 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             <select
               value={semanaActual}
               onChange={(e) => setSemanaActual(e.target.value)}
-              className="no-print"
-              style={{
-                border: "none",
-                borderRadius: 7,
-                padding: "8px 12px",
-                fontSize: 13,
-                fontWeight: 600,
-                fontFamily: "inherit",
-                background: "#FFFFFF",
-                color: "#E85D1F",
-                cursor: "pointer",
-              }}
+              style={{ border: "none", borderRadius: 7, padding: "8px 12px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", background: "#FFFFFF", color: "#E85D1F", cursor: "pointer" }}
             >
-              {SEMANAS.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                </option>
-              ))}
+              {SEMANAS.map((s) => (<option key={s.key} value={s.key}>{s.label}</option>))}
             </select>
             <SaveIndicator state={saveState} />
-            <button onClick={() => setShowEmpleados(true)} className="no-print" style={btnStyle("#FFFFFF", "#E85D1F")}>
-              <Users size={15} /> Empleados
-            </button>
-            <button onClick={() => setShowConsolidado(true)} className="no-print" style={btnStyle("#FFFFFF", "#E85D1F")}>
-              <Clock size={15} /> Consolidado
-            </button>
-            <button onClick={handlePrint} style={btnStyle("#3FBFC4", "#FFFFFF")}>
-              <Printer size={15} /> Imprimir
-            </button>
-            <button onClick={onSalir} className="no-print" title="Salir" style={{ ...btnStyle("transparent", "#FFFFFF"), padding: 8 }}>
-              <LogOut size={16} />
-            </button>
+            <button onClick={() => setShowEmpleados(true)} style={btnStyle("#FFFFFF", "#E85D1F")}><Users size={15} /> Empleados</button>
+            <button onClick={() => setShowConsolidado(true)} style={btnStyle("#FFFFFF", "#E85D1F")}><Clock size={15} /> Consolidado</button>
+            <button onClick={handlePrint} style={btnStyle("#3FBFC4", "#FFFFFF")}><Printer size={15} /> Imprimir</button>
+            <button onClick={onSalir} title="Salir" style={{ ...btnStyle("transparent", "#FFFFFF"), padding: 8 }}><LogOut size={16} /></button>
           </div>
         </div>
       </div>
 
-      <div className="print-scale" style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 28px 60px" }}>
+      {/* Contenido principal — este div se escala al imprimir */}
+      <div className="print-wrapper" style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 28px 60px" }}>
         <div className="sheet" style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 28 }}>
-          {/* Header notes */}
-          <div style={{ fontSize: 11.5, color: "#6B5A4A", borderBottom: "2px solid #E85D1F", paddingBottom: 14, marginBottom: 18, lineHeight: 1.6 }}>
+
+          {/* Nota de encabezado */}
+          <div className="print-nota" style={{ fontSize: 11.5, color: "#6B5A4A", borderBottom: "2px solid #E85D1F", paddingBottom: 14, marginBottom: 18, lineHeight: 1.6 }}>
             <strong style={{ color: "#E85D1F" }}>Tiendas RITMO</strong> · "Precios bajos todos los días" — Cada colaborador debe disfrutar de 36 horas continuas de descanso semanal. Las horas extras por inventario deben ser mínimas; solo el turno de la tarde debe generarlas. El turno de la mañana entra a las 6:00 a.m. y sale a la 1:30 p.m. No se pagarán horas extras no justificadas: toda hora extra requiere observación y aprobación del Jefe de Zona.
           </div>
 
-          {/* Store info */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 22 }}>
+          {/* Info de tienda */}
+          <div className="store-info-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 22 }}>
             <Field label="Nombre Tienda">
               <input value={tienda} onChange={(e) => setTienda(e.target.value)} style={fieldInputStyle} placeholder="Ej. Santiago Centro" />
             </Field>
@@ -632,7 +562,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             </Field>
           </div>
 
-          {/* Days */}
+          {/* Días */}
           {days.map((d) => (
             <div key={d.dia} className="day-block" style={{ marginBottom: 22, border: "1px solid #E5E3DC", borderRadius: 8, overflow: "hidden" }}>
               <div className="day-header" style={{ background: "#E6F7F8", padding: "10px 14px" }}>
@@ -643,23 +573,23 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                 <table className="print-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
                   <thead>
                     <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
-                      <Th>Mes/Día</Th>
-                      <Th>Nombre</Th>
-                      <Th>Cédula</Th>
-                      <Th>Estado</Th>
-                      <Th>Hora Llegada</Th>
-                      <Th>Hora Salida</Th>
-                      <Th printHide>Break Inicio</Th>
-                      <Th printHide>Break Fin</Th>
-                      <Th>Hrs Programadas</Th>
-                      <Th printHide>Llegada Real</Th>
-                      <Th printHide>Salida Real</Th>
-                      <Th>Hrs Reales</Th>
-                      <Th printHide>Hrs Nocturnas</Th>
-                      <Th printHide>Saldo</Th>
-                      <Th>Firma</Th>
-                      <Th printHide>Observación</Th>
-                      <Th printHide></Th>
+                      <th style={thStyle}>Mes/Día</th>
+                      <th style={thStyle}>Nombre</th>
+                      <th style={thStyle}>Cédula</th>
+                      <th style={thStyle}>Estado</th>
+                      <th style={thStyle}>Hora Llegada</th>
+                      <th style={thStyle}>Hora Salida</th>
+                      <th className="col-break-inicio no-print" style={thStyle}>Break Inicio</th>
+                      <th className="col-break-fin no-print" style={thStyle}>Break Fin</th>
+                      <th style={thStyle}>Hrs Prog.</th>
+                      <th className="col-llegada-real no-print" style={thStyle}>Llegada Real</th>
+                      <th className="col-salida-real no-print" style={thStyle}>Salida Real</th>
+                      <th style={thStyle}>Hrs Reales</th>
+                      <th className="col-nocturnas no-print" style={thStyle}>Hrs Noct.</th>
+                      <th className="col-saldo no-print" style={thStyle}>Saldo</th>
+                      <th style={thStyle}>Firma</th>
+                      <th className="col-obs no-print" style={thStyle}>Observación</th>
+                      <th className="col-acciones no-print" style={thStyle}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -668,63 +598,27 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                         key={entry.id}
                         className={`entry-row ${entry.nombre.trim() === "" ? "empty-row" : ""}`}
                         style={{
-                          background: aprobaciones[entry.id] === "aprobado"
-                            ? "#43A047"
-                            : aprobaciones[entry.id] === "rechazado"
-                            ? "#E53935"
-                            : undefined,
-                          borderLeft: aprobaciones[entry.id] === "aprobado"
-                            ? "5px solid #1B5E20"
-                            : aprobaciones[entry.id] === "rechazado"
-                            ? "5px solid #B71C1C"
-                            : undefined,
+                          background: aprobaciones[entry.id] === "aprobado" ? "#43A047" : aprobaciones[entry.id] === "rechazado" ? "#E53935" : undefined,
+                          borderLeft: aprobaciones[entry.id] === "aprobado" ? "5px solid #1B5E20" : aprobaciones[entry.id] === "rechazado" ? "5px solid #B71C1C" : undefined,
                           color: aprobaciones[entry.id] ? "white" : undefined,
                         }}
                       >
-                        <Td>
+                        <td style={tdStyle}>
                           <input className="cell-input" value={entry.fecha} onChange={(e) => updateEntry(d.dia, entry.id, "fecha", e.target.value)} placeholder="06/16" />
-                        </Td>
-                        <Td>
-                          <select
-                            className="cell-input"
-                            value={entry.nombre}
-                            onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)}
-                            style={{ fontWeight: 600, minWidth: 140, cursor: "pointer" }}
-                          >
+                        </td>
+                        <td style={tdStyle}>
+                          <select className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} style={{ fontWeight: 600, minWidth: 140, cursor: "pointer" }}>
                             <option value="">Seleccionar...</option>
-                            {empleados.map((emp) => (
-                              <option key={emp.id} value={emp.nombre}>
-                                {emp.nombre}
-                              </option>
-                            ))}
+                            {empleados.map((emp) => (<option key={emp.id} value={emp.nombre}>{emp.nombre}</option>))}
                           </select>
-                        </Td>
-                        <Td>
-                          <input
-                            className="cell-input"
-                            value={entry.cedula}
-                            readOnly
-                            placeholder="Selecciona un nombre"
-                            style={{
-                              minWidth: 100,
-                              background: entry.cedula.trim() === "" ? "#FCEBEB" : "#F2EFE9",
-                              borderRadius: 4,
-                              color: "#5C5F5A",
-                              cursor: "default",
-                            }}
-                          />
-                        </Td>
-                        <Td>
-                          <select
-                            className="cell-input"
-                            value={entry.estado}
-                            onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
-                            style={{
-                              cursor: "pointer",
-                              fontWeight: estaBloqueado(entry) ? 700 : 400,
-                              color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14",
-                            }}
-                          >
+                        </td>
+                        <td style={tdStyle}>
+                          <input className="cell-input" value={entry.cedula} readOnly placeholder="Selecciona un nombre"
+                            style={{ minWidth: 100, background: entry.cedula.trim() === "" ? "#FCEBEB" : "#F2EFE9", borderRadius: 4, color: "#5C5F5A", cursor: "default" }} />
+                        </td>
+                        <td style={tdStyle}>
+                          <select className="cell-input" value={entry.estado} onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
+                            style={{ cursor: "pointer", fontWeight: estaBloqueado(entry) ? 700 : 400, color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14" }}>
                             <option value="trabaja">Trabaja</option>
                             <option value="t_inventario_manana">T.Inventario mañana</option>
                             <option value="domingo_t_manana">Domingo T. mañana</option>
@@ -734,126 +628,81 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             <option value="licencia_maternidad">Licencia de maternidad</option>
                             <option value="luto">Luto</option>
                           </select>
-                        </Td>
-                        <Td>
-                          <select
-                            disabled={estaBloqueado(entry)}
-                            className="cell-input"
-                            value={entry.llegada}
-                            onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
-                            style={{ cursor: "pointer", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }}
-                          >
+                        </td>
+                        <td style={tdStyle}>
+                          <select disabled={estaBloqueado(entry)} className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
+                            style={{ cursor: "pointer", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }}>
                             <option value="">--:-- --</option>
                             <option value="06:00">6:00 AM</option>
                             <option value="07:00">7:00 AM</option>
                             <option value="07:30">7:30 AM</option>
                             <option value="13:30">1:30 PM</option>
                           </select>
-                        </Td>
-                        <Td>
-                          <input
-                            disabled
-                            readOnly
-                            type="time"
-                            className="cell-input"
-                            value={entry.salida}
-                            style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }}
-                          />
-                        </Td>
-                        <Td printHide>
-                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
-                        </Td>
-                        <Td printHide>
-                          <input
-                            disabled
-                            readOnly
-                            type="time"
-                            className="cell-input"
-                            value={entry.breakFin}
-                            style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }}
-                          />
-                        </Td>
-                        <Td>
-                          <input
-                            disabled
-                            readOnly
-                            className="cell-input"
-                            value={entry.horasProgramadas}
-                            placeholder="0"
-                            style={{
-                              textAlign: "center",
-                              background: "#F2EFE9",
-                              color: "#5C5F5A",
-                              cursor: "default",
-                            }}
-                          />
-                        </Td>
-                        <Td printHide>
-                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.llegadaReal} onChange={(e) => updateEntry(d.dia, entry.id, "llegadaReal", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
-                        </Td>
-                        <Td printHide>
-                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.salidaReal} onChange={(e) => updateEntry(d.dia, entry.id, "salidaReal", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
-                        </Td>
-                        <Td>
+                        </td>
+                        <td style={tdStyle}>
+                          <input disabled readOnly type="time" className="cell-input" value={entry.salida}
+                            style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
+                        </td>
+                        <td className="col-break-inicio no-print" style={tdStyle}>
+                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio}
+                            onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)}
+                            style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
+                        </td>
+                        <td className="col-break-fin no-print" style={tdStyle}>
+                          <input disabled readOnly type="time" className="cell-input" value={entry.breakFin}
+                            style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
+                        </td>
+                        <td style={tdStyle}>
+                          <input disabled readOnly className="cell-input" value={entry.horasProgramadas} placeholder="0"
+                            style={{ textAlign: "center", background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
+                        </td>
+                        <td className="col-llegada-real no-print" style={tdStyle}>
+                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.llegadaReal}
+                            onChange={(e) => updateEntry(d.dia, entry.id, "llegadaReal", e.target.value)}
+                            style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
+                        </td>
+                        <td className="col-salida-real no-print" style={tdStyle}>
+                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.salidaReal}
+                            onChange={(e) => updateEntry(d.dia, entry.id, "salidaReal", e.target.value)}
+                            style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
+                        </td>
+                        <td style={tdStyle}>
                           <div style={{ display: "flex", alignItems: "center", gap: 4, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
-                            <input
-                              disabled
-                              readOnly
-                              className="cell-input"
-                              value={entry.horasReales}
-                              placeholder="0"
-                              style={{
-                                textAlign: "center",
-                                background: entry.esFestivo ? "transparent" : "#F2EFE9",
-                                color: entry.esFestivo ? "#04342C" : "#5C5F5A",
-                                fontWeight: entry.esFestivo ? 600 : 400,
-                                cursor: "default",
-                              }}
-                            />
-                            <label
-                              className="no-print"
-                              title="Marcar como festivo"
-                              style={{ display: "flex", alignItems: "center", cursor: estaBloqueado(entry) ? "not-allowed" : "pointer", paddingRight: 3 }}
-                            >
-                              <input
-                                type="checkbox"
-                                disabled={estaBloqueado(entry)}
-                                checked={entry.esFestivo}
+                            <input disabled readOnly className="cell-input" value={entry.horasReales} placeholder="0"
+                              style={{ textAlign: "center", background: entry.esFestivo ? "transparent" : "#F2EFE9", color: entry.esFestivo ? "#04342C" : "#5C5F5A", fontWeight: entry.esFestivo ? 600 : 400, cursor: "default" }} />
+                            <label className="no-print" title="Marcar como festivo"
+                              style={{ display: "flex", alignItems: "center", cursor: estaBloqueado(entry) ? "not-allowed" : "pointer", paddingRight: 3 }}>
+                              <input type="checkbox" disabled={estaBloqueado(entry)} checked={entry.esFestivo}
                                 onChange={(e) => updateEntry(d.dia, entry.id, "esFestivo", e.target.checked)}
-                                style={{ cursor: estaBloqueado(entry) ? "not-allowed" : "pointer" }}
-                              />
+                                style={{ cursor: estaBloqueado(entry) ? "not-allowed" : "pointer" }} />
                             </label>
                           </div>
-                        </Td>
-                        <Td printHide>
-                          <span style={{ fontSize: 12, color: "#5C5F5A", display: "block", textAlign: "center" }}>
-                            {entry.horasNocturnas || "0"}
-                          </span>
-                        </Td>
-                        <Td printHide>
-                          <span
-                            style={{
-                              fontSize: 12,
-                              fontWeight: 700,
-                              color: entry.saldo.startsWith("+") ? "#B3261E" : entry.saldo.startsWith("-") ? "#946800" : "#5C5F5A",
-                            }}
-                          >
+                        </td>
+                        <td className="col-nocturnas no-print" style={tdStyle}>
+                          <span style={{ fontSize: 12, color: "#5C5F5A", display: "block", textAlign: "center" }}>{entry.horasNocturnas || "0"}</span>
+                        </td>
+                        <td className="col-saldo no-print" style={tdStyle}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: entry.saldo.startsWith("+") ? "#B3261E" : entry.saldo.startsWith("-") ? "#946800" : "#5C5F5A" }}>
                             {entry.saldo}
                           </span>
-                        </Td>
-                        <Td>
-                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.firma} onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
-                        </Td>
-                        <Td printHide>
-                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder="—" style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
-                        </Td>
-                        <Td printHide>
+                        </td>
+                        <td style={tdStyle}>
+                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.firma}
+                            onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)}
+                            style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
+                        </td>
+                        <td className="col-obs no-print" style={tdStyle}>
+                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.observacion}
+                            onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)}
+                            placeholder="—" style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
+                        </td>
+                        <td className="col-acciones no-print" style={tdStyle}>
                           {d.entries.length > 1 && (
-                            <button className="no-print" onClick={() => removeEntry(d.dia, entry.id)} style={iconBtnStyle}>
+                            <button onClick={() => removeEntry(d.dia, entry.id)} style={iconBtnStyle}>
                               <Trash2 size={14} color="#B3261E" />
                             </button>
                           )}
-                        </Td>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -868,16 +717,16 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             </div>
           ))}
 
-          {/* Footer: supervisor */}
-          <div style={{ paddingTop: 20, borderTop: "2px solid #E85D1F" }}>
+          {/* Pie: supervisor */}
+          <div className="footer-supervisor" style={{ paddingTop: 20, borderTop: "2px solid #E85D1F" }}>
             <div style={{ maxWidth: 420 }}>
               <Field label="Nombre Supervisor">
                 <input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} style={fieldInputStyle} placeholder="Nombre del supervisor" />
               </Field>
-              <div style={{ marginTop: 36, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>
+              <div className="firma-line" style={{ marginTop: 36, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>
                 Firma Supervisor
               </div>
-              <div style={{ marginTop: 28, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>
+              <div className="firma-line" style={{ marginTop: 28, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>
                 Aprobado por JDZ
               </div>
             </div>
@@ -885,72 +734,40 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         </div>
       </div>
 
+      {/* Modal Consolidado */}
       {showConsolidado && (
-        <div
-          className="no-print"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(36,28,20,0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 50,
-            padding: 20,
-          }}
-          onClick={() => setShowConsolidado(false)}
-        >
-          <div
-            style={{
-              background: "white",
-              borderRadius: 10,
-              padding: 24,
-              maxWidth: 720,
-              width: "100%",
-              maxHeight: "85vh",
-              overflowY: "auto",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="no-print"
+          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(36,28,20,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}
+          onClick={() => setShowConsolidado(false)}>
+          <div style={{ background: "white", borderRadius: 10, padding: 24, maxWidth: 720, width: "100%", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}
+            onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#E85D1F" }}>Consolidado Semanal por Operario</div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <button onClick={exportarConsolidadoExcel} style={btnStyle("#3FBFC4", "#FFFFFF")}>
-                  <FileSpreadsheet size={15} /> Exportar a Excel
-                </button>
-                <button onClick={() => setShowConsolidado(false)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 18, color: "#5C5F5A" }}>
-                  ✕
-                </button>
+                <button onClick={exportarConsolidadoExcel} style={btnStyle("#3FBFC4", "#FFFFFF")}><FileSpreadsheet size={15} /> Exportar a Excel</button>
+                <button onClick={() => setShowConsolidado(false)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 18, color: "#5C5F5A" }}>✕</button>
               </div>
             </div>
-
             {consolidadoPorOperario.length === 0 ? (
               <div style={{ fontSize: 13, color: "#5C5F5A" }}>No hay colaboradores con datos registrados todavía.</div>
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
-                    <Th>Operario</Th>
-                    <Th>Cédula</Th>
-                    <Th>Hrs Festivas</Th>
-                    <Th>Hrs Nocturnas</Th>
-                    <Th>Extras Festivas</Th>
-                    <Th>Extras Normales</Th>
+                    <th style={thStyle}>Operario</th><th style={thStyle}>Cédula</th>
+                    <th style={thStyle}>Hrs Festivas</th><th style={thStyle}>Hrs Nocturnas</th>
+                    <th style={thStyle}>Extras Festivas</th><th style={thStyle}>Extras Normales</th>
                   </tr>
                 </thead>
                 <tbody>
                   {consolidadoPorOperario.map((op) => (
                     <tr key={op.cedula || op.nombre} style={{ borderTop: "1px solid #EDEBE4" }}>
-                      <Td style={{ fontWeight: 600 }}>{op.nombre || "(Sin nombre)"}</Td>
-                      <Td>{op.cedula || "—"}</Td>
-                      <Td>{fmt(op.festivas)}</Td>
-                      <Td>{fmt(op.nocturnas)}</Td>
-                      <Td>{fmt(op.extrasFestivas)}</Td>
-                      <Td>{fmt(op.extrasNormales)}</Td>
+                      <td style={{ ...tdStyle, fontWeight: 600 }}>{op.nombre || "(Sin nombre)"}</td>
+                      <td style={tdStyle}>{op.cedula || "—"}</td>
+                      <td style={tdStyle}>{fmt(op.festivas)}</td>
+                      <td style={tdStyle}>{fmt(op.nocturnas)}</td>
+                      <td style={tdStyle}>{fmt(op.extrasFestivas)}</td>
+                      <td style={tdStyle}>{fmt(op.extrasNormales)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -960,18 +777,15 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         </div>
       )}
 
+      {/* Modal Empleados */}
       {showEmpleados && (
-        <ModalEmpleados
-          codigoTienda={codigoTienda}
-          empleados={empleados}
-          onClose={() => setShowEmpleados(false)}
-          onRecargar={cargarEmpleados}
-        />
+        <ModalEmpleados codigoTienda={codigoTienda} empleados={empleados} onClose={() => setShowEmpleados(false)} onRecargar={cargarEmpleados} />
       )}
     </div>
   );
 }
 
+/* ─── Modal Empleados ─── */
 function ModalEmpleados({ codigoTienda, empleados, onClose, onRecargar }) {
   const [nombre, setNombre] = useState("");
   const [cedula, setCedula] = useState("");
@@ -979,48 +793,25 @@ function ModalEmpleados({ codigoTienda, empleados, onClose, onRecargar }) {
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
 
-  const limpiarFormulario = () => {
-    setNombre("");
-    setCedula("");
-    setEditandoId(null);
-    setError("");
-  };
+  const limpiarFormulario = () => { setNombre(""); setCedula(""); setEditandoId(null); setError(""); };
 
-  const handleEditar = (emp) => {
-    setNombre(emp.nombre);
-    setCedula(emp.cedula);
-    setEditandoId(emp.id);
-    setError("");
-  };
+  const handleEditar = (emp) => { setNombre(emp.nombre); setCedula(emp.cedula); setEditandoId(emp.id); setError(""); };
 
   const handleGuardar = async (e) => {
     e.preventDefault();
-    if (!nombre.trim() || !cedula.trim()) {
-      setError("Completa nombre y cédula.");
-      return;
-    }
-    setGuardando(true);
-    setError("");
+    if (!nombre.trim() || !cedula.trim()) { setError("Completa nombre y cédula."); return; }
+    setGuardando(true); setError("");
     try {
       if (editandoId) {
-        const { error: err } = await supabase
-          .from("empleados")
-          .update({ nombre: nombre.trim(), cedula: cedula.trim() })
-          .eq("id", editandoId);
+        const { error: err } = await supabase.from("empleados").update({ nombre: nombre.trim(), cedula: cedula.trim() }).eq("id", editandoId);
         if (err) throw err;
       } else {
-        const { error: err } = await supabase
-          .from("empleados")
-          .insert({ tienda_codigo: codigoTienda, nombre: nombre.trim(), cedula: cedula.trim() });
+        const { error: err } = await supabase.from("empleados").insert({ tienda_codigo: codigoTienda, nombre: nombre.trim(), cedula: cedula.trim() });
         if (err) throw err;
       }
-      await onRecargar();
-      limpiarFormulario();
-    } catch (err) {
-      setError("Esa cédula ya existe en esta tienda, o ocurrió un error. Intenta de nuevo.");
-    } finally {
-      setGuardando(false);
-    }
+      await onRecargar(); limpiarFormulario();
+    } catch (err) { setError("Esa cédula ya existe en esta tienda, o ocurrió un error. Intenta de nuevo."); }
+    finally { setGuardando(false); }
   };
 
   const handleEliminar = async (id) => {
@@ -1028,75 +819,30 @@ function ModalEmpleados({ codigoTienda, empleados, onClose, onRecargar }) {
       await supabase.from("empleados").delete().eq("id", id);
       await onRecargar();
       if (editandoId === id) limpiarFormulario();
-    } catch (err) {
-      setError("No se pudo eliminar. Intenta de nuevo.");
-    }
+    } catch (err) { setError("No se pudo eliminar. Intenta de nuevo."); }
   };
 
   return (
-    <div
-      className="no-print"
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: "rgba(36,28,20,0.45)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 50,
-        padding: 20,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "white",
-          borderRadius: 10,
-          padding: 24,
-          maxWidth: 520,
-          width: "100%",
-          maxHeight: "85vh",
-          overflowY: "auto",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="no-print"
+      style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(36,28,20,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}
+      onClick={onClose}>
+      <div style={{ background: "white", borderRadius: 10, padding: 24, maxWidth: 520, width: "100%", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}
+        onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#E85D1F" }}>Empleados de la tienda</div>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#5C5F5A" }}>
-            <X size={18} />
-          </button>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#5C5F5A" }}><X size={18} /></button>
         </div>
 
         <form onSubmit={handleGuardar} style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-          <input
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            placeholder="Nombre completo"
-            style={{ ...fieldInputStyle, flex: "1 1 180px" }}
-          />
-          <input
-            value={cedula}
-            onChange={(e) => setCedula(e.target.value)}
-            placeholder="Cédula"
-            style={{ ...fieldInputStyle, flex: "1 1 140px" }}
-          />
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre completo" style={{ ...fieldInputStyle, flex: "1 1 180px" }} />
+          <input value={cedula} onChange={(e) => setCedula(e.target.value)} placeholder="Cédula" style={{ ...fieldInputStyle, flex: "1 1 140px" }} />
           <button type="submit" disabled={guardando} style={{ ...btnStyle("#E85D1F", "#FFFFFF"), opacity: guardando ? 0.7 : 1 }}>
             {editandoId ? "Guardar" : <><Plus size={14} /> Agregar</>}
           </button>
-          {editandoId && (
-            <button type="button" onClick={limpiarFormulario} style={btnStyle("#FAFAF7", "#5C5F5A")}>
-              Cancelar
-            </button>
-          )}
+          {editandoId && (<button type="button" onClick={limpiarFormulario} style={btnStyle("#FAFAF7", "#5C5F5A")}>Cancelar</button>)}
         </form>
 
-        {error && (
-          <div style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 12.5, padding: "8px 10px", borderRadius: 6, marginBottom: 14 }}>{error}</div>
-        )}
+        {error && (<div style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 12.5, padding: "8px 10px", borderRadius: 6, marginBottom: 14 }}>{error}</div>)}
 
         {empleados.length === 0 ? (
           <div style={{ fontSize: 13, color: "#5C5F5A" }}>Todavía no hay empleados registrados para esta tienda.</div>
@@ -1104,26 +850,20 @@ function ModalEmpleados({ codigoTienda, empleados, onClose, onRecargar }) {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
-                <Th>Nombre</Th>
-                <Th>Cédula</Th>
-                <Th></Th>
+                <th style={thStyle}>Nombre</th><th style={thStyle}>Cédula</th><th style={thStyle}></th>
               </tr>
             </thead>
             <tbody>
               {empleados.map((emp) => (
                 <tr key={emp.id} style={{ borderTop: "1px solid #EDEBE4" }}>
-                  <Td style={{ fontWeight: 600 }}>{emp.nombre}</Td>
-                  <Td>{emp.cedula}</Td>
-                  <Td>
+                  <td style={{ ...tdStyle, fontWeight: 600 }}>{emp.nombre}</td>
+                  <td style={tdStyle}>{emp.cedula}</td>
+                  <td style={tdStyle}>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => handleEditar(emp)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#1B8388", fontSize: 12, fontWeight: 600 }}>
-                        Editar
-                      </button>
-                      <button onClick={() => handleEliminar(emp.id)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#791F1F", fontSize: 12, fontWeight: 600 }}>
-                        Eliminar
-                      </button>
+                      <button onClick={() => handleEditar(emp)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#1B8388", fontSize: 12, fontWeight: 600 }}>Editar</button>
+                      <button onClick={() => handleEliminar(emp.id)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#791F1F", fontSize: 12, fontWeight: 600 }}>Eliminar</button>
                     </div>
-                  </Td>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1134,28 +874,12 @@ function ModalEmpleados({ codigoTienda, empleados, onClose, onRecargar }) {
   );
 }
 
+/* ─── Componentes auxiliares ─── */
 function Field({ label, children }) {
   return (
     <div>
       <div style={{ fontSize: 11, color: "#5C5F5A", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
       {children}
-    </div>
-  );
-}
-
-function Th({ children, printHide }) {
-  return <th className={printHide ? "no-print" : ""} style={{ padding: "9px 8px", textAlign: "left", fontWeight: 600 }}>{children}</th>;
-}
-
-function Td({ children, style, printHide }) {
-  return <td className={printHide ? "no-print" : ""} style={{ padding: "4px 8px", fontSize: 12.5, verticalAlign: "middle", borderTop: "1px solid #EDEBE4", ...style }}>{children}</td>;
-}
-
-function SummaryRow({ label, value, bold, color }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", fontSize: bold ? 14 : 12.5, fontWeight: bold ? 700 : 500, padding: "4px 0", color: color || "#241C14" }}>
-      <span>{label}</span>
-      <span>{Number.isFinite(value) ? value : 0} h</span>
     </div>
   );
 }
@@ -1177,46 +901,28 @@ function SaveIndicator({ state }) {
   );
 }
 
-const disabledCellStyle = {
-  background: "#F2EFE9",
-  color: "#A6A199",
-  cursor: "not-allowed",
+/* ─── Estilos compartidos ─── */
+const disabledCellStyle = { background: "#F2EFE9", color: "#A6A199", cursor: "not-allowed" };
+
+const fieldInputStyle = {
+  width: "100%", border: "1px solid #DEDBD2", borderRadius: 6,
+  padding: "7px 10px", fontSize: 13, fontFamily: "inherit",
+  background: "#FAFAF8", outline: "none", color: "#241C14",
 };
 
-const fieldInputStyle = {  width: "100%",
-  border: "1px solid #DEDBD2",
-  borderRadius: 6,
-  padding: "7px 10px",
-  fontSize: 13,
-  fontFamily: "inherit",
-  background: "#FAFAF8",
-  outline: "none",
-  color: "#241C14",
-};
+const thStyle = { padding: "9px 8px", textAlign: "left", fontWeight: 600 };
+const tdStyle = { padding: "4px 8px", fontSize: 12.5, verticalAlign: "middle", borderTop: "1px solid #EDEBE4" };
 
 function btnStyle(bg, color) {
   return {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    background: bg,
-    color,
-    border: "none",
-    borderRadius: 7,
-    padding: "8px 14px",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    fontFamily: "inherit",
+    display: "inline-flex", alignItems: "center", gap: 6,
+    background: bg, color, border: "none", borderRadius: 7,
+    padding: "8px 14px", fontSize: 13, fontWeight: 600,
+    cursor: "pointer", fontFamily: "inherit",
   };
 }
 
 const iconBtnStyle = {
-  background: "transparent",
-  border: "none",
-  cursor: "pointer",
-  padding: 4,
-  borderRadius: 6,
-  display: "flex",
-  alignItems: "center",
+  background: "transparent", border: "none", cursor: "pointer",
+  padding: 4, borderRadius: 6, display: "flex", alignItems: "center",
 };
