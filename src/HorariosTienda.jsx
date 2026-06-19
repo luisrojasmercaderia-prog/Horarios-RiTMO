@@ -531,25 +531,27 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          .sheet { box-shadow: none !important; padding: 2px !important; }
-          body { background: white !important; margin: 0 !important; }
-          @page { size: landscape; margin: 3mm; }
+          .sheet { box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
+          body { background: white !important; margin: 0 !important; padding: 0 !important; }
+          @page { size: landscape; margin: 2mm; }
           html, body { width: 100%; height: auto; overflow: visible; }
+          * { page-break-inside: avoid !important; page-break-before: avoid !important; page-break-after: avoid !important; }
           .print-scale {
-            transform: scale(0.55);
+            transform: scale(0.42);
             transform-origin: top left;
-            width: 181%;
+            width: 238%;
           }
-          table { font-size: 7px !important; }
-          th, td { padding: 1px 2px !important; }
-          .cell-input { font-size: 7px !important; padding: 1px !important; height: auto !important; }
-          h1, .day-title { font-size: 9px !important; }
-          .day-block { margin-bottom: 2px !important; page-break-inside: avoid; }
+          table { font-size: 6.5px !important; border-collapse: collapse !important; }
+          th, td { padding: 0.5px 2px !important; line-height: 1.1 !important; }
+          .cell-input { font-size: 6.5px !important; padding: 0 !important; height: 14px !important; min-height: 0 !important; }
+          h1, .day-title { font-size: 8px !important; margin: 0 !important; }
+          .day-block { margin-bottom: 1px !important; padding: 0 !important; }
           .print-table { min-width: 0 !important; }
           .empty-row { display: none !important; }
-          .day-header { padding: 1px 4px !important; }
-          input, select { border: none !important; background: transparent !important; }
+          .day-header { padding: 1px 3px !important; font-size: 7px !important; }
+          input, select { border: none !important; background: transparent !important; font-size: 6.5px !important; }
           select { -webkit-appearance: none; appearance: none; }
+          div, section { margin: 0 !important; padding: 0 !important; }
         }
         input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
         .cell-input {
