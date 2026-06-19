@@ -627,6 +627,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           .col-salida-real,
           .col-nocturnas,
           .col-saldo,
+          .col-saldo-festiva,
           .col-obs,
           .col-acciones { display: none !important; }
 
@@ -752,6 +753,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <th style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
                       <th className="col-nocturnas no-print" style={thStyle}>Hrs Noct.</th>
                       <th className="col-saldo no-print" style={thStyle}>Extra</th>
+                      <th className="col-saldo-festiva no-print" style={thStyle}>Extra Festiva</th>
                       <th className="col-firma-screen" style={thStyle}>Firma</th>
                       <th className="col-obs no-print" style={thStyle}>Observación</th>
                       <th className="col-acciones no-print" style={thStyle}></th>
@@ -850,7 +852,22 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                         </td>
                         <td className="col-saldo no-print" style={tdStyle}>
                           <span style={{ fontSize: 12, fontWeight: 700, color: entry.saldo.startsWith("+") ? "#B3261E" : entry.saldo.startsWith("-") ? "#946800" : "#5C5F5A" }}>
-                            {entry.saldo}
+                            {(() => {
+                              const esDiaFestivo = d.dia === "Domingo" || entry.esFestivo;
+                              const saldoNum = parseFloat(entry.saldo) || 0;
+                              if (esDiaFestivo && saldoNum > 0) return entry.saldo.startsWith("-") ? entry.saldo : "0";
+                              return entry.saldo;
+                            })()}
+                          </span>
+                        </td>
+                        <td className="col-saldo-festiva no-print" style={tdStyle}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#B3261E" }}>
+                            {(() => {
+                              const esDiaFestivo = d.dia === "Domingo" || entry.esFestivo;
+                              const saldoNum = parseFloat(entry.saldo) || 0;
+                              if (esDiaFestivo && saldoNum > 0) return `+${saldoNum}`;
+                              return "0";
+                            })()}
                           </span>
                         </td>
                         <td className="col-firma-screen" style={tdStyle}>
