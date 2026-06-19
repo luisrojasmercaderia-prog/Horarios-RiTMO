@@ -441,9 +441,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           /* Página landscape con márgenes mínimos */
           @page { size: landscape; margin: 3mm; }
 
-          /* Zoom colapsa el espacio real (a diferencia de transform: scale) */
+          /* Zoom para llenar toda la hoja */
           html, body {
-            zoom: 0.42;
+            zoom: 0.75;
             width: 100%;
             overflow: visible;
             min-height: 0 !important;
@@ -473,23 +473,22 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             border-radius: 0 !important;
           }
 
-          /* Tipografía compacta */
-          table { font-size: 8px !important; border-collapse: collapse !important; width: 100% !important; }
-          th, td { padding: 0px 3px !important; line-height: 1.05 !important; height: 10px !important; }
-          .cell-input { font-size: 8px !important; padding: 0 !important; height: 10px !important; width: 100% !important; line-height: 1.05 !important; }
-          .day-title { font-size: 8px !important; line-height: 1 !important; }
-          .day-block { margin-bottom: 1px !important; padding: 0 !important; border-radius: 0 !important; }
+          /* Tipografía compacta pero legible */
+          table { font-size: 9px !important; border-collapse: collapse !important; width: 100% !important; }
+          th, td { padding: 3px 4px !important; line-height: 1.4 !important; }
+          .cell-input { font-size: 9px !important; padding: 0 !important; height: auto !important; width: 100% !important; }
+          .day-title { font-size: 10px !important; }
+          .day-block { margin-bottom: 4px !important; padding: 0 !important; border-radius: 0 !important; }
           .print-table { min-width: 0 !important; width: 100% !important; }
-          .day-header { padding: 1px 4px !important; min-height: 0 !important; }
-          
-          /* Eliminar todos los márgenes y paddings internos */
-          .sheet > * { margin-bottom: 3px !important; }
-          .print-nota { margin-bottom: 3px !important; padding-bottom: 2px !important; }
-          .store-info-grid { margin-bottom: 3px !important; }
-          
-          /* Filas de tabla sin altura fija del navegador */
-          tr { height: auto !important; min-height: 0 !important; }
-          input, select { height: 10px !important; min-height: 0 !important; line-height: 1 !important; }
+          .day-header { padding: 4px 6px !important; }
+
+          /* Márgenes internos normales */
+          .sheet > * { margin-bottom: 6px !important; }
+          .print-nota { margin-bottom: 6px !important; padding-bottom: 4px !important; }
+          .store-info-grid { margin-bottom: 8px !important; }
+
+          tr { height: auto !important; }
+          input, select { height: auto !important; line-height: 1.4 !important; }
 
           /* Filas vacías ocultas */
           .empty-row { display: none !important; }
