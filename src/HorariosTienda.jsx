@@ -443,7 +443,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
 
           /* Zoom para llenar toda la hoja */
           html, body {
-            zoom: 0.58;
+            zoom: 0.68;
             width: 100%;
             overflow: visible;
             min-height: 0 !important;
