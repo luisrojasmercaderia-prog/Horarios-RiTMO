@@ -441,16 +441,18 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           /* Página landscape con márgenes mínimos */
           @page { size: landscape; margin: 3mm; }
 
-          /* Contenedor raíz ocupa todo */
-          html, body { width: 100%; overflow: visible; }
+          /* Zoom colapsa el espacio real (a diferencia de transform: scale) */
+          html, body {
+            zoom: 0.42;
+            width: 100%;
+            overflow: visible;
+          }
 
-          /* Escalar todo el sheet para que quepa en una sola página */
           .print-wrapper {
-            transform: scale(0.54);
-            transform-origin: top left;
-            width: calc(100% / 0.54) !important;
             padding: 0 !important;
             margin: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
           }
 
           .sheet {
@@ -461,10 +463,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           }
 
           /* Tipografía compacta */
-          table { font-size: 7px !important; border-collapse: collapse !important; width: 100% !important; }
-          th, td { padding: 1px 3px !important; line-height: 1.15 !important; }
-          .cell-input { font-size: 7px !important; padding: 0 !important; height: auto !important; width: 100% !important; }
-          .day-title { font-size: 8px !important; }
+          table { font-size: 8px !important; border-collapse: collapse !important; width: 100% !important; }
+          th, td { padding: 1px 3px !important; line-height: 1.2 !important; }
+          .cell-input { font-size: 8px !important; padding: 0 !important; height: auto !important; width: 100% !important; }
+          .day-title { font-size: 9px !important; }
           .day-block { margin-bottom: 2px !important; padding: 0 !important; }
           .print-table { min-width: 0 !important; width: 100% !important; }
           .day-header { padding: 2px 5px !important; }
@@ -476,7 +478,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           input, select {
             border: none !important;
             background: transparent !important;
-            font-size: 7px !important;
+            font-size: 8px !important;
             -webkit-appearance: none !important;
             appearance: none !important;
           }
@@ -492,10 +494,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           .col-acciones { display: none !important; }
 
           /* Notas del encabezado compactas */
-          .print-nota { font-size: 6.5px !important; padding-bottom: 4px !important; margin-bottom: 5px !important; line-height: 1.3 !important; }
-          .store-info-grid { margin-bottom: 6px !important; gap: 8px !important; }
-          .footer-supervisor { padding-top: 6px !important; }
-          .firma-line { margin-top: 16px !important; }
+          .print-nota { font-size: 7px !important; padding-bottom: 3px !important; margin-bottom: 4px !important; line-height: 1.3 !important; }
+          .store-info-grid { margin-bottom: 5px !important; gap: 6px !important; }
+          .footer-supervisor { padding-top: 5px !important; }
+          .firma-line { margin-top: 12px !important; }
 
           /* Header de pantalla oculto */
           .top-bar { display: none !important; }
