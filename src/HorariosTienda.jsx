@@ -6,33 +6,101 @@ import logoRitmo from "./logo-ritmo.png";
 
 const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
-const emptyEntry = (id) => ({
-  id,
-  estado: "trabaja",
-  fecha: "",
-  nombre: "",
-  cedula: "",
-  llegada: "",
-  salida: "",
-  breakInicio: "",
-  breakFin: "",
-  horasProgramadas: "",
-  llegadaReal: "",
-  salidaReal: "",
-  horasReales: "",
-  esFestivo: false,
-  horasNocturnas: "",
-  saldo: "",
-  firma: "",
-  observacion: "",
-});
+// ─── Lógica de periodos de nómina (corte del día 20) ───
+// Un periodo de nómina va del 21 del mes anterior al 20 del mes actual.
+// Ej: periodo "Junio 2026" = 21 mayo 2026 → 20 junio 2026
+
+function getRangoPeriodo(anio, mes) {
+  // mes: 1-12, representa el mes de CORTE (el mes cuyo día 20 cierra el periodo)
+  const fin = new Date(anio, mes - 1, 20);
+  const inicio = new Date(anio, mes - 2, 21);
+  return { inicio, fin };
+}
+
+function formatFechaCorta(date) {
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}`;
+}
+
+function formatFechaISO(date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+const NOMBRES_MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+function getPeriodoLabel(anio, mes) {
+  return `${NOMBRES_MESES[mes - 1]} ${anio}`;
+}
+
+// Genera la lista de semanas (Domingo-Sábado) dentro de un periodo de nómina.
+// Cada semana es un array de 7 fechas (Date), puede tener días fuera del periodo
+// en la primera/última semana - esos se marcan como null.
+function getSemanasDelPeriodo(anio, mes) {
+  const { inicio, fin } = getRangoPeriodo(anio, mes);
+  const semanas = [];
+
+  // Retrocedemos al domingo de la semana que contiene "inicio"
+  const cursor = new Date(inicio);
+  cursor.setDate(cursor.getDate() - cursor.getDay());
+
+  while (cursor <= fin) {
+    const semana = [];
+    for (let i = 0; i < 7; i++) {
+      const dia = new Date(cursor);
+      dia.setDate(cursor.getDate() + i);
+      // Solo incluir el día si cae dentro del rango del periodo
+      if (dia >= inicio && dia <= fin) {
+        semana.push(dia);
+      } else {
+        semana.push(null);
+      }
+    }
+    semanas.push(semana);
+    cursor.setDate(cursor.getDate() + 7);
+  }
+  return semanas;
+}
+
+function emptyEntry(id) {
+  return {
+    id,
+    estado: "trabaja",
+    fecha: "",
+    nombre: "",
+    cedula: "",
+    llegada: "",
+    salida: "",
+    breakInicio: "",
+    breakFin: "",
+    horasProgramadas: "",
+    llegadaReal: "",
+    salidaReal: "",
+    horasReales: "",
+    esFestivo: false,
+    horasNocturnas: "",
+    saldo: "",
+    firma: "",
+    observacion: "",
+  };
+}
 
 const ROWS_PER_DAY = 5;
 
-const emptyDay = (dia, idStart) => ({
-  dia,
-  entries: Array.from({ length: ROWS_PER_DAY }, (_, i) => emptyEntry(idStart + i)),
-});
+function emptyDay(dia, idStart, fechaDate) {
+  return {
+    dia,
+    fechaDate: fechaDate ? formatFechaISO(fechaDate) : null,
+    entries: Array.from({ length: ROWS_PER_DAY }, (_, i) => {
+      const e = emptyEntry(idStart + i);
+      if (fechaDate) e.fecha = formatFechaCorta(fechaDate);
+      return e;
+    }),
+  };
+}
 
 function calcSaldo(prog, real) {
   const p = parseFloat(prog);
@@ -129,17 +197,11 @@ function calcularHorasNocturnas(horaSalida) {
   return horas % 1 === 0 ? String(horas) : horas.toFixed(1);
 }
 
-const SEMANAS = [
-  { key: "semana_1", label: "Semana 1" },
-  { key: "semana_2", label: "Semana 2" },
-  { key: "semana_3", label: "Semana 3" },
-  { key: "semana_4", label: "Semana 4" },
-];
-
-function diasVacios() {
+function diasVacios(semanaFechas) {
   let id = 1;
-  return DIAS.map((d) => {
-    const day = emptyDay(d, id);
+  return DIAS.map((d, idx) => {
+    const fechaDate = semanaFechas ? semanaFechas[idx] : null;
+    const day = emptyDay(d, id, fechaDate);
     id += ROWS_PER_DAY;
     return day;
   });
@@ -155,7 +217,19 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [saveState, setSaveState] = useState("idle");
   const [loaded, setLoaded] = useState(false);
   const [showConsolidado, setShowConsolidado] = useState(false);
-  const [semanaActual, setSemanaActual] = useState("semana_1");
+
+  // Periodo de nómina: corte el día 20. anioPeriodo/mesPeriodo definen el mes de CIERRE.
+  const hoy = new Date();
+  const [anioPeriodo, setAnioPeriodo] = useState(hoy.getFullYear());
+  const [mesPeriodo, setMesPeriodo] = useState(hoy.getMonth() + 1);
+  const [semanaIdx, setSemanaIdx] = useState(0);
+
+  const semanasDelPeriodo = getSemanasDelPeriodo(anioPeriodo, mesPeriodo);
+  // Si el índice quedó fuera de rango (ej. al cambiar de periodo), lo corregimos
+  const semanaIdxSegura = Math.min(semanaIdx, semanasDelPeriodo.length - 1);
+  const semanaFechas = semanasDelPeriodo[semanaIdxSegura] || [];
+  const semanaKey = `${anioPeriodo}-${String(mesPeriodo).padStart(2, "0")}_semana_${semanaIdxSegura + 1}`;
+
   const [empleados, setEmpleados] = useState([]);
   const [aprobaciones, setAprobaciones] = useState({});
   const [showEmpleados, setShowEmpleados] = useState(false);
@@ -197,7 +271,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
 
         const { data, error } = await supabase
           .from("horarios_semana").select("datos")
-          .eq("tienda_codigo", codigoTienda).eq("semana_fecha", semanaActual).maybeSingle();
+          .eq("tienda_codigo", codigoTienda).eq("semana_fecha", semanaKey).maybeSingle();
 
         if (!activo) return;
 
@@ -206,20 +280,20 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           if (saved.tienda) setTienda(saved.tienda);
           setFecha(saved.fecha || "");
           setSupervisor(saved.supervisor || "");
-          setDays(saved.days && saved.days.length ? saved.days : diasVacios());
+          setDays(saved.days && saved.days.length ? saved.days : diasVacios(semanaFechas));
           setNextId(saved.nextId || DIAS.length * ROWS_PER_DAY + 1);
         } else {
-          setFecha(""); setSupervisor(""); setDays(diasVacios());
+          setFecha(""); setSupervisor(""); setDays(diasVacios(semanaFechas));
           setNextId(DIAS.length * ROWS_PER_DAY + 1);
         }
       } catch (e) {}
       finally {
         if (activo) setLoaded(true);
-        if (activo) cargarAprobaciones(semanaActual);
+        if (activo) cargarAprobaciones(semanaKey);
       }
     })();
     return () => { activo = false; };
-  }, [codigoTienda, semanaActual, cargarAprobaciones]);
+  }, [codigoTienda, semanaKey, cargarAprobaciones]);
 
   const persist = useCallback(async (state, semanaKey) => {
     setSaveState("saving");
@@ -236,10 +310,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   useEffect(() => {
     if (!loaded) return;
     const t = setTimeout(() => {
-      persist({ tienda, codigo, fecha, supervisor, days, nextId }, semanaActual);
+      persist({ tienda, codigo, fecha, supervisor, days, nextId }, semanaKey);
     }, 600);
     return () => clearTimeout(t);
-  }, [tienda, codigo, fecha, supervisor, days, nextId, loaded, persist, semanaActual]);
+  }, [tienda, codigo, fecha, supervisor, days, nextId, loaded, persist, semanaKey]);
 
   const updateEntry = (dia, entryId, field, value) => {
     if (field === "estado" && value === "trabaja") {
@@ -427,7 +501,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     hoja["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 18 }];
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Consolidado");
-    const nombreArchivo = `Consolidado_${tienda || "Tienda"}_${semanaActual}_${fecha || "sin_fecha"}.xlsx`.replace(/\s+/g, "_");
+    const nombreArchivo = `Consolidado_${tienda || "Tienda"}_${semanaKey}_${fecha || "sin_fecha"}.xlsx`.replace(/\s+/g, "_");
     XLSX.writeFile(libro, nombreArchivo);
   };
 
@@ -549,13 +623,38 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             <img src={logoRitmo} alt="Tiendas RITMO" style={{ height: 32, marginBottom: 4 }} />
             <div style={{ fontSize: 20, fontWeight: 700 }}>Programación de Horarios Semanales</div>
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <select
-              value={semanaActual}
-              onChange={(e) => setSemanaActual(e.target.value)}
+              value={mesPeriodo}
+              onChange={(e) => { setMesPeriodo(Number(e.target.value)); setSemanaIdx(0); }}
+              title="Mes de corte de nómina (cierra el día 20)"
               style={{ border: "none", borderRadius: 7, padding: "8px 12px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", background: "#FFFFFF", color: "#E85D1F", cursor: "pointer" }}
             >
-              {SEMANAS.map((s) => (<option key={s.key} value={s.key}>{s.label}</option>))}
+              {NOMBRES_MESES.map((nombre, i) => (
+                <option key={i} value={i + 1}>{nombre}</option>
+              ))}
+            </select>
+            <select
+              value={anioPeriodo}
+              onChange={(e) => { setAnioPeriodo(Number(e.target.value)); setSemanaIdx(0); }}
+              style={{ border: "none", borderRadius: 7, padding: "8px 12px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", background: "#FFFFFF", color: "#E85D1F", cursor: "pointer" }}
+            >
+              {[hoy.getFullYear() - 1, hoy.getFullYear(), hoy.getFullYear() + 1].map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+            <select
+              value={semanaIdxSegura}
+              onChange={(e) => setSemanaIdx(Number(e.target.value))}
+              title="Semana dentro del periodo de nómina"
+              style={{ border: "none", borderRadius: 7, padding: "8px 12px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", background: "#FFFFFF", color: "#E85D1F", cursor: "pointer" }}
+            >
+              {semanasDelPeriodo.map((semana, i) => {
+                const primerDia = semana.find((d) => d !== null);
+                const ultimoDia = [...semana].reverse().find((d) => d !== null);
+                const rango = primerDia && ultimoDia ? ` (${formatFechaCorta(primerDia)}–${formatFechaCorta(ultimoDia)})` : "";
+                return <option key={i} value={i}>Semana {i + 1}{rango}</option>;
+              })}
             </select>
             <SaveIndicator state={saveState} />
             <button onClick={() => setShowEmpleados(true)} style={btnStyle("#FFFFFF", "#E85D1F")}><Users size={15} /> Empleados</button>
@@ -563,6 +662,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             <button onClick={handlePrint} style={btnStyle("#3FBFC4", "#FFFFFF")}><Printer size={15} /> Imprimir</button>
             <button onClick={onSalir} title="Salir" style={{ ...btnStyle("transparent", "#FFFFFF"), padding: 8 }}><LogOut size={16} /></button>
           </div>
+        </div>
+        <div style={{ maxWidth: 1400, margin: "8px auto 0", fontSize: 12, opacity: 0.9 }}>
+          Periodo de nómina: <strong>{getPeriodoLabel(anioPeriodo, mesPeriodo)}</strong> (21 de {NOMBRES_MESES[(mesPeriodo - 2 + 12) % 12]} – 20 de {NOMBRES_MESES[mesPeriodo - 1]})
         </div>
       </div>
 
@@ -589,10 +691,20 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           </div>
 
           {/* Días */}
-          {days.map((d) => (
+          {days.map((d) => {
+            if (d.fechaDate === null && semanaFechas.length) {
+              // Día fuera del rango del periodo de nómina (primera/última semana parcial)
+              return null;
+            }
+            const fechaLabel = d.fechaDate
+              ? formatFechaCorta(new Date(d.fechaDate + "T00:00:00"))
+              : "";
+            return (
             <div key={d.dia} className="day-block" style={{ marginBottom: 22, border: "1px solid #E5E3DC", borderRadius: 8, overflow: "hidden" }}>
               <div className="day-header" style={{ background: "#E6F7F8", padding: "10px 14px" }}>
-                <span className="day-title" style={{ fontWeight: 700, color: "#1B8388", fontSize: 13.5 }}>{d.dia}</span>
+                <span className="day-title" style={{ fontWeight: 700, color: "#1B8388", fontSize: 13.5 }}>
+                  {d.dia}{fechaLabel ? ` — ${fechaLabel}` : ""}
+                </span>
               </div>
 
               <div style={{ overflowX: "auto" }}>
@@ -741,7 +853,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
 
           {/* Pie: supervisor */}
           <div className="footer-supervisor" style={{ paddingTop: 20, borderTop: "2px solid #E85D1F" }}>
