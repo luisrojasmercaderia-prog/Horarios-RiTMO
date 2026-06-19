@@ -737,7 +737,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <th style={thStyle}>Hrs Prog.</th>
                       <th className="col-llegada-real no-print" style={thStyle}>Llegada Real</th>
                       <th className="col-salida-real no-print" style={thStyle}>Salida Real</th>
-                      <th style={thStyle}>Hrs Reales</th>
+                      <th style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
                       <th className="col-nocturnas no-print" style={thStyle}>Hrs Noct.</th>
                       <th className="col-saldo no-print" style={thStyle}>Saldo</th>
                       <th style={thStyle}>Firma</th>
@@ -819,10 +819,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             onChange={(e) => updateEntry(d.dia, entry.id, "salidaReal", e.target.value)}
                             style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
                         </td>
-                        <td style={tdStyle}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
+                        <td style={{ ...tdStyle, minWidth: 90 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
                             <input disabled readOnly className="cell-input" value={entry.horasReales} placeholder="0"
-                              style={{ textAlign: "center", background: entry.esFestivo ? "transparent" : "#F2EFE9", color: entry.esFestivo ? "#04342C" : "#5C5F5A", fontWeight: entry.esFestivo ? 600 : 400, cursor: "default" }} />
+                              style={{ textAlign: "center", minWidth: 40, width: 40, flexShrink: 0, background: entry.esFestivo ? "transparent" : "#F2EFE9", color: entry.esFestivo ? "#04342C" : "#5C5F5A", fontWeight: entry.esFestivo ? 600 : 400, cursor: "default" }} />
                             <label className="no-print" title="Marcar como festivo"
                               style={{ display: "flex", alignItems: "center", cursor: estaBloqueado(entry) ? "not-allowed" : "pointer", paddingRight: 3 }}>
                               <input type="checkbox" disabled={estaBloqueado(entry)} checked={entry.esFestivo}
