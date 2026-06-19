@@ -663,7 +663,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <Th>Hrs Reales</Th>
                       <Th printHide>Hrs Nocturnas</Th>
                       <Th printHide>Saldo</Th>
-                      <Th printHide>Firma</Th>
+                      <Th>Firma</Th>
                       <Th printHide>Observación</Th>
                       <Th printHide></Th>
                     </tr>
@@ -847,7 +847,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             {entry.saldo}
                           </span>
                         </Td>
-                        <Td printHide>
+                        <Td>
                           <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.firma} onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
                         </Td>
                         <Td printHide>
