@@ -68,7 +68,7 @@ function getSemanasDelPeriodo(anio, mes) {
 function emptyEntry(id) {
   return {
     id,
-    estado: "trabaja",
+    estado: "",
     fecha: "",
     nombre: "",
     cedula: "",
@@ -772,6 +772,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                         <td style={{ ...tdStyle, minWidth: 170 }}>
                           <select className="cell-input" value={entry.estado} onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
                             style={{ cursor: "pointer", width: "100%", minWidth: 160, whiteSpace: "nowrap", fontWeight: estaBloqueado(entry) ? 700 : 400, color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14" }}>
+                            <option value="">Seleccionar...</option>
                             <option value="trabaja">Trabaja</option>
                             <option value="t_inventario_manana">T.Inventario mañana</option>
                             <option value="domingo_t_manana">Domingo T. mañana</option>
