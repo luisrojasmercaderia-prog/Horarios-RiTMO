@@ -531,24 +531,25 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          .sheet { box-shadow: none !important; padding: 6px !important; }
-          body { background: white !important; }
-          @page { size: landscape; margin: 4mm; }
-          html, body { width: 100%; height: auto; }
+          .sheet { box-shadow: none !important; padding: 2px !important; }
+          body { background: white !important; margin: 0 !important; }
+          @page { size: landscape; margin: 3mm; }
+          html, body { width: 100%; height: auto; overflow: visible; }
           .print-scale {
-            transform: scale(0.78);
+            transform: scale(0.55);
             transform-origin: top left;
-            width: 128.2%;
+            width: 181%;
           }
-          table { font-size: 9px !important; }
-          th, td { padding: 1px 3px !important; }
-          .cell-input { font-size: 9px !important; padding: 1px !important; }
-          h1, .day-title { font-size: 11px !important; }
-          .day-block { margin-bottom: 4px !important; }
+          table { font-size: 7px !important; }
+          th, td { padding: 1px 2px !important; }
+          .cell-input { font-size: 7px !important; padding: 1px !important; height: auto !important; }
+          h1, .day-title { font-size: 9px !important; }
+          .day-block { margin-bottom: 2px !important; page-break-inside: avoid; }
           .print-table { min-width: 0 !important; }
           .empty-row { display: none !important; }
-          .day-header { padding: 2px 8px !important; }
-          .sheet { padding: 6px !important; }
+          .day-header { padding: 1px 4px !important; }
+          input, select { border: none !important; background: transparent !important; }
+          select { -webkit-appearance: none; appearance: none; }
         }
         input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
         .cell-input {
