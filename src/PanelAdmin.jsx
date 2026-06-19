@@ -65,6 +65,7 @@ function extraerFilasConExtras(datos, tiendaCodigo, semanaFecha) {
         horasReales: e.horasReales || "",
         saldo: e.saldo || "",
         esFestivo: d.dia === "Domingo" || e.esFestivo,
+        observacion: e.observacion || "",
         aprobacionEstado: null,
       });
     });
@@ -412,6 +413,7 @@ export default function PanelAdmin() {
                           <th style={thStyle}>Salida</th>
                           <th style={thStyle}>Saldo</th>
                           <th style={thStyle}>Tipo</th>
+                          <th style={thStyle}>Observación</th>
                           <th style={thStyle}>Estado</th>
                           <th style={thStyle}>Acción</th>
                         </tr>
@@ -437,6 +439,9 @@ export default function PanelAdmin() {
                               <td style={tdStyle}>{f.salida}</td>
                               <td style={{ ...tdStyle, color: "#E85D1F", fontWeight: 700 }}>{f.saldo}</td>
                               <td style={tdStyle}>{f.esFestivo ? "Festivo" : "Normal"}</td>
+                              <td style={{ ...tdStyle, maxWidth: 200, fontSize: 12, color: "#5C5F5A", fontStyle: f.observacion ? "normal" : "italic" }}>
+                                {f.observacion || "Sin observación"}
+                              </td>
                               <td style={tdStyle}>
                                 {aprobado && <span style={{ color: "#2E7D32", fontWeight: 600 }}>✓ Aprobado</span>}
                                 {rechazado && <span style={{ color: "#C62828", fontWeight: 600 }}>✗ Rechazado</span>}
