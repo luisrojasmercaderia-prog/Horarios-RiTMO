@@ -260,6 +260,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const semanaIdxSegura = Math.min(semanaIdx, semanasDelPeriodo.length - 1);
   const semanaFechas = semanasDelPeriodo[semanaIdxSegura] || [];
   const semanaKey = `${anioPeriodo}-${String(mesPeriodo).padStart(2, "0")}_semana_${semanaIdxSegura + 1}`;
+  // Fecha del primer día válido de la semana actual, usada para autocompletar el campo "Fecha"
+  const primerDiaSemana = semanaFechas.find((d) => d !== null);
+  const fechaInicioSemana = primerDiaSemana ? formatFechaISO(primerDiaSemana) : "";
 
   const [empleados, setEmpleados] = useState([]);
   const [aprobaciones, setAprobaciones] = useState({});
@@ -309,12 +312,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         if (!error && data && data.datos) {
           const saved = data.datos;
           if (saved.tienda) setTienda(saved.tienda);
-          setFecha(saved.fecha || "");
+          setFecha(saved.fecha || fechaInicioSemana);
           setSupervisor(saved.supervisor || "");
           setDays(saved.days && saved.days.length ? saved.days : diasVacios(semanaFechas));
           setNextId(saved.nextId || DIAS.length * ROWS_PER_DAY + 1);
         } else {
-          setFecha(""); setSupervisor(""); setDays(diasVacios(semanaFechas));
+          setFecha(fechaInicioSemana); setSupervisor(""); setDays(diasVacios(semanaFechas));
           setNextId(DIAS.length * ROWS_PER_DAY + 1);
         }
       } catch (e) {}
@@ -324,7 +327,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       }
     })();
     return () => { activo = false; };
-  }, [codigoTienda, semanaKey, cargarAprobaciones]);
+  }, [codigoTienda, semanaKey, cargarAprobaciones, fechaInicioSemana]);
 
   const persist = useCallback(async (state, semanaKey) => {
     setSaveState("saving");
