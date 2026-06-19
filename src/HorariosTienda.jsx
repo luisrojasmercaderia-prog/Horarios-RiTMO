@@ -1,547 +1,1199 @@
-import React, { useState, useEffect } from "react";
-import { ShieldCheck, RefreshCw, FileSpreadsheet, Loader2, Store, BarChart3, CheckCircle, XCircle } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2, FileSpreadsheet, LogOut, Users, X } from "lucide-react";
 import * as XLSX from "xlsx";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "./supabaseClient";
-import HorariosTienda from "./HorariosTienda";
+import logoRitmo from "./logo-ritmo.png";
 
-function fmt(n) {
-  const r = Math.round(n * 100) / 100;
-  return Number.isInteger(r) ? String(r) : String(r);
+const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+const emptyEntry = (id) => ({
+  id,
+  estado: "trabaja",
+  fecha: "",
+  nombre: "",
+  cedula: "",
+  llegada: "",
+  salida: "",
+  breakInicio: "",
+  breakFin: "",
+  horasProgramadas: "",
+  llegadaReal: "",
+  salidaReal: "",
+  horasReales: "",
+  esFestivo: false,
+  horasNocturnas: "",
+  saldo: "",
+  firma: "",
+  observacion: "",
+});
+
+const ROWS_PER_DAY = 5;
+
+const emptyDay = (dia, idStart) => ({
+  dia,
+  entries: Array.from({ length: ROWS_PER_DAY }, (_, i) => emptyEntry(idStart + i)),
+});
+
+const STORAGE_KEY = "ritmo-horarios-v2";
+
+function calcSaldo(prog, real) {
+  const p = parseFloat(prog);
+  const r = parseFloat(real);
+  if (isNaN(p) || isNaN(r)) return "";
+  const diff = r - p;
+  return diff === 0 ? "0" : diff > 0 ? `+${diff}` : `${diff}`;
 }
 
-function calcularConsolidadoTienda(datos) {
-  const mapa = {};
-  const days = (datos && datos.days) || [];
-  days.forEach((d) => {
-    (d.entries || []).forEach((e) => {
-      const nombre = (e.nombre || "").trim();
-      const cedula = (e.cedula || "").trim();
-      if (!nombre || !cedula) return;
-      const clave = cedula;
-      if (!mapa[clave]) {
-        mapa[clave] = { nombre, cedula, festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0 };
-      }
-      const reales = parseFloat(e.horasReales) || 0;
-      const nocturnas = parseFloat(e.horasNocturnas) || 0;
-      const saldo = parseFloat(e.saldo) || 0;
-      const esDiaFestivo = d.dia === "Domingo" || e.esFestivo;
-      mapa[clave].nocturnas += nocturnas;
-      if (esDiaFestivo) {
-        mapa[clave].festivas += reales;
-      }
-      if (saldo > 0) {
-        if (esDiaFestivo) {
-          mapa[clave].extrasFestivas += saldo;
-        } else {
-          mapa[clave].extrasNormales += saldo;
-        }
-      }
-    });
+function calcularHorasRealesDesdeLlegadaSalida(llegadaReal, salidaReal) {
+  if (!llegadaReal || !salidaReal) return "";
+  const [lh, lm] = llegadaReal.split(":").map(Number);
+  const [sh, sm] = salidaReal.split(":").map(Number);
+  if (isNaN(lh) || isNaN(lm) || isNaN(sh) || isNaN(sm)) return "";
+  let llegadaMin = lh * 60 + lm;
+  let salidaMin = sh * 60 + sm;
+  if (salidaMin < llegadaMin) {
+    salidaMin += 24 * 60;
+  }
+  const minutosTotales = salidaMin - llegadaMin - 60;
+  if (minutosTotales <= 0) return "0";
+  const horas = minutosTotales / 60;
+  return horas % 1 === 0 ? String(horas) : horas.toFixed(1);
+}
+
+function esNoLaborable(estado) {
+  return ["descanso", "incapacitado", "licencia_maternidad", "luto"].includes(estado);
+}
+
+const TURNOS_FIJOS = {
+  t_inventario_manana: { llegada: "06:00", salida: "14:30", horasProgramadas: "7.5" },
+  domingo_t_manana: { llegada: "07:30", salida: "15:00", horasProgramadas: "6.5", breakEditable: true },
+  domingo_t_tarde: { llegada: "12:30", salida: "20:00", horasProgramadas: "6.5", breakEditable: true },
+};
+
+function esTurnoFijo(estado) {
+  return Object.prototype.hasOwnProperty.call(TURNOS_FIJOS, estado);
+}
+
+function estaBloqueado(entry) {
+  return esNoLaborable(entry.estado) || esTurnoFijo(entry.estado) || entry.cedula.trim() === "";
+}
+
+function parcialBloqueado(entry) {
+  if (esTurnoFijo(entry.estado) && TURNOS_FIJOS[entry.estado].breakEditable) {
+    return esNoLaborable(entry.estado) || entry.cedula.trim() === "";
+  }
+  return estaBloqueado(entry);
+}
+
+const HORARIOS_PREDETERMINADOS = {
+  "06:00": "14:30",
+  "07:00": "15:30",
+  "07:30": "16:00",
+  "13:30": "22:00",
+};
+
+const TURNO_MANANA_SALIDAS = ["14:30", "15:30", "16:00"];
+const TURNO_TARDE_SALIDAS = ["22:00"];
+const TURNO_MANANA_LLEGADAS = ["06:00", "07:00", "07:30"];
+const TURNO_TARDE_LLEGADAS = ["13:30"];
+
+function getTurnoDesdeSalida(salida) {
+  if (TURNO_MANANA_SALIDAS.includes(salida)) return "manana";
+  if (TURNO_TARDE_SALIDAS.includes(salida)) return "tarde";
+  return null;
+}
+
+function getLlegadasValidasDesdeTurno(turno) {
+  if (turno === "manana") return TURNO_MANANA_LLEGADAS;
+  if (turno === "tarde") return TURNO_TARDE_LLEGADAS;
+  return [];
+}
+
+function calcularSalidaAutomatica(horaLlegada) {
+  return HORARIOS_PREDETERMINADOS[horaLlegada] || null;
+}
+
+function sumarUnaHora(hora) {
+  if (!hora) return null;
+  const [h, m] = hora.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return null;
+  const totalMin = (h * 60 + m + 60) % (24 * 60);
+  const nuevaH = Math.floor(totalMin / 60);
+  const nuevaM = totalMin % 60;
+  return `${String(nuevaH).padStart(2, "0")}:${String(nuevaM).padStart(2, "0")}`;
+}
+
+const INICIO_NOCTURNO_MIN = 21 * 60; // 9:00 p.m.
+
+function calcularHorasNocturnas(horaSalida) {
+  if (!horaSalida) return "";
+  const [h, m] = horaSalida.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return "";
+  let salidaMin = h * 60 + m;
+  // Si la salida cae en la madrugada (ej. 00:30), se asume que es despues de medianoche
+  if (salidaMin < INICIO_NOCTURNO_MIN && salidaMin < 6 * 60) {
+    salidaMin += 24 * 60;
+  }
+  if (salidaMin <= INICIO_NOCTURNO_MIN) return "0";
+  const minutosNocturnos = salidaMin - INICIO_NOCTURNO_MIN;
+  const horas = minutosNocturnos / 60;
+  return horas % 1 === 0 ? String(horas) : horas.toFixed(1);
+}
+
+const SEMANAS = [
+  { key: "semana_1", label: "Semana 1" },
+  { key: "semana_2", label: "Semana 2" },
+  { key: "semana_3", label: "Semana 3" },
+  { key: "semana_4", label: "Semana 4" },
+];
+
+function diasVacios() {
+  let id = 1;
+  return DIAS.map((d) => {
+    const day = emptyDay(d, id);
+    id += ROWS_PER_DAY;
+    return day;
   });
-  return Object.values(mapa);
 }
 
-function extraerFilasConExtras(datos, tiendaCodigo, semanaFecha) {
-  const resultado = [];
-  const days = (datos && datos.days) || [];
-  days.forEach((d) => {
-    (d.entries || []).forEach((e) => {
-      const nombre = (e.nombre || "").trim();
-      const cedula = (e.cedula || "").trim();
-      if (!nombre || !cedula) return;
-      const saldo = parseFloat(e.saldo) || 0;
-      if (saldo <= 0) return;
-      resultado.push({
-        entryId: e.id,
-        tiendaCodigo,
-        semanaFecha,
-        dia: d.dia,
-        nombre,
-        cedula,
-        llegada: e.llegada || "",
-        salida: e.salida || "",
-        horasProgramadas: e.horasProgramadas || "",
-        horasReales: e.horasReales || "",
-        saldo: e.saldo || "",
-        esFestivo: d.dia === "Domingo" || e.esFestivo,
-        observacion: e.observacion || "",
-        aprobacionEstado: null,
-      });
-    });
-  });
-  return resultado;
-}
-
-export default function PanelAdmin() {
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState("");
-  const [filas, setFilas] = useState([]);
-  const [listaTiendas, setListaTiendas] = useState([]);
-  const [tiendaSeleccionada, setTiendaSeleccionada] = useState("");
-  const [filasExtras, setFilasExtras] = useState([]);
+export default function HorariosTienda({ codigoTienda, onSalir }) {
+  const [tienda, setTienda] = useState("");
+  const [codigo, setCodigo] = useState(codigoTienda);
+  const [fecha, setFecha] = useState("");
+  const [supervisor, setSupervisor] = useState("");
+  const [days, setDays] = useState(diasVacios);
+  const [nextId, setNextId] = useState(DIAS.length * ROWS_PER_DAY + 1);
+  const [saveState, setSaveState] = useState("idle");
+  const [loaded, setLoaded] = useState(false);
+  const [showConsolidado, setShowConsolidado] = useState(false);
+  const [semanaActual, setSemanaActual] = useState("semana_1");
+  const [empleados, setEmpleados] = useState([]);
   const [aprobaciones, setAprobaciones] = useState({});
+  const [showEmpleados, setShowEmpleados] = useState(false);
 
-  const cargarDatos = async () => {
-    setCargando(true);
-    setError("");
+  const cargarAprobaciones = useCallback(async (semana) => {
     try {
-      const { data: tiendas, error: errTiendas } = await supabase
-        .from("tiendas")
-        .select("codigo, nombre")
-        .order("codigo", { ascending: true });
-      if (errTiendas) throw errTiendas;
-
-      setListaTiendas(tiendas || []);
-
-      const { data: horarios, error: errHorarios } = await supabase
-        .from("horarios_semana")
-        .select("tienda_codigo, semana_fecha, datos, updated_at");
-      if (errHorarios) throw errHorarios;
-
-      const horariosPorTienda = {};
-      (horarios || []).forEach((h) => {
-        if (!horariosPorTienda[h.tienda_codigo]) horariosPorTienda[h.tienda_codigo] = [];
-        horariosPorTienda[h.tienda_codigo].push(h);
-      });
-
-      const SEMANA_LABEL = { semana_1: "Semana 1", semana_2: "Semana 2", semana_3: "Semana 3", semana_4: "Semana 4" };
-
-      const resultado = [];
-      (tiendas || []).forEach((t) => {
-        const registros = horariosPorTienda[t.codigo] || [];
-        let huboDatos = false;
-        registros.forEach((registro) => {
-          const consolidado = calcularConsolidadoTienda(registro.datos);
-          consolidado.forEach((op) => {
-            huboDatos = true;
-            resultado.push({
-              tiendaCodigo: t.codigo,
-              tiendaNombre: t.nombre,
-              semana: SEMANA_LABEL[registro.semana_fecha] || registro.semana_fecha,
-              operario: op.nombre || "(Sin nombre)",
-              cedula: op.cedula || "",
-              festivas: op.festivas,
-              nocturnas: op.nocturnas,
-              extrasFestivas: op.extrasFestivas,
-              extrasNormales: op.extrasNormales,
-            });
-          });
-        });
-        if (!huboDatos) {
-          resultado.push({
-            tiendaCodigo: t.codigo,
-            tiendaNombre: t.nombre,
-            semana: "—",
-            operario: "(Sin datos registrados)",
-            cedula: "",
-            festivas: 0,
-            nocturnas: 0,
-            extrasFestivas: 0,
-            extrasNormales: 0,
-          });
-        }
-      });
-
-      setFilas(resultado);
-
-      const todasFilasExtras = [];
-      (horarios || []).forEach((h) => {
-        const filas = extraerFilasConExtras(h.datos, h.tienda_codigo, h.semana_fecha);
-        todasFilasExtras.push(...filas);
-      });
-
-      const { data: aprobacionesData } = await supabase
+      const { data } = await supabase
         .from("aprobaciones")
-        .select("tienda_codigo, semana_fecha, entry_id, estado");
-
-      const mapaAprobaciones = {};
-      (aprobacionesData || []).forEach((a) => {
-        const key = `${a.tienda_codigo}__${a.semana_fecha}__${a.entry_id}`;
-        mapaAprobaciones[key] = a.estado;
+        .select("entry_id, estado")
+        .eq("tienda_codigo", codigoTienda)
+        .eq("semana_fecha", semana);
+      const mapa = {};
+      (data || []).forEach((a) => {
+        mapa[a.entry_id] = a.estado;
       });
-
-      todasFilasExtras.forEach((f) => {
-        const key = `${f.tiendaCodigo}__${f.semanaFecha}__${f.entryId}`;
-        f.aprobacionEstado = mapaAprobaciones[key] || null;
-      });
-
-      setFilasExtras(todasFilasExtras);
-      setAprobaciones(mapaAprobaciones);
+      setAprobaciones(mapa);
     } catch (e) {
-      setError("No se pudieron cargar los datos. Intenta de nuevo.");
-    } finally {
-      setCargando(false);
+      // sin aprobaciones
     }
-  };
+  }, [codigoTienda]);
+
+  const cargarEmpleados = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("empleados")
+        .select("id, nombre, cedula")
+        .eq("tienda_codigo", codigoTienda)
+        .order("nombre", { ascending: true });
+      if (!error && data) {
+        setEmpleados(data);
+      }
+    } catch (e) {
+      // sin empleados registrados todavia
+    }
+  }, [codigoTienda]);
 
   useEffect(() => {
-    cargarDatos();
-  }, []);
+    cargarEmpleados();
+  }, [cargarEmpleados]);
 
-  const handleAprobacion = async (fila, nuevoEstado) => {
-    const key = `${fila.tiendaCodigo}__${fila.semanaFecha}__${fila.entryId}`;
+  useEffect(() => {
+    let activo = true;
+    setLoaded(false);
+    (async () => {
+      try {
+        const { data: tiendaData } = await supabase
+          .from("tiendas")
+          .select("nombre")
+          .eq("codigo", codigoTienda)
+          .maybeSingle();
+        if (activo && tiendaData) {
+          setTienda(tiendaData.nombre || "");
+        }
+
+        const { data, error } = await supabase
+          .from("horarios_semana")
+          .select("datos")
+          .eq("tienda_codigo", codigoTienda)
+          .eq("semana_fecha", semanaActual)
+          .maybeSingle();
+
+        if (!activo) return;
+
+        if (!error && data && data.datos) {
+          const saved = data.datos;
+          if (saved.tienda) setTienda(saved.tienda);
+          setFecha(saved.fecha || "");
+          setSupervisor(saved.supervisor || "");
+          setDays(saved.days && saved.days.length ? saved.days : diasVacios());
+          setNextId(saved.nextId || DIAS.length * ROWS_PER_DAY + 1);
+        } else {
+          setFecha("");
+          setSupervisor("");
+          setDays(diasVacios());
+          setNextId(DIAS.length * ROWS_PER_DAY + 1);
+        }
+      } catch (e) {
+        // sin datos previos, se continua con valores vacios
+      } finally {
+        if (activo) setLoaded(true);
+        if (activo) cargarAprobaciones(semanaActual);
+      }
+    })();
+    return () => {
+      activo = false;
+    };
+  }, [codigoTienda, semanaActual, cargarAprobaciones]);
+
+  const persist = useCallback(async (state, semanaKey) => {
+    setSaveState("saving");
     try {
       const { error } = await supabase
-        .from("aprobaciones")
+        .from("horarios_semana")
         .upsert(
           {
-            tienda_codigo: fila.tiendaCodigo,
-            semana_fecha: fila.semanaFecha,
-            entry_id: fila.entryId,
-            estado: nuevoEstado,
+            tienda_codigo: codigoTienda,
+            semana_fecha: semanaKey,
+            datos: state,
+            updated_at: new Date().toISOString(),
           },
-          { onConflict: "tienda_codigo,semana_fecha,entry_id" }
+          { onConflict: "tienda_codigo,semana_fecha" }
         );
       if (error) throw error;
-
-      setAprobaciones((prev) => ({ ...prev, [key]: nuevoEstado }));
-      setFilasExtras((prev) =>
-        prev.map((f) =>
-          f.tiendaCodigo === fila.tiendaCodigo &&
-          f.semanaFecha === fila.semanaFecha &&
-          f.entryId === fila.entryId
-            ? { ...f, aprobacionEstado: nuevoEstado }
-            : f
-        )
-      );
+      setSaveState("saved");
     } catch (e) {
-      alert("Error al guardar la aprobación. Intenta de nuevo.");
+      setSaveState("error");
     }
+  }, [codigoTienda]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const t = setTimeout(() => {
+      persist({ tienda, codigo, fecha, supervisor, days, nextId }, semanaActual);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [tienda, codigo, fecha, supervisor, days, nextId, loaded, persist, semanaActual]);
+
+  const updateEntry = (dia, entryId, field, value) => {
+    if (field === "estado" && value === "trabaja") {
+      const diaActualIdx = DIAS.indexOf(dia);
+      const entryActual = days
+        .find((d) => d.dia === dia)
+        ?.entries.find((e) => e.id === entryId);
+
+      if (entryActual && entryActual.cedula.trim()) {
+        const cedula = entryActual.cedula.trim();
+        let ultimaSalidaMin = null;
+        let ultimoDiaNombre = "";
+
+        for (let i = 0; i < diaActualIdx; i++) {
+          const diaAnterior = days[i];
+          diaAnterior.entries.forEach((e) => {
+            if (e.cedula.trim() === cedula && !esNoLaborable(e.estado) && !esTurnoFijo(e.estado) || (esTurnoFijo(e.estado))) {
+              if (e.salida) {
+                const [h, m] = e.salida.split(":").map(Number);
+                if (!isNaN(h) && !isNaN(m)) {
+                  const minutos = i * 24 * 60 + h * 60 + m;
+                  if (ultimaSalidaMin === null || minutos > ultimaSalidaMin) {
+                    ultimaSalidaMin = minutos;
+                    ultimoDiaNombre = diaAnterior.dia;
+                  }
+                }
+              }
+            }
+          });
+        }
+
+        if (ultimaSalidaMin !== null && entryActual.llegada) {
+          const [lh, lm] = entryActual.llegada.split(":").map(Number);
+          if (!isNaN(lh) && !isNaN(lm)) {
+            const llegadaMin = diaActualIdx * 24 * 60 + lh * 60 + lm;
+            const horasDescanso = (llegadaMin - ultimaSalidaMin) / 60;
+            if (horasDescanso < 36) {
+              alert(`⚠️ No se puede programar a este operario el día ${dia}.\n\nDesde su última salida el ${ultimoDiaNombre} solo habría ${horasDescanso.toFixed(1)} horas de descanso, y se requieren mínimo 36 horas continuas.`);
+              return;
+            }
+          }
+        }
+      }
+    }
+
+    if (field === "llegada" && value) {
+      const diaActualIdx = DIAS.indexOf(dia);
+      const entryActual = days
+        .find((d) => d.dia === dia)
+        ?.entries.find((e) => e.id === entryId);
+
+      if (entryActual && entryActual.cedula.trim()) {
+        const cedula = entryActual.cedula.trim();
+        let ultimaSalida = null;
+        let ultimoDiaNombre = "";
+
+        for (let i = 0; i < diaActualIdx; i++) {
+          const diaAnterior = days[i];
+          diaAnterior.entries.forEach((e) => {
+            if (e.cedula.trim() === cedula && e.salida && !esNoLaborable(e.estado)) {
+              const [h, m] = e.salida.split(":").map(Number);
+              if (!isNaN(h) && !isNaN(m)) {
+                const minutos = i * 24 * 60 + h * 60 + m;
+                if (ultimaSalida === null || minutos > ultimaSalida.minutos) {
+                  ultimaSalida = { minutos, salida: e.salida };
+                  ultimoDiaNombre = diaAnterior.dia;
+                }
+              }
+            }
+          });
+        }
+
+        if (ultimaSalida) {
+          const turnoAnterior = getTurnoDesdeSalida(ultimaSalida.salida);
+          const llegadasValidas = getLlegadasValidasDesdeTurno(turnoAnterior);
+          if (turnoAnterior && llegadasValidas.length > 0 && !llegadasValidas.includes(value)) {
+            const turnoNombre = turnoAnterior === "manana" ? "mañana" : "tarde";
+            const llegadasTexto = llegadasValidas.map((h) => {
+              const [hh, mm] = h.split(":");
+              const hora = parseInt(hh);
+              return `${hora > 12 ? hora - 12 : hora}:${mm} ${hora >= 12 ? "PM" : "AM"}`;
+            }).join(" o ");
+            alert(`⚠️ Este operario debe regresar al turno de ${turnoNombre}.\n\nSu última salida el ${ultimoDiaNombre} fue a las ${ultimaSalida.salida.replace(":", ":")}. Debe volver con entrada: ${llegadasTexto}.`);
+            return;
+          }
+        }
+      }
+    }
+
+    setDays((prev) =>
+      prev.map((d) => {
+        if (d.dia !== dia) return d;
+        const entries = d.entries.map((e) => {
+          if (e.id !== entryId) return e;
+          let updated = { ...e, [field]: value };
+
+          if (field === "nombre") {
+            const match = empleados.find((emp) => emp.nombre === value);
+            if (match) updated.cedula = match.cedula;
+          }
+
+          if (field === "cedula") {
+            const match = empleados.find((emp) => emp.cedula === value);
+            if (match) updated.nombre = match.nombre;
+          }
+
+          if (field === "estado" && esNoLaborable(value)) {
+            updated.horasProgramadas = "";
+            updated.llegadaReal = "";
+            updated.salidaReal = "";
+            updated.horasReales = "";
+            updated.llegada = "";
+            updated.salida = "";
+            updated.breakInicio = "";
+            updated.breakFin = "";
+            updated.horasNocturnas = "";
+          }
+
+          if (field === "estado" && esTurnoFijo(value)) {
+            const turno = TURNOS_FIJOS[value];
+            updated.llegada = turno.llegada;
+            updated.salida = turno.salida;
+            updated.horasProgramadas = turno.horasProgramadas;
+            updated.llegadaReal = "";
+            updated.salidaReal = "";
+            updated.horasReales = "";
+            updated.breakInicio = "";
+            updated.breakFin = "";
+          }
+
+          if (field === "llegada") {
+            const salidaAuto = HORARIOS_PREDETERMINADOS[value];
+            updated.salida = salidaAuto || "";
+            updated.horasProgramadas = salidaAuto ? "7.5" : "";
+          }
+
+          if (field === "breakInicio") {
+            const breakFinAuto = sumarUnaHora(value);
+            if (breakFinAuto) {
+              updated.breakFin = breakFinAuto;
+            }
+          }
+
+          if (field === "llegadaReal" || field === "salidaReal") {
+            updated.horasReales = calcularHorasRealesDesdeLlegadaSalida(updated.llegadaReal, updated.salidaReal);
+          }
+
+          if (field === "horasProgramadas" || field === "horasReales" || field === "estado" || field === "llegada" || field === "llegadaReal" || field === "salidaReal") {
+            updated.saldo = calcSaldo(updated.horasProgramadas, updated.horasReales);
+          }
+
+          if (field === "salida" || field === "llegada" || field === "estado" || field === "horasProgramadas" || field === "horasReales" || field === "llegadaReal" || field === "salidaReal") {
+            updated.horasNocturnas = calcularHorasNocturnas(updated.salidaReal || updated.salida);
+          }
+          return updated;
+        });
+        return { ...d, entries };
+      })
+    );
   };
 
-  const totalesPorTienda = (() => {
+  const addEntry = (dia) => {
+    setDays((prev) =>
+      prev.map((d) => (d.dia === dia ? { ...d, entries: [...d.entries, emptyEntry(nextId)] } : d))
+    );
+    setNextId((n) => n + 1);
+  };
+
+  const removeEntry = (dia, entryId) => {
+    setDays((prev) =>
+      prev.map((d) =>
+        d.dia === dia
+          ? { ...d, entries: d.entries.length > 1 ? d.entries.filter((e) => e.id !== entryId) : d.entries }
+          : d
+      )
+    );
+  };
+
+  const totalProgramadas = days.reduce(
+    (sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasProgramadas) || 0), 0),
+    0
+  );
+  const totalReales = days.reduce(
+    (sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasReales) || 0), 0),
+    0
+  );
+  const saldoTotal = totalReales - totalProgramadas;
+
+  const handlePrint = () => window.print();
+
+  const consolidadoPorOperario = (() => {
     const mapa = {};
-    filas.forEach((f) => {
-      if (!mapa[f.tiendaCodigo]) {
-        mapa[f.tiendaCodigo] = { tienda: f.tiendaNombre, extrasNormales: 0, extrasFestivas: 0, nocturnas: 0 };
-      }
-      mapa[f.tiendaCodigo].extrasNormales += f.extrasNormales;
-      mapa[f.tiendaCodigo].extrasFestivas += f.extrasFestivas;
-      mapa[f.tiendaCodigo].nocturnas += f.nocturnas;
-    });
-    return Object.values(mapa);
-  })();
-
-  const totalTiendaSeleccionada = (() => {
-    if (!tiendaSeleccionada) return [];
-    const nombreTienda = listaTiendas.find((t) => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada;
-    const total = { tienda: nombreTienda, extrasNormales: 0, extrasFestivas: 0, nocturnas: 0 };
-    filas
-      .filter((f) => f.tiendaCodigo === tiendaSeleccionada)
-      .forEach((f) => {
-        total.extrasNormales += f.extrasNormales;
-        total.extrasFestivas += f.extrasFestivas;
-        total.nocturnas += f.nocturnas;
+    days.forEach((d) => {
+      d.entries.forEach((e) => {
+        const nombre = e.nombre.trim();
+        const cedula = e.cedula.trim();
+        if (!nombre || !cedula) return;
+        const clave = cedula;
+        if (!mapa[clave]) {
+          mapa[clave] = { nombre, cedula, festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0 };
+        }
+        const reales = parseFloat(e.horasReales) || 0;
+        const nocturnas = parseFloat(e.horasNocturnas) || 0;
+        const saldo = parseFloat(e.saldo) || 0;
+        const esDiaFestivo = d.dia === "Domingo" || e.esFestivo;
+        mapa[clave].nocturnas += nocturnas;
+        if (esDiaFestivo) {
+          mapa[clave].festivas += reales;
+        }
+        if (saldo > 0) {
+          if (esDiaFestivo) {
+            mapa[clave].extrasFestivas += saldo;
+          } else {
+            mapa[clave].extrasNormales += saldo;
+          }
+        }
       });
-    return [total];
+    });
+    return Object.values(mapa).sort((a, b) => a.nombre.localeCompare(b.nombre));
   })();
 
-  const totalesParaGraficas = tiendaSeleccionada ? totalTiendaSeleccionada : totalesPorTienda;
+  const fmt = (n) => {
+    const r = Math.round(n * 100) / 100;
+    return Number.isInteger(r) ? String(r) : String(r);
+  };
 
-  const datosExtrasNormales = [...totalesParaGraficas]
-    .sort((a, b) => b.extrasNormales - a.extrasNormales)
-    .map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.extrasNormales)) }));
+  const exportarConsolidadoExcel = () => {
+    const filas = consolidadoPorOperario.map((op) => ({
+      Operario: op.nombre || "(Sin nombre)",
+      Cédula: op.cedula || "",
+      "Hrs Festivas": Number(fmt(op.festivas)),
+      "Hrs Nocturnas": Number(fmt(op.nocturnas)),
+      "Hrs Extras Festivas": Number(fmt(op.extrasFestivas)),
+      "Hrs Extras Normales": Number(fmt(op.extrasNormales)),
+    }));
+    const hoja = XLSX.utils.json_to_sheet(filas);
+    hoja["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 18 }];
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Consolidado");
+    const nombreArchivo = `Consolidado_${tienda || "Tienda"}_${semanaActual}_${fecha || "sin_fecha"}.xlsx`.replace(/\s+/g, "_");
+    XLSX.writeFile(libro, nombreArchivo);
+  };
 
-  const datosExtrasFestivas = [...totalesParaGraficas]
-    .sort((a, b) => b.extrasFestivas - a.extrasFestivas)
-    .map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.extrasFestivas)) }));
+  return (
+    <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#FFF6EE", minHeight: "100vh", color: "#241C14" }}>
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          .sheet { box-shadow: none !important; padding: 6px !important; }
+          body { background: white !important; }
+          @page { size: landscape; margin: 4mm; }
+          html, body { width: 100%; height: auto; }
+          .print-scale {
+            transform: scale(0.78);
+            transform-origin: top left;
+            width: 128.2%;
+          }
+          table { font-size: 9px !important; }
+          th, td { padding: 1px 3px !important; }
+          .cell-input { font-size: 9px !important; padding: 1px !important; }
+          h1, .day-title { font-size: 11px !important; }
+          .day-block { margin-bottom: 4px !important; }
+          .print-table { min-width: 0 !important; }
+          .empty-row { display: none !important; }
+          .day-header { padding: 2px 8px !important; }
+          .sheet { padding: 6px !important; }
+        }
+        input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
+        .cell-input {
+          width: 100%;
+          border: none;
+          background: transparent;
+          font-size: 12.5px;
+          font-family: inherit;
+          color: #241C14;
+          padding: 4px 2px;
+          outline: none;
+        }
+        .cell-input:focus {
+          background: #FFF1DC;
+          border-radius: 3px;
+        }
+        .entry-row:hover { background: #FFFBF5; }
+      `}</style>
 
-  const datosNocturnas = [...totalesParaGraficas]
-    .sort((a, b) => b.nocturnas - a.nocturnas)
-    .map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.nocturnas)) }));
+      <div className="no-print" style={{ background: "#E85D1F", color: "#FFFFFF", padding: "18px 28px" }}>
+        <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <img src={logoRitmo} alt="Tiendas RITMO" style={{ height: 32, marginBottom: 4 }} />
+            <div style={{ fontSize: 20, fontWeight: 700 }}>Programación de Horarios Semanales</div>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <select
+              value={semanaActual}
+              onChange={(e) => setSemanaActual(e.target.value)}
+              className="no-print"
+              style={{
+                border: "none",
+                borderRadius: 7,
+                padding: "8px 12px",
+                fontSize: 13,
+                fontWeight: 600,
+                fontFamily: "inherit",
+                background: "#FFFFFF",
+                color: "#E85D1F",
+                cursor: "pointer",
+              }}
+            >
+              {SEMANAS.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <SaveIndicator state={saveState} />
+            <button onClick={() => setShowEmpleados(true)} className="no-print" style={btnStyle("#FFFFFF", "#E85D1F")}>
+              <Users size={15} /> Empleados
+            </button>
+            <button onClick={() => setShowConsolidado(true)} className="no-print" style={btnStyle("#FFFFFF", "#E85D1F")}>
+              <Clock size={15} /> Consolidado
+            </button>
+            <button onClick={handlePrint} style={btnStyle("#3FBFC4", "#FFFFFF")}>
+              <Printer size={15} /> Imprimir
+            </button>
+            <button onClick={onSalir} className="no-print" title="Salir" style={{ ...btnStyle("transparent", "#FFFFFF"), padding: 8 }}>
+              <LogOut size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
 
-  const exportarExcel = () => {
-    if (tiendaSeleccionada) {
-      const nombreTienda = listaTiendas.find((t) => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada;
-      const filasTienda = filas.filter((f) => f.tiendaCodigo === tiendaSeleccionada);
-      const data = filasTienda.map((f) => ({
-        Semana: f.semana,
-        Operario: f.operario,
-        Cédula: f.cedula,
-        "Hrs Festivas": Number(fmt(f.festivas)),
-        "Hrs Nocturnas": Number(fmt(f.nocturnas)),
-        "Hrs Extras Festivas": Number(fmt(f.extrasFestivas)),
-        "Hrs Extras Normales": Number(fmt(f.extrasNormales)),
-      }));
-      const hoja = XLSX.utils.json_to_sheet(data);
-      hoja["!cols"] = [{ wch: 12 }, { wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 18 }];
-      const libro = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(libro, hoja, "Consolidado");
-      const nombreArchivo = `Consolidado_${nombreTienda}.xlsx`.replace(/\s+/g, "_");
-      XLSX.writeFile(libro, nombreArchivo);
+      <div className="print-scale" style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 28px 60px" }}>
+        <div className="sheet" style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 28 }}>
+          {/* Header notes */}
+          <div style={{ fontSize: 11.5, color: "#6B5A4A", borderBottom: "2px solid #E85D1F", paddingBottom: 14, marginBottom: 18, lineHeight: 1.6 }}>
+            <strong style={{ color: "#E85D1F" }}>Tiendas RITMO</strong> · "Precios bajos todos los días" — Cada colaborador debe disfrutar de 36 horas continuas de descanso semanal. Las horas extras por inventario deben ser mínimas; solo el turno de la tarde debe generarlas. El turno de la mañana entra a las 6:00 a.m. y sale a la 1:30 p.m. No se pagarán horas extras no justificadas: toda hora extra requiere observación y aprobación del Jefe de Zona.
+          </div>
+
+          {/* Store info */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 22 }}>
+            <Field label="Nombre Tienda">
+              <input value={tienda} onChange={(e) => setTienda(e.target.value)} style={fieldInputStyle} placeholder="Ej. Santiago Centro" />
+            </Field>
+            <Field label="Código">
+              <input value={codigo} disabled style={{ ...fieldInputStyle, background: "#F2EFE9", color: "#5C5F5A", cursor: "not-allowed" }} />
+            </Field>
+            <Field label="Fecha">
+              <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={fieldInputStyle} />
+            </Field>
+          </div>
+
+          {/* Days */}
+          {days.map((d) => (
+            <div key={d.dia} className="day-block" style={{ marginBottom: 22, border: "1px solid #E5E3DC", borderRadius: 8, overflow: "hidden" }}>
+              <div className="day-header" style={{ background: "#E6F7F8", padding: "10px 14px" }}>
+                <span className="day-title" style={{ fontWeight: 700, color: "#1B8388", fontSize: 13.5 }}>{d.dia}</span>
+              </div>
+
+              <div style={{ overflowX: "auto" }}>
+                <table className="print-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
+                  <thead>
+                    <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                      <Th>Mes/Día</Th>
+                      <Th>Nombre</Th>
+                      <Th>Cédula</Th>
+                      <Th>Estado</Th>
+                      <Th>Hora Llegada</Th>
+                      <Th>Hora Salida</Th>
+                      <Th>Break Inicio</Th>
+                      <Th>Break Fin</Th>
+                      <Th>Hrs Programadas</Th>
+                      <Th>Llegada Real</Th>
+                      <Th>Salida Real</Th>
+                      <Th>Hrs Reales</Th>
+                      <Th>Hrs Nocturnas</Th>
+                      <Th>Saldo</Th>
+                      <Th>Firma</Th>
+                      <Th>Observación</Th>
+                      <Th></Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.entries.map((entry) => (
+                      <tr
+                        key={entry.id}
+                        className={`entry-row ${entry.nombre.trim() === "" ? "empty-row" : ""}`}
+                        style={{
+                          background: aprobaciones[entry.id] === "aprobado"
+                            ? "#C8E6C9"
+                            : aprobaciones[entry.id] === "rechazado"
+                            ? "#FFCDD2"
+                            : undefined,
+                          borderLeft: aprobaciones[entry.id] === "aprobado"
+                            ? "4px solid #2E7D32"
+                            : aprobaciones[entry.id] === "rechazado"
+                            ? "4px solid #C62828"
+                            : undefined,
+                        }}
+                      >
+                        <Td>
+                          <input className="cell-input" value={entry.fecha} onChange={(e) => updateEntry(d.dia, entry.id, "fecha", e.target.value)} placeholder="06/16" />
+                        </Td>
+                        <Td>
+                          <select
+                            className="cell-input"
+                            value={entry.nombre}
+                            onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)}
+                            style={{ fontWeight: 600, minWidth: 140, cursor: "pointer" }}
+                          >
+                            <option value="">Seleccionar...</option>
+                            {empleados.map((emp) => (
+                              <option key={emp.id} value={emp.nombre}>
+                                {emp.nombre}
+                              </option>
+                            ))}
+                          </select>
+                        </Td>
+                        <Td>
+                          <input
+                            className="cell-input"
+                            value={entry.cedula}
+                            readOnly
+                            placeholder="Selecciona un nombre"
+                            style={{
+                              minWidth: 100,
+                              background: entry.cedula.trim() === "" ? "#FCEBEB" : "#F2EFE9",
+                              borderRadius: 4,
+                              color: "#5C5F5A",
+                              cursor: "default",
+                            }}
+                          />
+                        </Td>
+                        <Td>
+                          <select
+                            className="cell-input"
+                            value={entry.estado}
+                            onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
+                            style={{
+                              cursor: "pointer",
+                              fontWeight: estaBloqueado(entry) ? 700 : 400,
+                              color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14",
+                            }}
+                          >
+                            <option value="trabaja">Trabaja</option>
+                            <option value="t_inventario_manana">T.Inventario mañana</option>
+                            <option value="domingo_t_manana">Domingo T. mañana</option>
+                            <option value="domingo_t_tarde">Domingo T. tarde</option>
+                            <option value="descanso">Descanso</option>
+                            <option value="incapacitado">Incapacitado</option>
+                            <option value="licencia_maternidad">Licencia de maternidad</option>
+                            <option value="luto">Luto</option>
+                          </select>
+                        </Td>
+                        <Td>
+                          <select
+                            disabled={estaBloqueado(entry)}
+                            className="cell-input"
+                            value={entry.llegada}
+                            onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
+                            style={{ cursor: "pointer", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }}
+                          >
+                            <option value="">--:-- --</option>
+                            <option value="06:00">6:00 AM</option>
+                            <option value="07:00">7:00 AM</option>
+                            <option value="07:30">7:30 AM</option>
+                            <option value="13:30">1:30 PM</option>
+                          </select>
+                        </Td>
+                        <Td>
+                          <input
+                            disabled
+                            readOnly
+                            type="time"
+                            className="cell-input"
+                            value={entry.salida}
+                            style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }}
+                          />
+                        </Td>
+                        <Td>
+                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio} onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
+                        </Td>
+                        <Td>
+                          <input
+                            disabled
+                            readOnly
+                            type="time"
+                            className="cell-input"
+                            value={entry.breakFin}
+                            style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }}
+                          />
+                        </Td>
+                        <Td>
+                          <input
+                            disabled
+                            readOnly
+                            className="cell-input"
+                            value={entry.horasProgramadas}
+                            placeholder="0"
+                            style={{
+                              textAlign: "center",
+                              background: "#F2EFE9",
+                              color: "#5C5F5A",
+                              cursor: "default",
+                            }}
+                          />
+                        </Td>
+                        <Td>
+                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.llegadaReal} onChange={(e) => updateEntry(d.dia, entry.id, "llegadaReal", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
+                        </Td>
+                        <Td>
+                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.salidaReal} onChange={(e) => updateEntry(d.dia, entry.id, "salidaReal", e.target.value)} style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
+                        </Td>
+                        <Td>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
+                            <input
+                              disabled
+                              readOnly
+                              className="cell-input"
+                              value={entry.horasReales}
+                              placeholder="0"
+                              style={{
+                                textAlign: "center",
+                                background: entry.esFestivo ? "transparent" : "#F2EFE9",
+                                color: entry.esFestivo ? "#04342C" : "#5C5F5A",
+                                fontWeight: entry.esFestivo ? 600 : 400,
+                                cursor: "default",
+                              }}
+                            />
+                            <label
+                              className="no-print"
+                              title="Marcar como festivo"
+                              style={{ display: "flex", alignItems: "center", cursor: estaBloqueado(entry) ? "not-allowed" : "pointer", paddingRight: 3 }}
+                            >
+                              <input
+                                type="checkbox"
+                                disabled={estaBloqueado(entry)}
+                                checked={entry.esFestivo}
+                                onChange={(e) => updateEntry(d.dia, entry.id, "esFestivo", e.target.checked)}
+                                style={{ cursor: estaBloqueado(entry) ? "not-allowed" : "pointer" }}
+                              />
+                            </label>
+                          </div>
+                        </Td>
+                        <Td>
+                          <span style={{ fontSize: 12, color: "#5C5F5A", display: "block", textAlign: "center" }}>
+                            {entry.horasNocturnas || "0"}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: entry.saldo.startsWith("+") ? "#B3261E" : entry.saldo.startsWith("-") ? "#946800" : "#5C5F5A",
+                            }}
+                          >
+                            {entry.saldo}
+                          </span>
+                        </Td>
+                        <Td>
+                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.firma} onChange={(e) => updateEntry(d.dia, entry.id, "firma", e.target.value)} style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
+                        </Td>
+                        <Td>
+                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.observacion} onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)} placeholder="—" style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
+                        </Td>
+                        <Td>
+                          {d.entries.length > 1 && (
+                            <button className="no-print" onClick={() => removeEntry(d.dia, entry.id)} style={iconBtnStyle}>
+                              <Trash2 size={14} color="#B3261E" />
+                            </button>
+                          )}
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ padding: "8px 14px", background: "#FAFAF7" }}>
+                <button className="no-print" onClick={() => addEntry(d.dia)} style={{ ...btnStyle("transparent", "#E85D1F"), border: "1px dashed #E85D1F", padding: "5px 10px", fontSize: 12 }}>
+                  <Plus size={13} /> Agregar colaborador a {d.dia}
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/* Footer: supervisor */}
+          <div style={{ paddingTop: 20, borderTop: "2px solid #E85D1F" }}>
+            <div style={{ maxWidth: 420 }}>
+              <Field label="Nombre Supervisor">
+                <input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} style={fieldInputStyle} placeholder="Nombre del supervisor" />
+              </Field>
+              <div style={{ marginTop: 36, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>
+                Firma Supervisor
+              </div>
+              <div style={{ marginTop: 28, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>
+                Aprobado por JDZ
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {showConsolidado && (
+        <div
+          className="no-print"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(36,28,20,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+            padding: 20,
+          }}
+          onClick={() => setShowConsolidado(false)}
+        >
+          <div
+            style={{
+              background: "white",
+              borderRadius: 10,
+              padding: 24,
+              maxWidth: 720,
+              width: "100%",
+              maxHeight: "85vh",
+              overflowY: "auto",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#E85D1F" }}>Consolidado Semanal por Operario</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button onClick={exportarConsolidadoExcel} style={btnStyle("#3FBFC4", "#FFFFFF")}>
+                  <FileSpreadsheet size={15} /> Exportar a Excel
+                </button>
+                <button onClick={() => setShowConsolidado(false)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 18, color: "#5C5F5A" }}>
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {consolidadoPorOperario.length === 0 ? (
+              <div style={{ fontSize: 13, color: "#5C5F5A" }}>No hay colaboradores con datos registrados todavía.</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                    <Th>Operario</Th>
+                    <Th>Cédula</Th>
+                    <Th>Hrs Festivas</Th>
+                    <Th>Hrs Nocturnas</Th>
+                    <Th>Extras Festivas</Th>
+                    <Th>Extras Normales</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {consolidadoPorOperario.map((op) => (
+                    <tr key={op.cedula || op.nombre} style={{ borderTop: "1px solid #EDEBE4" }}>
+                      <Td style={{ fontWeight: 600 }}>{op.nombre || "(Sin nombre)"}</Td>
+                      <Td>{op.cedula || "—"}</Td>
+                      <Td>{fmt(op.festivas)}</Td>
+                      <Td>{fmt(op.nocturnas)}</Td>
+                      <Td>{fmt(op.extrasFestivas)}</Td>
+                      <Td>{fmt(op.extrasNormales)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showEmpleados && (
+        <ModalEmpleados
+          codigoTienda={codigoTienda}
+          empleados={empleados}
+          onClose={() => setShowEmpleados(false)}
+          onRecargar={cargarEmpleados}
+        />
+      )}
+    </div>
+  );
+}
+
+function ModalEmpleados({ codigoTienda, empleados, onClose, onRecargar }) {
+  const [nombre, setNombre] = useState("");
+  const [cedula, setCedula] = useState("");
+  const [editandoId, setEditandoId] = useState(null);
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const limpiarFormulario = () => {
+    setNombre("");
+    setCedula("");
+    setEditandoId(null);
+    setError("");
+  };
+
+  const handleEditar = (emp) => {
+    setNombre(emp.nombre);
+    setCedula(emp.cedula);
+    setEditandoId(emp.id);
+    setError("");
+  };
+
+  const handleGuardar = async (e) => {
+    e.preventDefault();
+    if (!nombre.trim() || !cedula.trim()) {
+      setError("Completa nombre y cédula.");
       return;
     }
+    setGuardando(true);
+    setError("");
+    try {
+      if (editandoId) {
+        const { error: err } = await supabase
+          .from("empleados")
+          .update({ nombre: nombre.trim(), cedula: cedula.trim() })
+          .eq("id", editandoId);
+        if (err) throw err;
+      } else {
+        const { error: err } = await supabase
+          .from("empleados")
+          .insert({ tienda_codigo: codigoTienda, nombre: nombre.trim(), cedula: cedula.trim() });
+        if (err) throw err;
+      }
+      await onRecargar();
+      limpiarFormulario();
+    } catch (err) {
+      setError("Esa cédula ya existe en esta tienda, o ocurrió un error. Intenta de nuevo.");
+    } finally {
+      setGuardando(false);
+    }
+  };
 
-    const data = filas.map((f) => ({
-      Tienda: f.tiendaNombre,
-      "Código Tienda": f.tiendaCodigo,
-      Semana: f.semana,
-      Operario: f.operario,
-      Cédula: f.cedula,
-      "Hrs Festivas": Number(fmt(f.festivas)),
-      "Hrs Nocturnas": Number(fmt(f.nocturnas)),
-      "Hrs Extras Festivas": Number(fmt(f.extrasFestivas)),
-      "Hrs Extras Normales": Number(fmt(f.extrasNormales)),
-    }));
-    const hoja = XLSX.utils.json_to_sheet(data);
-    hoja["!cols"] = [{ wch: 22 }, { wch: 16 }, { wch: 12 }, { wch: 26 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 18 }, { wch: 18 }];
-    const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hoja, "Consolidado General");
-    XLSX.writeFile(libro, "Consolidado_General_RITMO.xlsx");
+  const handleEliminar = async (id) => {
+    try {
+      await supabase.from("empleados").delete().eq("id", id);
+      await onRecargar();
+      if (editandoId === id) limpiarFormulario();
+    } catch (err) {
+      setError("No se pudo eliminar. Intenta de nuevo.");
+    }
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#FFF6EE", fontFamily: "'Inter', system-ui, sans-serif", color: "#241C14" }}>
-      <div style={{ background: "#E85D1F", color: "white", padding: "18px 28px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <ShieldCheck size={20} />
-            <div style={{ fontSize: 18, fontWeight: 700 }}>Panel administrativo · Jefe de Zona</div>
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={cargarDatos} style={btnStyle("transparent", "#FFFFFF")}>
-              <RefreshCw size={14} /> Actualizar
-            </button>
-            <button onClick={exportarExcel} style={btnStyle("#3FBFC4", "#FFFFFF")}>
-              <FileSpreadsheet size={14} /> {tiendaSeleccionada ? "Exportar tienda" : "Exportar a Excel"}
-            </button>
-          </div>
+    <div
+      className="no-print"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(36,28,20,0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 50,
+        padding: 20,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "white",
+          borderRadius: 10,
+          padding: 24,
+          maxWidth: 520,
+          width: "100%",
+          maxHeight: "85vh",
+          overflowY: "auto",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#E85D1F" }}>Empleados de la tienda</div>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#5C5F5A" }}>
+            <X size={18} />
+          </button>
         </div>
-      </div>
 
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 28px 60px" }}>
-        <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 24 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#E85D1F", marginBottom: 16 }}>Consolidado por tienda</div>
-
-          {cargando && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#5C5F5A", fontSize: 13 }}>
-              <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> Cargando datos...
-              <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-            </div>
+        <form onSubmit={handleGuardar} style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+          <input
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            placeholder="Nombre completo"
+            style={{ ...fieldInputStyle, flex: "1 1 180px" }}
+          />
+          <input
+            value={cedula}
+            onChange={(e) => setCedula(e.target.value)}
+            placeholder="Cédula"
+            style={{ ...fieldInputStyle, flex: "1 1 140px" }}
+          />
+          <button type="submit" disabled={guardando} style={{ ...btnStyle("#E85D1F", "#FFFFFF"), opacity: guardando ? 0.7 : 1 }}>
+            {editandoId ? "Guardar" : <><Plus size={14} /> Agregar</>}
+          </button>
+          {editandoId && (
+            <button type="button" onClick={limpiarFormulario} style={btnStyle("#FAFAF7", "#5C5F5A")}>
+              Cancelar
+            </button>
           )}
+        </form>
 
-          {!cargando && error && (
-            <div style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 13, padding: "10px 12px", borderRadius: 6 }}>{error}</div>
-          )}
+        {error && (
+          <div style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 12.5, padding: "8px 10px", borderRadius: 6, marginBottom: 14 }}>{error}</div>
+        )}
 
-          {!cargando && !error && listaTiendas.length === 0 && (
-            <div style={{ fontSize: 13, color: "#5C5F5A" }}>Todavía no hay tiendas registradas.</div>
-          )}
-
-          {!cargando && !error && listaTiendas.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-              {listaTiendas.map((t) => {
-                const activo = tiendaSeleccionada === t.codigo;
-                return (
-                  <button
-                    key={t.codigo}
-                    onClick={() => setTiendaSeleccionada(activo ? "" : t.codigo)}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      background: activo ? "#E85D1F" : "#FFF6EE",
-                      color: activo ? "#FFFFFF" : "#E85D1F",
-                      border: "1px solid #E85D1F",
-                      borderRadius: 7,
-                      padding: "9px 14px",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    <Store size={14} /> {t.nombre} ({t.codigo})
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {tiendaSeleccionada && (() => {
-            const filasTienda = filas.filter((f) => f.tiendaCodigo === tiendaSeleccionada);
-            const nombreTienda = listaTiendas.find((t) => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada;
-            const filasExtrasTienda = filasExtras.filter((f) => f.tiendaCodigo === tiendaSeleccionada);
-            return (
-              <div style={{ marginTop: 18, borderTop: "1px solid #EDEBE4", paddingTop: 18 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>{nombreTienda}</div>
-                {filasTienda.length === 0 ? (
-                  <div style={{ fontSize: 13, color: "#5C5F5A" }}>Sin datos registrados todavía.</div>
-                ) : (
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
-                        <th style={thStyle}>Semana</th>
-                        <th style={thStyle}>Operario</th>
-                        <th style={thStyle}>Cédula</th>
-                        <th style={thStyle}>Hrs Festivas</th>
-                        <th style={thStyle}>Hrs Nocturnas</th>
-                        <th style={thStyle}>Extras Festivas</th>
-                        <th style={thStyle}>Extras Normales</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filasTienda.map((f, i) => (
-                        <tr key={`${f.semana}-${f.cedula || f.operario}-${i}`} style={{ borderTop: "1px solid #EDEBE4" }}>
-                          <td style={tdStyle}>{f.semana}</td>
-                          <td style={{ ...tdStyle, fontWeight: 600 }}>{f.operario}</td>
-                          <td style={tdStyle}>{f.cedula || "—"}</td>
-                          <td style={tdStyle}>{fmt(f.festivas)}</td>
-                          <td style={tdStyle}>{fmt(f.nocturnas)}</td>
-                          <td style={tdStyle}>{fmt(f.extrasFestivas)}</td>
-                          <td style={tdStyle}>{fmt(f.extrasNormales)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-
-                {filasExtrasTienda.length > 0 && (
-                  <div style={{ marginTop: 20 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#E85D1F", marginBottom: 10 }}>
-                      Aprobación de horas extras
+        {empleados.length === 0 ? (
+          <div style={{ fontSize: 13, color: "#5C5F5A" }}>Todavía no hay empleados registrados para esta tienda.</div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                <Th>Nombre</Th>
+                <Th>Cédula</Th>
+                <Th></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {empleados.map((emp) => (
+                <tr key={emp.id} style={{ borderTop: "1px solid #EDEBE4" }}>
+                  <Td style={{ fontWeight: 600 }}>{emp.nombre}</Td>
+                  <Td>{emp.cedula}</Td>
+                  <Td>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => handleEditar(emp)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#1B8388", fontSize: 12, fontWeight: 600 }}>
+                        Editar
+                      </button>
+                      <button onClick={() => handleEliminar(emp.id)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#791F1F", fontSize: 12, fontWeight: 600 }}>
+                        Eliminar
+                      </button>
                     </div>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
-                          <th style={thStyle}>Semana</th>
-                          <th style={thStyle}>Día</th>
-                          <th style={thStyle}>Operario</th>
-                          <th style={thStyle}>Cédula</th>
-                          <th style={thStyle}>Entrada</th>
-                          <th style={thStyle}>Salida</th>
-                          <th style={thStyle}>Saldo</th>
-                          <th style={thStyle}>Tipo</th>
-                          <th style={thStyle}>Observación</th>
-                          <th style={thStyle}>Estado</th>
-                          <th style={thStyle}>Acción</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filasExtrasTienda.map((f, i) => {
-                          const SEMANA_LABEL = { semana_1: "Semana 1", semana_2: "Semana 2", semana_3: "Semana 3", semana_4: "Semana 4" };
-                          const aprobado = f.aprobacionEstado === "aprobado";
-                          const rechazado = f.aprobacionEstado === "rechazado";
-                          return (
-                            <tr
-                              key={`${f.tiendaCodigo}-${f.semanaFecha}-${f.entryId}-${i}`}
-                              style={{
-                                borderTop: "1px solid #EDEBE4",
-                                background: aprobado ? "#E8F5E9" : rechazado ? "#FDECEA" : "white",
-                              }}
-                            >
-                              <td style={tdStyle}>{SEMANA_LABEL[f.semanaFecha] || f.semanaFecha}</td>
-                              <td style={tdStyle}>{f.dia}</td>
-                              <td style={{ ...tdStyle, fontWeight: 600 }}>{f.nombre}</td>
-                              <td style={tdStyle}>{f.cedula}</td>
-                              <td style={tdStyle}>{f.llegada}</td>
-                              <td style={tdStyle}>{f.salida}</td>
-                              <td style={{ ...tdStyle, color: "#E85D1F", fontWeight: 700 }}>{f.saldo}</td>
-                              <td style={tdStyle}>{f.esFestivo ? "Festivo" : "Normal"}</td>
-                              <td style={{ ...tdStyle, maxWidth: 200, fontSize: 12, color: "#5C5F5A", fontStyle: f.observacion ? "normal" : "italic" }}>
-                                {f.observacion || "Sin observación"}
-                              </td>
-                              <td style={tdStyle}>
-                                {aprobado && <span style={{ color: "#2E7D32", fontWeight: 600 }}>✓ Aprobado</span>}
-                                {rechazado && <span style={{ color: "#C62828", fontWeight: 600 }}>✗ Rechazado</span>}
-                                {!f.aprobacionEstado && <span style={{ color: "#5C5F5A" }}>Pendiente</span>}
-                              </td>
-                              <td style={tdStyle}>
-                                <div style={{ display: "flex", gap: 6 }}>
-                                  <button
-                                    onClick={() => handleAprobacion(f, "aprobado")}
-                                    style={{
-                                      display: "inline-flex", alignItems: "center", gap: 4,
-                                      background: aprobado ? "#2E7D32" : "#E8F5E9",
-                                      color: aprobado ? "white" : "#2E7D32",
-                                      border: "1px solid #2E7D32", borderRadius: 5,
-                                      padding: "4px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer",
-                                    }}
-                                  >
-                                    <CheckCircle size={12} /> Aprobar
-                                  </button>
-                                  <button
-                                    onClick={() => handleAprobacion(f, "rechazado")}
-                                    style={{
-                                      display: "inline-flex", alignItems: "center", gap: 4,
-                                      background: rechazado ? "#C62828" : "#FDECEA",
-                                      color: rechazado ? "white" : "#C62828",
-                                      border: "1px solid #C62828", borderRadius: 5,
-                                      padding: "4px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer",
-                                    }}
-                                  >
-                                    <XCircle size={12} /> Rechazar
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </div>
-
-        {!cargando && !error && totalesParaGraficas.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginTop: 24 }}>
-            <GraficaBarras
-              titulo={tiendaSeleccionada ? "Horas extras normales (total de la tienda)" : "Mayor horas extras normales"}
-              datos={datosExtrasNormales}
-              color="#3FBFC4"
-            />
-            <GraficaBarras
-              titulo={tiendaSeleccionada ? "Horas festivas / dominicales (total de la tienda)" : "Mayor horas festivas / dominicales"}
-              datos={datosExtrasFestivas}
-              color="#E85D1F"
-            />
-            <GraficaBarras
-              titulo={tiendaSeleccionada ? "Horas nocturnas (total de la tienda)" : "Mayor horas nocturnas"}
-              datos={datosNocturnas}
-              color="#7C5CFF"
-            />
-          </div>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
-
-      {tiendaSeleccionada && (
-        <div style={{ borderTop: "4px solid #E85D1F", marginTop: 8 }}>
-          <HorariosTienda codigoTienda={tiendaSeleccionada} onSalir={() => setTiendaSeleccionada("")} />
-        </div>
-      )}
     </div>
   );
 }
 
-const thStyle = { padding: "9px 8px", textAlign: "left", fontWeight: 600 };
-const tdStyle = { padding: "8px", fontSize: 12.5, verticalAlign: "middle" };
-
-function GraficaBarras({ titulo, datos, color }) {
+function Field({ label, children }) {
   return (
-    <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, color: "#241C14", fontWeight: 700, fontSize: 13 }}>
-        <BarChart3 size={15} color={color} /> {titulo}
-      </div>
-      {datos.every((d) => d.valor === 0) ? (
-        <div style={{ fontSize: 12.5, color: "#5C5F5A" }}>Todavía no hay horas registradas para graficar.</div>
-      ) : (
-        <ResponsiveContainer width="100%" height={Math.max(160, datos.length * 34)}>
-          <BarChart data={datos} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#EDEBE4" />
-            <XAxis type="number" tick={{ fontSize: 11, fill: "#5C5F5A" }} />
-            <YAxis type="category" dataKey="tienda" width={110} tick={{ fontSize: 11, fill: "#241C14" }} />
-            <Tooltip formatter={(value) => [`${value} h`, "Horas"]} />
-            <Bar dataKey="valor" fill={color} radius={[0, 4, 4, 0]} barSize={16} />
-          </BarChart>
-        </ResponsiveContainer>
-      )}
+    <div>
+      <div style={{ fontSize: 11, color: "#5C5F5A", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+      {children}
     </div>
   );
 }
+
+function Th({ children }) {
+  return <th style={{ padding: "9px 8px", textAlign: "left", fontWeight: 600 }}>{children}</th>;
+}
+
+function Td({ children, style }) {
+  return <td style={{ padding: "4px 8px", fontSize: 12.5, verticalAlign: "middle", borderTop: "1px solid #EDEBE4", ...style }}>{children}</td>;
+}
+
+function SummaryRow({ label, value, bold, color }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", fontSize: bold ? 14 : 12.5, fontWeight: bold ? 700 : 500, padding: "4px 0", color: color || "#241C14" }}>
+      <span>{label}</span>
+      <span>{Number.isFinite(value) ? value : 0} h</span>
+    </div>
+  );
+}
+
+function SaveIndicator({ state }) {
+  const map = {
+    idle: { icon: null, text: "" },
+    saving: { icon: <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />, text: "Guardando..." },
+    saved: { icon: <CheckCircle2 size={13} />, text: "Guardado" },
+    error: { icon: <AlertCircle size={13} />, text: "Error al guardar" },
+  };
+  const { icon, text } = map[state] || map.idle;
+  if (!text) return null;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, opacity: 0.9 }}>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      {icon} {text}
+    </div>
+  );
+}
+
+const disabledCellStyle = {
+  background: "#F2EFE9",
+  color: "#A6A199",
+  cursor: "not-allowed",
+};
+
+const fieldInputStyle = {  width: "100%",
+  border: "1px solid #DEDBD2",
+  borderRadius: 6,
+  padding: "7px 10px",
+  fontSize: 13,
+  fontFamily: "inherit",
+  background: "#FAFAF8",
+  outline: "none",
+  color: "#241C14",
+};
 
 function btnStyle(bg, color) {
   return {
@@ -550,7 +1202,7 @@ function btnStyle(bg, color) {
     gap: 6,
     background: bg,
     color,
-    border: bg === "transparent" ? "1px solid rgba(255,255,255,0.6)" : "none",
+    border: "none",
     borderRadius: 7,
     padding: "8px 14px",
     fontSize: 13,
@@ -559,3 +1211,13 @@ function btnStyle(bg, color) {
     fontFamily: "inherit",
   };
 }
+
+const iconBtnStyle = {
+  background: "transparent",
+  border: "none",
+  cursor: "pointer",
+  padding: 4,
+  borderRadius: 6,
+  display: "flex",
+  alignItems: "center",
+};
