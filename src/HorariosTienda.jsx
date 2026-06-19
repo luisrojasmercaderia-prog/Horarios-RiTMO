@@ -628,6 +628,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           /* Filas vacías ocultas */
           .empty-row { display: none !important; }
 
+          /* Evitar que el encabezado de la tabla se repita solo (sin datos) al cortar página,
+             y evitar que una fila se parta a la mitad entre dos páginas */
+          thead { display: table-row-group !important; }
+          tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+          .day-block { page-break-inside: avoid !important; break-inside: avoid !important; }
+
           /* Inputs y selects sin bordes */
           input, select {
             border: none !important;
@@ -903,7 +909,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           </span>
                         </td>
                         <td className="col-firma-screen" style={tdStyle}>
-                          <span className="firma-line-print" />
+                          {entry.nombre.trim() !== "" && <span className="firma-line-print" />}
                         </td>
                         <td className="col-obs no-print" style={tdStyle}>
                           <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.observacion}
