@@ -226,6 +226,18 @@ function getPeriodoActual(fechaRef) {
   return { anio, mes, semanaIdx };
 }
 
+// Limpia el campo "estado" de filas que no tienen nombre asignado.
+// Sirve para corregir datos antiguos guardados con "trabaja" predeterminado
+// en filas que en realidad están vacías (sin colaborador seleccionado).
+function limpiarEstadoFilasVacias(days) {
+  return days.map((d) => ({
+    ...d,
+    entries: d.entries.map((e) =>
+      e.nombre.trim() === "" && e.estado !== "" ? { ...e, estado: "" } : e
+    ),
+  }));
+}
+
 function diasVacios(semanaFechas) {
   let id = 1;
   return DIAS.map((d, idx) => {
@@ -314,7 +326,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           if (saved.tienda) setTienda(saved.tienda);
           setFecha(saved.fecha || fechaInicioSemana);
           setSupervisor(saved.supervisor || "");
-          setDays(saved.days && saved.days.length ? saved.days : diasVacios(semanaFechas));
+          setDays(saved.days && saved.days.length ? limpiarEstadoFilasVacias(saved.days) : diasVacios(semanaFechas));
           setNextId(saved.nextId || DIAS.length * ROWS_PER_DAY + 1);
         } else {
           setFecha(fechaInicioSemana); setSupervisor(""); setDays(diasVacios(semanaFechas));
