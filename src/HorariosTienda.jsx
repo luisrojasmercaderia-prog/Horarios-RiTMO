@@ -124,6 +124,8 @@ function calcularExtraFeriada(dia, entry) {
   return excedente > 0 ? excedente : 0;
 }
 
+const MIN_HORAS_PARA_BREAK = 3.5;
+
 function calcularHorasRealesDesdeLlegadaSalida(llegadaReal, salidaReal) {
   if (!llegadaReal || !salidaReal) return "";
   const [lh, lm] = llegadaReal.split(":").map(Number);
@@ -132,7 +134,10 @@ function calcularHorasRealesDesdeLlegadaSalida(llegadaReal, salidaReal) {
   let llegadaMin = lh * 60 + lm;
   let salidaMin = sh * 60 + sm;
   if (salidaMin < llegadaMin) salidaMin += 24 * 60;
-  const minutosTotales = salidaMin - llegadaMin - 60;
+  const minutosBrutos = salidaMin - llegadaMin;
+  // Solo se descuenta 1 hora de break si el turno trabajado dura 3.5 horas (210 min) o más.
+  // Si dura menos, no le corresponde break y se cuenta el tiempo completo.
+  const minutosTotales = minutosBrutos >= MIN_HORAS_PARA_BREAK * 60 ? minutosBrutos - 60 : minutosBrutos;
   if (minutosTotales <= 0) return "0";
   const horas = minutosTotales / 60;
   return horas % 1 === 0 ? String(horas) : horas.toFixed(1);
@@ -153,8 +158,6 @@ const TURNOS_FIJOS = {
 function esTurnoFijo(estado) {
   return Object.prototype.hasOwnProperty.call(TURNOS_FIJOS, estado);
 }
-
-const MIN_HORAS_PARA_BREAK = 3.5;
 
 function turnoMuyCortoParaBreak(entry) {
   const horasProg = parseFloat(entry.horasProgramadas);
