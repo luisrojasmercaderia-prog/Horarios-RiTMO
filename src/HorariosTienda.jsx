@@ -768,7 +768,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       Cédula: op.cedula || "",
       "Hrs Festivas": Number(fmt(op.festivas)),
       "Hrs Nocturnas": Number(fmt(op.nocturnas)),
-      "Hrs Extras Feriadas": Number(fmt(op.extrasFestivas)),
+      "Hrs Extras Feriadas o Dominicales": Number(fmt(op.extrasFestivas)),
       "Hrs Extras Normales": Number(fmt(op.extrasNormales)),
     }));
     const hoja = XLSX.utils.json_to_sheet(filas);
@@ -1001,7 +1001,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <th style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
                       <th className="col-nocturnas no-print" style={thStyle}>Hrs Noct.</th>
                       <th className="col-saldo no-print" style={thStyle}>Extra</th>
-                      <th className="col-saldo-festiva no-print" style={thStyle}>Extra Feriada</th>
+                      <th className="col-saldo-festiva no-print" style={thStyle}>Extra Feriada o Dominical</th>
                       <th className="col-firma-screen" style={thStyle}>Firma</th>
                       <th className="col-obs no-print" style={thStyle}>Observación</th>
                       <th className="col-acciones no-print" style={thStyle}></th>
@@ -1203,7 +1203,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                   <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
                     <th style={thStyle}>Operario</th><th style={thStyle}>Cédula</th>
                     <th style={thStyle}>Hrs Festivas</th><th style={thStyle}>Hrs Nocturnas</th>
-                    <th style={thStyle}>Extras Feriadas</th><th style={thStyle}>Extras Normales</th>
+                    <th style={thStyle}>Extras Feriadas o Dominicales</th><th style={thStyle}>Extras Normales</th>
                   </tr>
                 </thead>
                 <tbody>
