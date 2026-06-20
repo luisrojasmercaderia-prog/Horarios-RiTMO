@@ -262,6 +262,36 @@ function diasVacios(semanaFechas) {
   });
 }
 
+// Dada una fecha calendario (Date), busca en Supabase si existe una fila guardada
+// para esa cédula en ese día exacto, y retorna su estado ("descanso", "trabaja", etc.)
+// o null si no hay datos guardados para ese día/cédula. Se usa para validar el
+// descanso continuo entre el Sábado saliente y el Domingo entrante, que pueden
+// pertenecer a semanas/periodos de nómina distintos.
+async function buscarEstadoGuardado(codigoTienda, fechaCalendario, cedula) {
+  try {
+    const periodo = getPeriodoActual(fechaCalendario);
+    const semanaKeyBuscada = `${periodo.anio}-${String(periodo.mes).padStart(2, "0")}_semana_${periodo.semanaIdx + 1}`;
+    const { data, error } = await supabase
+      .from("horarios_semana")
+      .select("datos")
+      .eq("tienda_codigo", codigoTienda)
+      .eq("semana_fecha", semanaKeyBuscada)
+      .maybeSingle();
+    if (error || !data || !data.datos || !data.datos.days) return null;
+
+    const fechaISO = formatFechaISO(fechaCalendario);
+    for (const d of data.datos.days) {
+      if (d.fechaDate === fechaISO) {
+        const entry = d.entries.find((e) => e.cedula.trim() === cedula);
+        if (entry) return entry.estado;
+      }
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
 export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [tienda, setTienda] = useState("");
   const [codigo, setCodigo] = useState(codigoTienda);
@@ -375,7 +405,45 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     return () => clearTimeout(t);
   }, [tienda, codigo, fecha, supervisor, days, nextId, loaded, persist, semanaKey]);
 
-  const updateEntry = (dia, entryId, field, value) => {
+  const updateEntry = async (dia, entryId, field, value) => {
+    // Validación: prohibido descansar el Sábado saliente y el Domingo entrante (días
+    // calendario consecutivos), aunque pertenezcan a semanas/periodos de nómina distintos.
+    if (field === "estado" && value === "descanso" && (dia === "Sábado" || dia === "Domingo")) {
+      const diaActual = days.find((d) => d.dia === dia);
+      const entryActual = diaActual?.entries.find((e) => e.id === entryId);
+      if (entryActual && entryActual.cedula.trim() && diaActual.fechaDate) {
+        const cedula = entryActual.cedula.trim();
+        const fechaBase = new Date(diaActual.fechaDate + "T00:00:00");
+        const fechaAdyacente = new Date(fechaBase);
+        let nombreDiaAdyacente;
+        if (dia === "Sábado") {
+          fechaAdyacente.setDate(fechaAdyacente.getDate() + 1); // domingo entrante
+          nombreDiaAdyacente = "Domingo";
+        } else {
+          fechaAdyacente.setDate(fechaAdyacente.getDate() - 1); // sábado saliente
+          nombreDiaAdyacente = "Sábado";
+        }
+
+        // Primero revisamos si el día adyacente ya está cargado en la semana actual en pantalla.
+        let estadoAdyacente = null;
+        const diaAdyacenteEnPantalla = days.find(
+          (d) => d.fechaDate === formatFechaISO(fechaAdyacente)
+        );
+        if (diaAdyacenteEnPantalla) {
+          const entryAdy = diaAdyacenteEnPantalla.entries.find((e) => e.cedula.trim() === cedula);
+          if (entryAdy) estadoAdyacente = entryAdy.estado;
+        } else {
+          // Si no está en la semana actual (pertenece a otra semana/periodo), lo buscamos en Supabase.
+          estadoAdyacente = await buscarEstadoGuardado(codigoTienda, fechaAdyacente, cedula);
+        }
+
+        if (estadoAdyacente === "descanso") {
+          alert(`⚠️ No se puede asignar descanso este ${dia}.\n\nEste colaborador ya tiene descanso programado el ${nombreDiaAdyacente} (${formatFechaCorta(fechaAdyacente)}). No está permitido descansar el Sábado saliente y el Domingo entrante de forma continua.`);
+          return;
+        }
+      }
+    }
+
     // Validación de 36 horas de descanso: solo aplica cuando el colaborador
     // viene de un día marcado como "Descanso" y ahora se le programa a trabajar.
     // Se dispara al fijar el estado a "trabaja"/turno fijo, o al llenar la hora de llegada
