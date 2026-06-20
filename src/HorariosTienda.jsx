@@ -146,6 +146,8 @@ const TURNOS_FIJOS = {
   t_inventario_manana: { llegada: "06:00", salida: "14:30", horasProgramadas: "7.5" },
   domingo_t_manana: { llegada: "07:30", salida: "15:00", horasProgramadas: "6.5", breakEditable: true },
   domingo_t_tarde: { llegada: "12:30", salida: "20:00", horasProgramadas: "6.5", breakEditable: true },
+  feriado_manana: { llegada: "07:30", salida: "15:30", horasProgramadas: "6.5", breakEditable: true, esFestivoAuto: true },
+  feriado_tarde: { llegada: "12:30", salida: "20:00", horasProgramadas: "6.5", breakEditable: true, esFestivoAuto: true },
 };
 
 function esTurnoFijo(estado) {
@@ -570,6 +572,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           if (field === "estado" && esTurnoFijo(value)) {
             const turno = TURNOS_FIJOS[value];
             updated = { ...updated, llegada: turno.llegada, salida: turno.salida, horasProgramadas: turno.horasProgramadas, llegadaReal: "", salidaReal: "", horasReales: "", breakInicio: "", breakFin: "" };
+            if (turno.esFestivoAuto) updated.esFestivo = true;
           }
           if (field === "llegada") {
             const salidaAuto = HORARIOS_PREDETERMINADOS[value];
@@ -932,6 +935,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             <option value="t_inventario_manana">T.Inventario mañana</option>
                             <option value="domingo_t_manana">Domingo T. mañana</option>
                             <option value="domingo_t_tarde">Domingo T. tarde</option>
+                            <option value="feriado_manana">Feriado mañana</option>
+                            <option value="feriado_tarde">Feriado tarde</option>
                             <option value="descanso">Descanso</option>
                             <option value="incapacitado">Incapacitado</option>
                             <option value="licencia_maternidad">Licencia de maternidad</option>
