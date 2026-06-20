@@ -291,6 +291,55 @@ function calcularBreakPredeterminado(llegada, entriesMismoTurno, entryIdActual) 
   return minutosAHora(maximoMin);
 }
 
+// Pasada final de seguridad: revisa TODAS las filas de un día y corrige cualquier
+// cruce de horario de break entre colaboradores del MISMO turno (misma llegada y
+// salida), sin importar el orden en que se hayan asignado. Se ejecuta después de
+// cada actualización de fila para garantizar consistencia independiente del timing.
+function resolverCrucesBreak(entries) {
+  // Agrupamos por turno (llegada+salida) para revisar cruces solo dentro de cada grupo.
+  const grupos = {};
+  entries.forEach((e) => {
+    if (e.nombre.trim() === "" || !e.llegada || !e.salida || !e.breakInicio) return;
+    const clave = `${e.llegada}|${e.salida}`;
+    if (!grupos[clave]) grupos[clave] = [];
+    grupos[clave].push(e);
+  });
+
+  const idsAjustados = {};
+  Object.values(grupos).forEach((grupo) => {
+    if (grupo.length < 2) return;
+    // Ordenamos por id para procesar siempre en el mismo orden determinista,
+    // dejando el primero fijo y ajustando los siguientes si se cruzan.
+    const ordenado = [...grupo].sort((a, b) => a.id - b.id);
+    const fijos = [ordenado[0]];
+    for (let i = 1; i < ordenado.length; i++) {
+      const actual = ordenado[i];
+      const inicioActual = horaAMinutos(actual.breakInicio);
+      const finActual = inicioActual !== null ? inicioActual + 60 : null;
+      const seCruzaConFijos = fijos.some((f) => {
+        const inicioF = horaAMinutos(f.breakInicio);
+        const finF = inicioF !== null ? inicioF + 60 : null;
+        if (inicioActual === null || finActual === null || inicioF === null || finF === null) return false;
+        return inicioActual < finF && finActual > inicioF;
+      });
+      if (seCruzaConFijos) {
+        const nuevoBreak = calcularBreakPredeterminado(actual.llegada, fijos, actual.id);
+        if (nuevoBreak && nuevoBreak !== actual.breakInicio) {
+          idsAjustados[actual.id] = { breakInicio: nuevoBreak, breakFin: sumarUnaHora(nuevoBreak) || "" };
+        }
+        fijos.push(idsAjustados[actual.id] ? { ...actual, breakInicio: nuevoBreak } : actual);
+      } else {
+        fijos.push(actual);
+      }
+    }
+  });
+
+  if (Object.keys(idsAjustados).length === 0) return entries;
+  return entries.map((e) =>
+    idsAjustados[e.id] ? { ...e, breakInicio: idsAjustados[e.id].breakInicio, breakFin: idsAjustados[e.id].breakFin } : e
+  );
+}
+
 const INICIO_NOCTURNO_MIN = 21 * 60;
 
 function calcularHorasNocturnas(horaSalida) {
@@ -782,7 +831,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           }
           return updated;
         });
-        return { ...d, entries };
+        return { ...d, entries: resolverCrucesBreak(entries) };
       })
     );
   };
