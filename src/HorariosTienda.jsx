@@ -1069,6 +1069,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           <select className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} style={{ fontWeight: 600, minWidth: 140, cursor: "pointer" }}>
                             <option value="">Seleccionar...</option>
                             {empleados.map((emp) => (<option key={emp.id} value={emp.nombre}>{emp.nombre}</option>))}
+                            {/* Si el colaborador de esta fila ya no está en el directorio actual
+                                (fue eliminado), igual mostramos su nombre para no perder el
+                                historial de planillas pasadas. */}
+                            {entry.nombre.trim() !== "" && !empleados.some((emp) => emp.nombre === entry.nombre) && (
+                              <option value={entry.nombre}>{entry.nombre} (ya no está en el directorio)</option>
+                            )}
                           </select>
                         </td>
                         <td style={tdStyle}>
