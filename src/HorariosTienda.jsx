@@ -170,6 +170,20 @@ function calcularDuracionHoras(horaInicio, horaFin) {
   return (finMin - inicioMin) / 60;
 }
 
+function horaAMinutos(hora) {
+  if (!hora) return null;
+  const [h, m] = hora.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+function minutosAHora(minutos) {
+  const minNorm = ((minutos % (24 * 60)) + 24 * 60) % (24 * 60);
+  const h = Math.floor(minNorm / 60);
+  const m = Math.round(minNorm % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 function turnoMuyCortoParaBreak(entry) {
   // Prioridad 1: si hay horasProgramadas válido, usarlo.
   const horasProg = parseFloat(entry.horasProgramadas);
@@ -554,6 +568,29 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       if (turnoMuyCortoParaBreak(entryParaChequeo)) {
         alert(`⚠️ No se puede registrar break para este colaborador.\n\nEl turno programado es de menos de 3 horas y 30 minutos, por lo que no le corresponde tomar break.`);
         return;
+      }
+    }
+
+    // Validación: el break debe iniciar al menos 3:30 horas después de la hora de
+    // llegada (tanto la programada como la real, si están disponibles).
+    if (field === "breakInicio" && value) {
+      const breakMin = horaAMinutos(value);
+      const llegadaProgMin = horaAMinutos(entryParaChequeo.llegada);
+      const llegadaRealMin = horaAMinutos(entryParaChequeo.llegadaReal);
+
+      if (llegadaProgMin !== null && breakMin !== null) {
+        const minimoPermitido = llegadaProgMin + MIN_HORAS_PARA_BREAK * 60;
+        if (breakMin < minimoPermitido) {
+          alert(`⚠️ Hora de break no permitida.\n\nEl colaborador llega a las ${entryParaChequeo.llegada}. El break solo puede iniciar después de 3 horas y 30 minutos trabajadas, es decir, no antes de ${minutosAHora(minimoPermitido)}.`);
+          return;
+        }
+      }
+      if (llegadaRealMin !== null && breakMin !== null) {
+        const minimoPermitidoReal = llegadaRealMin + MIN_HORAS_PARA_BREAK * 60;
+        if (breakMin < minimoPermitidoReal) {
+          alert(`⚠️ Hora de break no permitida.\n\nLa llegada real fue a las ${entryParaChequeo.llegadaReal}. El break solo puede iniciar después de 3 horas y 30 minutos trabajadas, es decir, no antes de ${minutosAHora(minimoPermitidoReal)}.`);
+          return;
+        }
       }
     }
 
