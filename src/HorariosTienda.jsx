@@ -376,6 +376,69 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   }, [tienda, codigo, fecha, supervisor, days, nextId, loaded, persist, semanaKey]);
 
   const updateEntry = (dia, entryId, field, value) => {
+    // Validación de 36 horas de descanso: solo aplica cuando el colaborador
+    // viene de un día marcado como "Descanso" y ahora se le programa a trabajar.
+    // Se dispara al fijar el estado a "trabaja"/turno fijo, o al llenar la hora de llegada
+    // de una fila que ya estaba en estado "trabaja".
+    const entryParaChequeo = days.find((d) => d.dia === dia)?.entries.find((e) => e.id === entryId);
+    const estadoEfectivo = field === "estado" ? value : entryParaChequeo?.estado;
+    const esCambioATrabajar =
+      (field === "estado" && (value === "trabaja" || esTurnoFijo(value))) ||
+      (field === "llegada" && (estadoEfectivo === "trabaja" || esTurnoFijo(estadoEfectivo)));
+
+    if (esCambioATrabajar) {
+      const diaActualIdx = DIAS.indexOf(dia);
+      const entryActual = entryParaChequeo;
+
+      if (entryActual && entryActual.cedula.trim() && diaActualIdx > 0) {
+        const cedula = entryActual.cedula.trim();
+        const diaAnteriorIdx = diaActualIdx - 1;
+        const diaAnterior = days[diaAnteriorIdx];
+        const entryDiaAnterior = diaAnterior.entries.find((e) => e.cedula.trim() === cedula);
+
+        // Solo validamos si el día inmediatamente anterior fue un descanso para este colaborador.
+        if (entryDiaAnterior && entryDiaAnterior.estado === "descanso") {
+          // Buscamos la última salida registrada ANTES de ese descanso (puede estar 2 días atrás).
+          let ultimaSalidaMin = null;
+          let ultimoDiaNombre = "";
+          for (let i = diaAnteriorIdx - 1; i >= 0; i--) {
+            const diaPrevio = days[i];
+            const entryPrevio = diaPrevio.entries.find((e) => e.cedula.trim() === cedula);
+            if (entryPrevio && entryPrevio.salida) {
+              const [h, m] = entryPrevio.salida.split(":").map(Number);
+              if (!isNaN(h) && !isNaN(m)) {
+                ultimaSalidaMin = i * 24 * 60 + h * 60 + m;
+                ultimoDiaNombre = diaPrevio.dia;
+              }
+              break; // nos quedamos con el día más cercano que tenga salida registrada
+            }
+          }
+
+          // Hora de llegada que tendrá el operario en el día actual.
+          let llegadaNueva;
+          if (field === "estado" && esTurnoFijo(value)) {
+            llegadaNueva = TURNOS_FIJOS[value].llegada;
+          } else if (field === "llegada") {
+            llegadaNueva = value;
+          } else {
+            llegadaNueva = entryActual.llegada;
+          }
+
+          if (ultimaSalidaMin !== null && llegadaNueva) {
+            const [lh, lm] = llegadaNueva.split(":").map(Number);
+            if (!isNaN(lh) && !isNaN(lm)) {
+              const llegadaMin = diaActualIdx * 24 * 60 + lh * 60 + lm;
+              const horasDescanso = (llegadaMin - ultimaSalidaMin) / 60;
+              if (horasDescanso < 36) {
+                alert(`⚠️ No se puede programar a este operario el día ${dia}.\n\nDescansó el ${diaAnterior.dia}, pero desde su última salida el ${ultimoDiaNombre} solo habría ${horasDescanso.toFixed(1)} horas de descanso. Se requieren mínimo 36 horas continuas.`);
+                return;
+              }
+            }
+          }
+        }
+      }
+    }
+
     setDays((prev) =>
       prev.map((d) => {
         if (d.dia !== dia) return d;
