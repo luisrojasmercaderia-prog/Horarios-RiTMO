@@ -87,6 +87,7 @@ function emptyEntry(id) {
     observacion: "",
     validado: false,
     enviadoRRHH: false,
+    fechaRegistroNovedad: "",
   };
 }
 
@@ -157,15 +158,15 @@ function esNovedadRRHH(estado) {
 
 const DIAS_LIMITE_ENVIO_RRHH = 2;
 
-// Calcula cuántos días han pasado desde la fecha de inicio de una novedad (entry
-// con estado incapacitado/licencia/luto) que aún no ha sido marcada como enviada
-// a Recursos Humanos. Retorna null si no aplica o si ya fue enviada.
-function diasVencidosRRHH(entry, fechaDate) {
-  if (!esNovedadRRHH(entry.estado) || entry.enviadoRRHH || !fechaDate) return null;
-  const fechaNovedad = new Date(fechaDate + "T00:00:00");
+// Calcula cuántos días han pasado desde que se REGISTRÓ realmente la novedad
+// (Incapacitado/Licencia/Luto) en el sistema -no la fecha calendario de la fila de
+// la planilla-, para una entry que aún no ha sido marcada como enviada a RRHH.
+function diasVencidosRRHH(entry) {
+  if (!esNovedadRRHH(entry.estado) || entry.enviadoRRHH || !entry.fechaRegistroNovedad) return null;
+  const fechaRegistro = new Date(entry.fechaRegistroNovedad + "T00:00:00");
   const hoy = new Date();
   const hoySinHora = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-  const diffMs = hoySinHora - fechaNovedad;
+  const diffMs = hoySinHora - fechaRegistro;
   const diffDias = Math.floor(diffMs / (24 * 60 * 60 * 1000));
   return diffDias;
 }
@@ -790,6 +791,18 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           if (field === "estado" && esNoLaborable(value)) {
             updated = { ...updated, horasProgramadas: "", llegadaReal: "", salidaReal: "", horasReales: "", llegada: "", salida: "", breakInicio: "", breakFin: "", horasNocturnas: "" };
           }
+          if (field === "estado") {
+            if (esNovedadRRHH(value) && !esNovedadRRHH(e.estado)) {
+              // Primera vez que se marca esta novedad: registramos la fecha real de hoy
+              // (no la fecha calendario de la fila), para contar los días vencidos desde aquí.
+              updated.fechaRegistroNovedad = formatFechaISO(new Date());
+              updated.enviadoRRHH = false;
+            } else if (!esNovedadRRHH(value)) {
+              // Se quitó la novedad: limpiamos el registro y el estado de envío.
+              updated.fechaRegistroNovedad = "";
+              updated.enviadoRRHH = false;
+            }
+          }
           if (field === "estado" && esTurnoFijo(value)) {
             const turno = TURNOS_FIJOS[value];
             updated = { ...updated, llegada: turno.llegada, salida: turno.salida, horasProgramadas: turno.horasProgramadas, llegadaReal: "", salidaReal: "", horasReales: "", breakInicio: "", breakFin: "" };
@@ -888,7 +901,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     (sum, d) =>
       sum +
       d.entries.filter((e) => {
-        const dias = diasVencidosRRHH(e, d.fechaDate);
+        const dias = diasVencidosRRHH(e);
         return dias !== null && dias >= DIAS_LIMITE_ENVIO_RRHH;
       }).length,
     0
@@ -1378,7 +1391,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                         </td>
                         <td className="col-rrhh no-print" style={{ ...tdStyle, textAlign: "center" }}>
                           {esNovedadRRHH(entry.estado) && (() => {
-                            const dias = diasVencidosRRHH(entry, d.fechaDate);
+                            const dias = diasVencidosRRHH(entry);
                             const vencido = dias !== null && dias >= DIAS_LIMITE_ENVIO_RRHH;
                             return (
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
