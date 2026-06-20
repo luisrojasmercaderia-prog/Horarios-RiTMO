@@ -425,7 +425,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           nombreDiaAdyacente = "Sábado";
         }
 
-        // Primero revisamos si el día adyacente ya está cargado en la semana actual en pantalla.
+        // Primero revisamos si el día adyacente ya está cargado en la semana actual en pantalla
+        // (esto cubre el caso en que ambos días están visibles ahora mismo, sin esperar guardado).
         let estadoAdyacente = null;
         const diaAdyacenteEnPantalla = days.find(
           (d) => d.fechaDate === formatFechaISO(fechaAdyacente)
@@ -434,7 +435,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           const entryAdy = diaAdyacenteEnPantalla.entries.find((e) => e.cedula.trim() === cedula);
           if (entryAdy) estadoAdyacente = entryAdy.estado;
         } else {
-          // Si no está en la semana actual (pertenece a otra semana/periodo), lo buscamos en Supabase.
+          // El día adyacente pertenece a otra semana/periodo: forzamos guardado inmediato
+          // de la semana actual (sin esperar el debounce de 600ms) antes de consultar Supabase,
+          // para evitar que un cambio recién hecho (ej. el Sábado) no se vea reflejado todavía.
+          await persist({ tienda, codigo, fecha, supervisor, days, nextId }, semanaKey);
           estadoAdyacente = await buscarEstadoGuardado(codigoTienda, fechaAdyacente, cedula);
         }
 
