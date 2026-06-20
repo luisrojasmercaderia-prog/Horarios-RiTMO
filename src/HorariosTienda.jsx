@@ -1278,7 +1278,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <th className="col-llegada-real" style={thStyle}>Llegada Real</th>
                       <th className="col-salida-real" style={thStyle}>Salida Real</th>
                       <th className="col-hrs-reales" style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
-                      <th className="col-validado no-print" style={thStyle}>Validado</th>
+                      <th className="col-validado no-print" style={thStyle}>Validado por SPV</th>
                       <th className="col-nocturnas" style={thStyle}>Hrs Noct.</th>
                       <th className="col-saldo" style={thStyle}>Extra</th>
                       <th className="col-saldo-festiva" style={thStyle}>Extra Feriada o Dominical</th>
