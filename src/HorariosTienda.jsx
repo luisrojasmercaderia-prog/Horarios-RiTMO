@@ -156,7 +156,7 @@ function esNovedadRRHH(estado) {
   return ["incapacitado", "licencia_maternidad", "luto"].includes(estado);
 }
 
-const DIAS_LIMITE_ENVIO_RRHH = 2;
+const DIAS_LIMITE_ENVIO_RRHH = 3;
 
 // Calcula cuántos días han pasado desde que se REGISTRÓ realmente la novedad
 // (Incapacitado/Licencia/Luto) en el sistema -no la fecha calendario de la fila de
@@ -463,6 +463,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [codigo, setCodigo] = useState(codigoTienda);
   const [fecha, setFecha] = useState("");
   const [supervisor, setSupervisor] = useState("");
+  const [completado, setCompletado] = useState(false);
+  const [fechaCompletado, setFechaCompletado] = useState("");
   const [days, setDays] = useState(diasVacios);
   const [nextId, setNextId] = useState(DIAS.length * ROWS_PER_DAY + 1);
   const [saveState, setSaveState] = useState("idle");
@@ -566,6 +568,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           if (saved.tienda) setTienda(saved.tienda);
           setFecha(saved.fecha || fechaInicioSemana);
           setSupervisor(saved.supervisor || "");
+          setCompletado(!!saved.completado);
+          setFechaCompletado(saved.fechaCompletado || "");
           const diasLimpios = saved.days && saved.days.length ? limpiarEstadoFilasVacias(saved.days) : diasVacios(semanaFechas);
           // Re-resolvemos posibles cruces de break que hayan quedado guardados de antes
           // de un cambio en las reglas de horario (ventana legal mínima/máxima).
@@ -574,6 +578,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           setNextId(saved.nextId || DIAS.length * ROWS_PER_DAY + 1);
         } else {
           setFecha(fechaInicioSemana); setSupervisor(""); setDays(diasVacios(semanaFechas));
+          setCompletado(false);
+          setFechaCompletado("");
           setNextId(DIAS.length * ROWS_PER_DAY + 1);
         }
       } catch (e) {}
@@ -600,10 +606,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   useEffect(() => {
     if (!loaded) return;
     const t = setTimeout(() => {
-      persist({ tienda, codigo, fecha, supervisor, days, nextId }, semanaKey);
+      persist({ tienda, codigo, fecha, supervisor, days, nextId, completado, fechaCompletado }, semanaKey);
     }, 600);
     return () => clearTimeout(t);
-  }, [tienda, codigo, fecha, supervisor, days, nextId, loaded, persist, semanaKey]);
+  }, [tienda, codigo, fecha, supervisor, days, nextId, completado, fechaCompletado, loaded, persist, semanaKey]);
 
   const updateEntry = async (dia, entryId, field, value) => {
     // Validación: prohibido descansar el Sábado saliente y el Domingo entrante (días
@@ -637,7 +643,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           // El día adyacente pertenece a otra semana/periodo: forzamos guardado inmediato
           // de la semana actual (sin esperar el debounce de 600ms) antes de consultar Supabase,
           // para evitar que un cambio recién hecho (ej. el Sábado) no se vea reflejado todavía.
-          await persist({ tienda, codigo, fecha, supervisor, days, nextId }, semanaKey);
+          await persist({ tienda, codigo, fecha, supervisor, days, nextId, completado, fechaCompletado }, semanaKey);
           estadoAdyacente = await buscarEstadoGuardado(codigoTienda, fechaAdyacente, cedula);
         }
 
@@ -1176,8 +1182,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             <button onClick={onSalir} title="Salir" style={{ ...btnStyle("transparent", "#FFFFFF"), padding: 8 }}><LogOut size={16} /></button>
           </div>
         </div>
-        <div style={{ maxWidth: 1400, margin: "8px auto 0", fontSize: 12, opacity: 0.9 }}>
-          Periodo de nómina: <strong>{getPeriodoLabel(anioPeriodo, mesPeriodo)}</strong> (21 de {NOMBRES_MESES[(mesPeriodo - 2 + 12) % 12]} – 20 de {NOMBRES_MESES[mesPeriodo - 1]})
+        <div style={{ maxWidth: 1400, margin: "8px auto 0", fontSize: 12, opacity: 0.9, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span>Periodo de nómina: <strong>{getPeriodoLabel(anioPeriodo, mesPeriodo)}</strong> (21 de {NOMBRES_MESES[(mesPeriodo - 2 + 12) % 12]} – 20 de {NOMBRES_MESES[mesPeriodo - 1]})</span>
+          {completado && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(46,125,50,0.25)", padding: "2px 9px", borderRadius: 999, fontWeight: 600 }}>
+              <CheckCircle2 size={12} /> Semana completada
+            </span>
+          )}
         </div>
       </div>
 
@@ -1461,6 +1472,39 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               <div className="firma-line" style={{ marginTop: 28, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>
                 Aprobado por JDZ
               </div>
+            </div>
+
+            <div className="no-print" style={{ marginTop: 26, paddingTop: 20, borderTop: "1px dashed #DEDBD2", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+              <button
+                onClick={() => {
+                  if (completado) {
+                    if (window.confirm("Esta planilla ya está marcada como completada.\n\n¿Quieres desmarcarla? (por ejemplo, si necesitas corregir algo más)")) {
+                      setCompletado(false);
+                      setFechaCompletado("");
+                    }
+                    return;
+                  }
+                  if (window.confirm("¿Confirmas que ya terminaste de programar los horarios de esta semana?\n\nEsto le indicará al Jefe de Zona que la planilla está lista.")) {
+                    setCompletado(true);
+                    setFechaCompletado(formatFechaISO(new Date()));
+                  }
+                }}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                  background: completado ? "#2E7D32" : "#3FBFC4",
+                  color: "#FFFFFF", border: "none", borderRadius: 8,
+                  padding: "11px 20px", fontSize: 14, fontWeight: 700,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                <CheckCircle2 size={17} />
+                {completado ? "Planilla completada — Marcar de nuevo" : "Marcar planilla como completada"}
+              </button>
+              {completado && fechaCompletado && (
+                <span style={{ fontSize: 12.5, color: "#5C5F5A" }}>
+                  Completada el {formatFechaCorta(new Date(fechaCompletado + "T00:00:00"))}
+                </span>
+              )}
             </div>
           </div>
         </div>
