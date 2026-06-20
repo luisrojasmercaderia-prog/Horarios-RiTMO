@@ -159,9 +159,32 @@ function esTurnoFijo(estado) {
   return Object.prototype.hasOwnProperty.call(TURNOS_FIJOS, estado);
 }
 
+function calcularDuracionHoras(horaInicio, horaFin) {
+  if (!horaInicio || !horaFin) return null;
+  const [ih, im] = horaInicio.split(":").map(Number);
+  const [fh, fm] = horaFin.split(":").map(Number);
+  if (isNaN(ih) || isNaN(im) || isNaN(fh) || isNaN(fm)) return null;
+  let inicioMin = ih * 60 + im;
+  let finMin = fh * 60 + fm;
+  if (finMin < inicioMin) finMin += 24 * 60;
+  return (finMin - inicioMin) / 60;
+}
+
 function turnoMuyCortoParaBreak(entry) {
+  // Prioridad 1: si hay horasProgramadas válido, usarlo.
   const horasProg = parseFloat(entry.horasProgramadas);
-  return !isNaN(horasProg) && horasProg < MIN_HORAS_PARA_BREAK;
+  if (!isNaN(horasProg)) return horasProg < MIN_HORAS_PARA_BREAK;
+
+  // Prioridad 2: calcular directamente desde Hora Llegada / Hora Salida programadas.
+  const duracionProgramada = calcularDuracionHoras(entry.llegada, entry.salida);
+  if (duracionProgramada !== null) return duracionProgramada < MIN_HORAS_PARA_BREAK;
+
+  // Prioridad 3: si tampoco hay llegada/salida programada, usar Llegada Real / Salida Real.
+  const duracionReal = calcularDuracionHoras(entry.llegadaReal, entry.salidaReal);
+  if (duracionReal !== null) return duracionReal < MIN_HORAS_PARA_BREAK;
+
+  // Sin datos suficientes para evaluar: no bloquear (se evaluará de nuevo cuando haya datos).
+  return false;
 }
 
 function estaBloqueado(entry) {
