@@ -553,6 +553,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             const salidaAuto = HORARIOS_PREDETERMINADOS[value];
             updated.salida = salidaAuto || "";
             updated.horasProgramadas = salidaAuto ? "7.5" : "";
+            // Al cambiar la hora de llegada, el break y las horas reales quedan desactualizados.
+            updated.breakInicio = "";
+            updated.breakFin = "";
+            updated.llegadaReal = "";
+            updated.salidaReal = "";
+            updated.horasReales = "";
           }
           if (field === "breakInicio") {
             const breakFinAuto = sumarUnaHora(value);
