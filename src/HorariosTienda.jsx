@@ -1461,7 +1461,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           })}
 
           {/* Pie: supervisor */}
-          <div className="footer-supervisor" style={{ paddingTop: 20, borderTop: "2px solid #E85D1F" }}>
+          <div className="footer-supervisor" style={{ paddingTop: 20, borderTop: "2px solid #E85D1F", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 20 }}>
             <div style={{ maxWidth: 420 }}>
               <Field label="Nombre Supervisor">
                 <input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} style={fieldInputStyle} placeholder="Nombre del supervisor" />
@@ -1473,8 +1473,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                 Aprobado por JDZ
               </div>
             </div>
-
-            <div className="no-print" style={{ marginTop: 26, paddingTop: 20, borderTop: "1px dashed #DEDBD2", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <div className="no-print" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
               <button
                 onClick={() => {
                   if (completado) {
@@ -1501,7 +1500,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                 {completado ? "Planilla completada — Marcar de nuevo" : "Marcar planilla como completada"}
               </button>
               {completado && fechaCompletado && (
-                <span style={{ fontSize: 12.5, color: "#5C5F5A" }}>
+                <span style={{ fontSize: 12, color: "#5C5F5A" }}>
                   Completada el {formatFechaCorta(new Date(fechaCompletado + "T00:00:00"))}
                 </span>
               )}
