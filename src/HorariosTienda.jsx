@@ -464,6 +464,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [fecha, setFecha] = useState("");
   const [supervisor, setSupervisor] = useState("");
   const [completado, setCompletado] = useState(false);
+  const [modoImpresion, setModoImpresion] = useState("planilla"); // "planilla" | "resumen"
   const [fechaCompletado, setFechaCompletado] = useState("");
   const [days, setDays] = useState(diasVacios);
   const [nextId, setNextId] = useState(DIAS.length * ROWS_PER_DAY + 1);
@@ -913,7 +914,14 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     0
   );
 
-  const handlePrint = () => window.print();
+  const handlePrintPlanilla = () => {
+    setModoImpresion("planilla");
+    setTimeout(() => window.print(), 50);
+  };
+  const handlePrintResumen = () => {
+    setModoImpresion("resumen");
+    setTimeout(() => window.print(), 50);
+  };
 
   // Carga los datos de TODAS las semanas del periodo de nómina actual desde Supabase,
   // combinando los días de cada semana en un solo arreglo para el cálculo acumulado.
@@ -997,7 +1005,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   };
 
   return (
-    <div className="root-wrap" style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#FFF6EE", minHeight: "100vh", color: "#241C14" }}>
+    <div className={`root-wrap print-mode-${modoImpresion}`} style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#FFF6EE", minHeight: "100vh", color: "#241C14" }}>
       <style>{`
         @media print {
           .no-print { display: none !important; }
@@ -1071,7 +1079,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             appearance: none !important;
           }
 
-          /* Ocultar columnas no esenciales en impresión */
+          /* Ocultar por defecto todas las columnas que no son fijas (Mes/Día, Nombre,
+             Cédula, Estado, Firma); cada modo de impresión decide cuáles mostrar. */
+          .col-llegada,
+          .col-salida,
+          .col-break-inicio,
+          .col-break-fin,
+          .col-hrs-prog,
           .col-llegada-real,
           .col-salida-real,
           .col-hrs-reales,
@@ -1082,6 +1096,23 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           .col-rrhh,
           .col-obs,
           .col-acciones { display: none !important; }
+
+          /* Modo "Planilla": Mes/Día, Nombre, Cédula, Estado, Hora Llegada, Hora Salida,
+             Break Inicio, Break Fin, Hrs Prog., Firma. */
+          .print-mode-planilla .col-llegada,
+          .print-mode-planilla .col-salida,
+          .print-mode-planilla .col-break-inicio,
+          .print-mode-planilla .col-break-fin,
+          .print-mode-planilla .col-hrs-prog { display: table-cell !important; }
+
+          /* Modo "Resumen": Mes/Día, Nombre, Cédula, Estado, Llegada Real, Salida Real,
+             Hrs Reales, Hrs Noct., Extra, Extra Feriada o Dominical, Firma. */
+          .print-mode-resumen .col-llegada-real,
+          .print-mode-resumen .col-salida-real,
+          .print-mode-resumen .col-hrs-reales,
+          .print-mode-resumen .col-nocturnas,
+          .print-mode-resumen .col-saldo,
+          .print-mode-resumen .col-saldo-festiva { display: table-cell !important; }
 
           /* Notas del encabezado compactas */
           .print-nota { font-size: 7px !important; padding-bottom: 3px !important; margin-bottom: 4px !important; line-height: 1.3 !important; }
@@ -1177,7 +1208,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                 </span>
               )}
             </button>
-            <button onClick={handlePrint} style={btnStyle("#3FBFC4", "#FFFFFF")}><Printer size={15} /> Imprimir</button>
+            <button onClick={handlePrintPlanilla} style={btnStyle("#3FBFC4", "#FFFFFF")}><Printer size={15} /> Imprimir Planilla</button>
+            <button onClick={handlePrintResumen} style={btnStyle("#3FBFC4", "#FFFFFF")}><Printer size={15} /> Imprimir Resumen</button>
             <button onClick={onSalir} title="Salir" style={{ ...btnStyle("transparent", "#FFFFFF"), padding: 8 }}><LogOut size={16} /></button>
           </div>
         </div>
@@ -1238,18 +1270,18 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <th style={thStyle}>Nombre</th>
                       <th style={thStyle}>Cédula</th>
                       <th style={{ ...thStyle, minWidth: 170 }}>Estado</th>
-                      <th style={thStyle}>Hora Llegada</th>
-                      <th style={thStyle}>Hora Salida</th>
+                      <th className="col-llegada" style={thStyle}>Hora Llegada</th>
+                      <th className="col-salida" style={thStyle}>Hora Salida</th>
                       <th className="col-break-inicio" style={thStyle}>Break Inicio</th>
                       <th className="col-break-fin" style={thStyle}>Break Fin</th>
-                      <th style={thStyle}>Hrs Prog.</th>
-                      <th className="col-llegada-real no-print" style={thStyle}>Llegada Real</th>
-                      <th className="col-salida-real no-print" style={thStyle}>Salida Real</th>
-                      <th className="col-hrs-reales no-print" style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
+                      <th className="col-hrs-prog" style={thStyle}>Hrs Prog.</th>
+                      <th className="col-llegada-real" style={thStyle}>Llegada Real</th>
+                      <th className="col-salida-real" style={thStyle}>Salida Real</th>
+                      <th className="col-hrs-reales" style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
                       <th className="col-validado no-print" style={thStyle}>Validado</th>
-                      <th className="col-nocturnas no-print" style={thStyle}>Hrs Noct.</th>
-                      <th className="col-saldo no-print" style={thStyle}>Extra</th>
-                      <th className="col-saldo-festiva no-print" style={thStyle}>Extra Feriada o Dominical</th>
+                      <th className="col-nocturnas" style={thStyle}>Hrs Noct.</th>
+                      <th className="col-saldo" style={thStyle}>Extra</th>
+                      <th className="col-saldo-festiva" style={thStyle}>Extra Feriada o Dominical</th>
                       <th className="col-rrhh no-print" style={thStyle}>Enviado a RRHH</th>
                       <th className="col-firma-screen" style={thStyle}>Firma</th>
                       <th className="col-obs no-print" style={thStyle}>Observación</th>
@@ -1308,7 +1340,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             <option value="luto">Luto</option>
                           </select>
                         </td>
-                        <td style={tdStyle}>
+                        <td className="col-llegada" style={tdStyle}>
                           <select key={`${entry.id}-${entry.estado}`} disabled={estaBloqueado(entry)} className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
                             style={{ cursor: "pointer", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }}>
                             <option value="">--:-- --</option>
@@ -1319,7 +1351,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             <option value="13:30">1:30 PM</option>
                           </select>
                         </td>
-                        <td style={tdStyle}>
+                        <td className="col-salida" style={tdStyle}>
                           <input disabled readOnly type="time" className="cell-input" value={entry.salida}
                             style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                         </td>
@@ -1332,21 +1364,21 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           <input disabled readOnly type="time" className="cell-input" value={entry.breakFin}
                             style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                         </td>
-                        <td style={tdStyle}>
+                        <td className="col-hrs-prog" style={tdStyle}>
                           <input disabled readOnly className="cell-input" value={entry.horasProgramadas} placeholder="0"
                             style={{ textAlign: "center", background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                         </td>
-                        <td className="col-llegada-real no-print" style={tdStyle}>
+                        <td className="col-llegada-real" style={tdStyle}>
                           <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.llegadaReal}
                             onChange={(e) => updateEntry(d.dia, entry.id, "llegadaReal", e.target.value)}
                             style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
                         </td>
-                        <td className="col-salida-real no-print" style={tdStyle}>
+                        <td className="col-salida-real" style={tdStyle}>
                           <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.salidaReal}
                             onChange={(e) => updateEntry(d.dia, entry.id, "salidaReal", e.target.value)}
                             style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
                         </td>
-                        <td className="col-hrs-reales no-print" style={{ ...tdStyle, minWidth: 90 }}>
+                        <td className="col-hrs-reales" style={{ ...tdStyle, minWidth: 90 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
                             <input disabled readOnly className="cell-input" value={entry.horasReales} placeholder="0"
                               style={{ textAlign: "center", minWidth: 40, width: 40, flexShrink: 0, background: entry.esFestivo ? "transparent" : "#F2EFE9", color: entry.esFestivo ? "#04342C" : "#5C5F5A", fontWeight: entry.esFestivo ? 600 : 400, cursor: "default" }} />
@@ -1375,10 +1407,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             />
                           )}
                         </td>
-                        <td className="col-nocturnas no-print" style={tdStyle}>
+                        <td className="col-nocturnas" style={tdStyle}>
                           <span style={{ fontSize: 12, color: "#5C5F5A", display: "block", textAlign: "center" }}>{entry.horasNocturnas || "0"}</span>
                         </td>
-                        <td className="col-saldo no-print" style={tdStyle}>
+                        <td className="col-saldo" style={tdStyle}>
                           <span style={{ fontSize: 12, fontWeight: 700, color: entry.saldo.startsWith("+") ? "#B3261E" : entry.saldo.startsWith("-") ? "#946800" : "#5C5F5A" }}>
                             {(() => {
                               const esDiaFeriado = d.dia === "Domingo" || entry.esFestivo;
@@ -1391,7 +1423,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             })()}
                           </span>
                         </td>
-                        <td className="col-saldo-festiva no-print" style={tdStyle}>
+                        <td className="col-saldo-festiva" style={tdStyle}>
                           <span style={{ fontSize: 12, fontWeight: 700, color: "#B3261E" }}>
                             {(() => {
                               const extraFeriada = calcularExtraFeriada(d.dia, entry);
