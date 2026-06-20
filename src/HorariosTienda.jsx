@@ -152,11 +152,19 @@ function esTurnoFijo(estado) {
   return Object.prototype.hasOwnProperty.call(TURNOS_FIJOS, estado);
 }
 
+const MIN_HORAS_PARA_BREAK = 3.5;
+
+function turnoMuyCortoParaBreak(entry) {
+  const horasProg = parseFloat(entry.horasProgramadas);
+  return !isNaN(horasProg) && horasProg < MIN_HORAS_PARA_BREAK;
+}
+
 function estaBloqueado(entry) {
   return esNoLaborable(entry.estado) || esTurnoFijo(entry.estado) || entry.cedula.trim() === "";
 }
 
 function parcialBloqueado(entry) {
+  if (turnoMuyCortoParaBreak(entry)) return true;
   if (esTurnoFijo(entry.estado) && TURNOS_FIJOS[entry.estado].breakEditable) {
     return esNoLaborable(entry.estado) || entry.cedula.trim() === "";
   }
@@ -509,6 +517,15 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             }
           }
         }
+      }
+    }
+
+    // Validación: no se puede registrar break (programado ni real) si el turno
+    // programado dura menos de 3.5 horas (3:30).
+    if ((field === "breakInicio" || field === "llegadaReal" || field === "salidaReal") && value) {
+      if (turnoMuyCortoParaBreak(entryParaChequeo)) {
+        alert(`⚠️ No se puede registrar break para este colaborador.\n\nEl turno programado es de menos de 3 horas y 30 minutos, por lo que no le corresponde tomar break.`);
+        return;
       }
     }
 
