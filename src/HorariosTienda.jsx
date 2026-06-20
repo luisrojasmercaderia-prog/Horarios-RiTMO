@@ -86,6 +86,7 @@ function emptyEntry(id) {
     firma: "",
     observacion: "",
     validado: false,
+    enviadoRRHH: false,
   };
 }
 
@@ -146,6 +147,27 @@ function calcularHorasRealesDesdeLlegadaSalida(llegadaReal, salidaReal) {
 
 function esNoLaborable(estado) {
   return ["descanso", "incapacitado", "licencia_maternidad", "luto"].includes(estado);
+}
+
+// Estados que constituyen una "novedad" administrativa que debe reportarse a
+// Recursos Humanos (no incluye "descanso", que es parte del horario normal).
+function esNovedadRRHH(estado) {
+  return ["incapacitado", "licencia_maternidad", "luto"].includes(estado);
+}
+
+const DIAS_LIMITE_ENVIO_RRHH = 2;
+
+// Calcula cuántos días han pasado desde la fecha de inicio de una novedad (entry
+// con estado incapacitado/licencia/luto) que aún no ha sido marcada como enviada
+// a Recursos Humanos. Retorna null si no aplica o si ya fue enviada.
+function diasVencidosRRHH(entry, fechaDate) {
+  if (!esNovedadRRHH(entry.estado) || entry.enviadoRRHH || !fechaDate) return null;
+  const fechaNovedad = new Date(fechaDate + "T00:00:00");
+  const hoy = new Date();
+  const hoySinHora = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const diffMs = hoySinHora - fechaNovedad;
+  const diffDias = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+  return diffDias;
 }
 
 const TURNOS_FIJOS = {
@@ -860,6 +882,18 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const totalProgramadas = days.reduce((sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasProgramadas) || 0), 0), 0);
   const totalReales = days.reduce((sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasReales) || 0), 0), 0);
 
+  // Cantidad de novedades (incapacidad/licencia/luto) vencidas (2+ días sin marcar
+  // como enviadas a RRHH) en la semana actualmente visible en pantalla.
+  const novedadesVencidas = days.reduce(
+    (sum, d) =>
+      sum +
+      d.entries.filter((e) => {
+        const dias = diasVencidosRRHH(e, d.fechaDate);
+        return dias !== null && dias >= DIAS_LIMITE_ENVIO_RRHH;
+      }).length,
+    0
+  );
+
   const handlePrint = () => window.print();
 
   // Carga los datos de TODAS las semanas del periodo de nómina actual desde Supabase,
@@ -1027,6 +1061,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           .col-saldo,
           .col-saldo-festiva,
           .col-validado,
+          .col-rrhh,
           .col-obs,
           .col-acciones { display: none !important; }
 
@@ -1106,7 +1141,24 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               {modoSupervisor ? <Unlock size={15} /> : <Lock size={15} />} {modoSupervisor ? "Supervisor activo" : "Modo Supervisor"}
             </button>
             <button onClick={() => setShowEmpleados(true)} style={btnStyle("#FFFFFF", "#E85D1F")}><Users size={15} /> Empleados</button>
-            <button onClick={() => { setShowConsolidado(true); cargarConsolidadoPeriodo(); }} style={btnStyle("#FFFFFF", "#E85D1F")}><Clock size={15} /> Consolidado</button>
+            <button onClick={() => { setShowConsolidado(true); cargarConsolidadoPeriodo(); }} style={{ ...btnStyle("#FFFFFF", "#E85D1F"), position: "relative" }}>
+              <Clock size={15} /> Consolidado
+              {novedadesVencidas > 0 && (
+                <span
+                  title={`${novedadesVencidas} novedad(es) sin enviar a RRHH hace 2+ días`}
+                  style={{
+                    position: "absolute", top: -7, right: -7,
+                    background: "#B3261E", color: "#FFFFFF",
+                    borderRadius: "50%", width: 19, height: 19,
+                    fontSize: 11, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    border: "2px solid #FFFFFF",
+                  }}
+                >
+                  {novedadesVencidas}
+                </span>
+              )}
+            </button>
             <button onClick={handlePrint} style={btnStyle("#3FBFC4", "#FFFFFF")}><Printer size={15} /> Imprimir</button>
             <button onClick={onSalir} title="Salir" style={{ ...btnStyle("transparent", "#FFFFFF"), padding: 8 }}><LogOut size={16} /></button>
           </div>
@@ -1175,6 +1227,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <th className="col-nocturnas no-print" style={thStyle}>Hrs Noct.</th>
                       <th className="col-saldo no-print" style={thStyle}>Extra</th>
                       <th className="col-saldo-festiva no-print" style={thStyle}>Extra Feriada o Dominical</th>
+                      <th className="col-rrhh no-print" style={thStyle}>Enviado a RRHH</th>
                       <th className="col-firma-screen" style={thStyle}>Firma</th>
                       <th className="col-obs no-print" style={thStyle}>Observación</th>
                       <th className="col-acciones no-print" style={thStyle}></th>
@@ -1322,6 +1375,36 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                               return extraFeriada > 0 ? `+${extraFeriada}` : "0";
                             })()}
                           </span>
+                        </td>
+                        <td className="col-rrhh no-print" style={{ ...tdStyle, textAlign: "center" }}>
+                          {esNovedadRRHH(entry.estado) && (() => {
+                            const dias = diasVencidosRRHH(entry, d.fechaDate);
+                            const vencido = dias !== null && dias >= DIAS_LIMITE_ENVIO_RRHH;
+                            return (
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                                <label
+                                  className="no-print"
+                                  title={entry.enviadoRRHH ? "Ya enviado a Recursos Humanos" : "Marcar como enviado a Recursos Humanos"}
+                                  style={{ display: "flex", alignItems: "center", cursor: "pointer" }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={entry.enviadoRRHH}
+                                    onChange={(ev) => updateEntry(d.dia, entry.id, "enviadoRRHH", ev.target.checked)}
+                                    style={{ width: 17, height: 17, cursor: "pointer", accentColor: "#3FBFC4" }}
+                                  />
+                                </label>
+                                {vencido && (
+                                  <span
+                                    title={`Sin enviar a RRHH hace ${dias} día(s)`}
+                                    style={{ fontSize: 11, fontWeight: 700, color: "#B3261E", background: "#FCEBEB", padding: "2px 6px", borderRadius: 4 }}
+                                  >
+                                    ⚠ {dias}d
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="col-firma-screen" style={tdStyle}>
                           {entry.nombre.trim() !== "" && <span className="firma-line-print" />}
