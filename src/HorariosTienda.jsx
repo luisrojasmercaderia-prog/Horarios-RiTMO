@@ -1072,10 +1072,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           }
 
           /* Ocultar columnas no esenciales en impresión */
-          .col-break-inicio,
-          .col-break-fin,
           .col-llegada-real,
           .col-salida-real,
+          .col-hrs-reales,
           .col-nocturnas,
           .col-saldo,
           .col-saldo-festiva,
@@ -1241,12 +1240,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <th style={{ ...thStyle, minWidth: 170 }}>Estado</th>
                       <th style={thStyle}>Hora Llegada</th>
                       <th style={thStyle}>Hora Salida</th>
-                      <th className="col-break-inicio no-print" style={thStyle}>Break Inicio</th>
-                      <th className="col-break-fin no-print" style={thStyle}>Break Fin</th>
+                      <th className="col-break-inicio" style={thStyle}>Break Inicio</th>
+                      <th className="col-break-fin" style={thStyle}>Break Fin</th>
                       <th style={thStyle}>Hrs Prog.</th>
                       <th className="col-llegada-real no-print" style={thStyle}>Llegada Real</th>
                       <th className="col-salida-real no-print" style={thStyle}>Salida Real</th>
-                      <th style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
+                      <th className="col-hrs-reales no-print" style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
                       <th className="col-validado no-print" style={thStyle}>Validado</th>
                       <th className="col-nocturnas no-print" style={thStyle}>Hrs Noct.</th>
                       <th className="col-saldo no-print" style={thStyle}>Extra</th>
@@ -1324,12 +1323,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           <input disabled readOnly type="time" className="cell-input" value={entry.salida}
                             style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                         </td>
-                        <td className="col-break-inicio no-print" style={tdStyle}>
+                        <td className="col-break-inicio" style={tdStyle}>
                           <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio}
                             onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)}
                             style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
                         </td>
-                        <td className="col-break-fin no-print" style={tdStyle}>
+                        <td className="col-break-fin" style={tdStyle}>
                           <input disabled readOnly type="time" className="cell-input" value={entry.breakFin}
                             style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                         </td>
@@ -1347,7 +1346,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             onChange={(e) => updateEntry(d.dia, entry.id, "salidaReal", e.target.value)}
                             style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
                         </td>
-                        <td style={{ ...tdStyle, minWidth: 90 }}>
+                        <td className="col-hrs-reales no-print" style={{ ...tdStyle, minWidth: 90 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
                             <input disabled readOnly className="cell-input" value={entry.horasReales} placeholder="0"
                               style={{ textAlign: "center", minWidth: 40, width: 40, flexShrink: 0, background: entry.esFestivo ? "transparent" : "#F2EFE9", color: entry.esFestivo ? "#04342C" : "#5C5F5A", fontWeight: entry.esFestivo ? 600 : 400, cursor: "default" }} />
