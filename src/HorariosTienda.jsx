@@ -622,8 +622,14 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           let updated = { ...e, [field]: value };
 
           if (field === "nombre") {
-            const match = empleados.find((emp) => emp.nombre === value);
-            if (match) updated.cedula = match.cedula;
+            if (value.trim() === "") {
+              // Se quitó el colaborador de la fila: limpiar toda la información asociada.
+              const idOriginal = updated.id;
+              updated = { ...emptyEntry(idOriginal), fecha: e.fecha };
+            } else {
+              const match = empleados.find((emp) => emp.nombre === value);
+              if (match) updated.cedula = match.cedula;
+            }
           }
           if (field === "cedula") {
             const match = empleados.find((emp) => emp.cedula === value);
