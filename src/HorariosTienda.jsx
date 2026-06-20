@@ -249,6 +249,39 @@ function sumarUnaHora(hora) {
   return `${String(nuevaH).padStart(2, "0")}:${String(nuevaM).padStart(2, "0")}`;
 }
 
+const MAX_HORAS_PARA_BREAK = 4;
+const PASO_AJUSTE_COLISION_MIN = 15;
+
+// Calcula la hora de break predeterminada para un colaborador, según su hora de
+// llegada: por ley debe iniciar después de 3:30 horas trabajadas y nunca después
+// de 4:00 horas. Por defecto se asigna el extremo más tardío permitido (Llegada + 4:00).
+// Si esa hora coincide con la de otro colaborador del MISMO turno (misma llegada y
+// salida) que ya tiene break asignado, se desplaza hacia atrás en pasos de 15 minutos
+// sin bajar del mínimo legal (Llegada + 3:30), buscando un horario libre.
+function calcularBreakPredeterminado(llegada, entriesMismoTurno, entryIdActual) {
+  const llegadaMin = horaAMinutos(llegada);
+  if (llegadaMin === null) return null;
+
+  const minimoMin = llegadaMin + MIN_HORAS_PARA_BREAK * 60; // Llegada + 3:30
+  const maximoMin = llegadaMin + MAX_HORAS_PARA_BREAK * 60; // Llegada + 4:00
+
+  const horasOcupadas = new Set(
+    entriesMismoTurno
+      .filter((e) => e.id !== entryIdActual && e.breakInicio)
+      .map((e) => e.breakInicio)
+  );
+
+  for (let candidato = maximoMin; candidato >= minimoMin; candidato -= PASO_AJUSTE_COLISION_MIN) {
+    const horaCandidata = minutosAHora(candidato);
+    if (!horasOcupadas.has(horaCandidata)) {
+      return horaCandidata;
+    }
+  }
+  // No se encontró un horario libre dentro de la ventana: se deja el máximo permitido
+  // (la validación de colisión existente avisará si aún así coincide).
+  return minutosAHora(maximoMin);
+}
+
 const INICIO_NOCTURNO_MIN = 21 * 60;
 
 function calcularHorasNocturnas(horaSalida) {
@@ -673,6 +706,17 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             const turno = TURNOS_FIJOS[value];
             updated = { ...updated, llegada: turno.llegada, salida: turno.salida, horasProgramadas: turno.horasProgramadas, llegadaReal: "", salidaReal: "", horasReales: "", breakInicio: "", breakFin: "" };
             if (turno.esFestivoAuto) updated.esFestivo = true;
+            if (!turnoMuyCortoParaBreak(updated)) {
+              const diaActualBreak = prev.find((dd) => dd.dia === dia);
+              const entriesMismoTurno = diaActualBreak
+                ? diaActualBreak.entries.filter((ee) => ee.llegada === turno.llegada && ee.salida === turno.salida)
+                : [];
+              const breakAuto = calcularBreakPredeterminado(turno.llegada, entriesMismoTurno, e.id);
+              if (breakAuto) {
+                updated.breakInicio = breakAuto;
+                updated.breakFin = sumarUnaHora(breakAuto) || "";
+              }
+            }
           }
           if (field === "llegada") {
             const salidaAuto = HORARIOS_PREDETERMINADOS[value];
@@ -684,6 +728,19 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             updated.llegadaReal = "";
             updated.salidaReal = "";
             updated.horasReales = "";
+            // Calculamos automáticamente el break predeterminado dentro de la ventana legal
+            // (Llegada + 3:30 a Llegada + 4:00), evitando coincidir con compañeros del mismo turno.
+            if (value && salidaAuto && !turnoMuyCortoParaBreak({ ...updated, horasProgramadas: "7.5" })) {
+              const diaActualBreak = prev.find((dd) => dd.dia === dia);
+              const entriesMismoTurno = diaActualBreak
+                ? diaActualBreak.entries.filter((ee) => ee.llegada === value && ee.salida === salidaAuto)
+                : [];
+              const breakAuto = calcularBreakPredeterminado(value, entriesMismoTurno, e.id);
+              if (breakAuto) {
+                updated.breakInicio = breakAuto;
+                updated.breakFin = sumarUnaHora(breakAuto) || "";
+              }
+            }
           }
           if (field === "breakInicio") {
             const breakFinAuto = sumarUnaHora(value);
@@ -691,6 +748,18 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           }
           if (field === "llegadaReal" || field === "salidaReal") {
             updated.horasReales = calcularHorasRealesDesdeLlegadaSalida(updated.llegadaReal, updated.salidaReal);
+          }
+          if (field === "llegadaReal" && value && !updated.breakInicio && !turnoMuyCortoParaBreak(updated)) {
+            // Si todavía no hay break asignado, lo calculamos a partir de la llegada real.
+            const diaActualBreak = prev.find((dd) => dd.dia === dia);
+            const entriesMismoTurno = diaActualBreak
+              ? diaActualBreak.entries.filter((ee) => ee.llegadaReal === value)
+              : [];
+            const breakAuto = calcularBreakPredeterminado(value, entriesMismoTurno, e.id);
+            if (breakAuto) {
+              updated.breakInicio = breakAuto;
+              updated.breakFin = sumarUnaHora(breakAuto) || "";
+            }
           }
           if (["horasProgramadas", "horasReales", "estado", "llegada", "llegadaReal", "salidaReal"].includes(field)) {
             updated.saldo = calcSaldo(updated.horasProgramadas, updated.horasReales);
