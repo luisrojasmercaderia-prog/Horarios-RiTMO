@@ -1131,9 +1131,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           {entry.nombre.trim() !== "" && <span className="firma-line-print" />}
                         </td>
                         <td className="col-obs no-print" style={tdStyle}>
-                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.observacion}
+                          <input disabled={entry.cedula.trim() === ""} className="cell-input" value={entry.observacion}
                             onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)}
-                            placeholder="—" style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
+                            placeholder="—" style={entry.cedula.trim() === "" ? disabledCellStyle : undefined} />
                         </td>
                         <td className="col-acciones no-print" style={tdStyle}>
                           {d.entries.length > 1 && (
