@@ -125,7 +125,7 @@ function calcularExtraFeriada(dia, entry) {
   return excedente > 0 ? excedente : 0;
 }
 
-const MIN_HORAS_PARA_BREAK = 3.5;
+const MIN_HORAS_PARA_BREAK = 3;
 
 function calcularHorasRealesDesdeLlegadaSalida(llegadaReal, salidaReal) {
   if (!llegadaReal || !salidaReal) return "";
@@ -249,22 +249,22 @@ function sumarUnaHora(hora) {
   return `${String(nuevaH).padStart(2, "0")}:${String(nuevaM).padStart(2, "0")}`;
 }
 
-const MAX_HORAS_PARA_BREAK = 4;
+const MAX_HORAS_PARA_BREAK = 5;
 const PASO_AJUSTE_COLISION_MIN = 15;
 
 // Calcula la hora de break predeterminada para un colaborador, según su hora de
-// llegada: por ley debe iniciar después de 3:30 horas trabajadas y nunca después
-// de 4:00 horas. Por defecto se asigna el extremo más tardío permitido (Llegada + 4:00).
+// llegada: por ley debe iniciar después de 3:00 horas trabajadas y nunca después
+// de 5:00 horas. Por defecto se asigna el extremo más tardío permitido (Llegada + 5:00).
 // Cada break dura 1 hora completa; si el rango (inicio a fin) se solapa con el de otro
 // colaborador del MISMO turno (misma llegada y salida) que ya tiene break asignado, se
-// desplaza hacia atrás en pasos de 15 minutos sin bajar del mínimo legal (Llegada + 3:30),
+// desplaza hacia atrás en pasos de 15 minutos sin bajar del mínimo legal (Llegada + 3:00),
 // buscando un horario completamente libre de cruces.
 function calcularBreakPredeterminado(llegada, entriesMismoTurno, entryIdActual) {
   const llegadaMin = horaAMinutos(llegada);
   if (llegadaMin === null) return null;
 
-  const minimoMin = llegadaMin + MIN_HORAS_PARA_BREAK * 60; // Llegada + 3:30
-  const maximoMin = llegadaMin + MAX_HORAS_PARA_BREAK * 60; // Llegada + 4:00
+  const minimoMin = llegadaMin + MIN_HORAS_PARA_BREAK * 60; // Llegada + 3:00
+  const maximoMin = llegadaMin + MAX_HORAS_PARA_BREAK * 60; // Llegada + 5:00
   const DURACION_BREAK_MIN = 60;
 
   // Rangos de inicio/fin de los breaks ya asignados a compañeros del mismo turno.
@@ -543,7 +543,11 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           if (saved.tienda) setTienda(saved.tienda);
           setFecha(saved.fecha || fechaInicioSemana);
           setSupervisor(saved.supervisor || "");
-          setDays(saved.days && saved.days.length ? limpiarEstadoFilasVacias(saved.days) : diasVacios(semanaFechas));
+          const diasLimpios = saved.days && saved.days.length ? limpiarEstadoFilasVacias(saved.days) : diasVacios(semanaFechas);
+          // Re-resolvemos posibles cruces de break que hayan quedado guardados de antes
+          // de un cambio en las reglas de horario (ventana legal mínima/máxima).
+          const diasSinCruces = diasLimpios.map((d) => ({ ...d, entries: resolverCrucesBreak(d.entries) }));
+          setDays(diasSinCruces);
           setNextId(saved.nextId || DIAS.length * ROWS_PER_DAY + 1);
         } else {
           setFecha(fechaInicioSemana); setSupervisor(""); setDays(diasVacios(semanaFechas));
@@ -685,15 +689,15 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     }
 
     // Validación: no se puede registrar break (programado ni real) si el turno
-    // programado dura menos de 3.5 horas (3:30).
+    // programado dura menos de 3 horas.
     if ((field === "breakInicio" || field === "llegadaReal" || field === "salidaReal") && value) {
       if (turnoMuyCortoParaBreak(entryParaChequeo)) {
-        alert(`⚠️ No se puede registrar break para este colaborador.\n\nEl turno programado es de menos de 3 horas y 30 minutos, por lo que no le corresponde tomar break.`);
+        alert(`⚠️ No se puede registrar break para este colaborador.\n\nEl turno programado es de menos de 3 horas, por lo que no le corresponde tomar break.`);
         return;
       }
     }
 
-    // Validación: el break debe iniciar al menos 3:30 horas después de la hora de
+    // Validación: el break debe iniciar al menos 3:00 horas después de la hora de
     // llegada (tanto la programada como la real, si están disponibles).
     if (field === "breakInicio" && value) {
       const breakMin = horaAMinutos(value);
@@ -703,14 +707,14 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       if (llegadaProgMin !== null && breakMin !== null) {
         const minimoPermitido = llegadaProgMin + MIN_HORAS_PARA_BREAK * 60;
         if (breakMin < minimoPermitido) {
-          alert(`⚠️ Hora de break no permitida.\n\nEl colaborador llega a las ${entryParaChequeo.llegada}. El break solo puede iniciar después de 3 horas y 30 minutos trabajadas, es decir, no antes de ${minutosAHora(minimoPermitido)}.`);
+          alert(`⚠️ Hora de break no permitida.\n\nEl colaborador llega a las ${entryParaChequeo.llegada}. El break solo puede iniciar después de 3 horas trabajadas, es decir, no antes de ${minutosAHora(minimoPermitido)}.`);
           return;
         }
       }
       if (llegadaRealMin !== null && breakMin !== null) {
         const minimoPermitidoReal = llegadaRealMin + MIN_HORAS_PARA_BREAK * 60;
         if (breakMin < minimoPermitidoReal) {
-          alert(`⚠️ Hora de break no permitida.\n\nLa llegada real fue a las ${entryParaChequeo.llegadaReal}. El break solo puede iniciar después de 3 horas y 30 minutos trabajadas, es decir, no antes de ${minutosAHora(minimoPermitidoReal)}.`);
+          alert(`⚠️ Hora de break no permitida.\n\nLa llegada real fue a las ${entryParaChequeo.llegadaReal}. El break solo puede iniciar después de 3 horas trabajadas, es decir, no antes de ${minutosAHora(minimoPermitidoReal)}.`);
           return;
         }
       }
@@ -791,7 +795,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             updated.salidaReal = "";
             updated.horasReales = "";
             // Calculamos automáticamente el break predeterminado dentro de la ventana legal
-            // (Llegada + 3:30 a Llegada + 4:00), evitando coincidir con compañeros del mismo turno.
+            // (Llegada + 3:00 a Llegada + 5:00), evitando coincidir con compañeros del mismo turno.
             if (value && salidaAuto && !turnoMuyCortoParaBreak({ ...updated, horasProgramadas: "7.5" })) {
               const diaActualBreak = prev.find((dd) => dd.dia === dia);
               const entriesMismoTurno = diaActualBreak
