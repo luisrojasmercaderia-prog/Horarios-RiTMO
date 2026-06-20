@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, RefreshCw, FileSpreadsheet, Loader2, Store, BarChart3, CheckCircle, XCircle } from "lucide-react";
+import { ShieldCheck, RefreshCw, FileSpreadsheet, Loader2, Store, BarChart3, CheckCircle, XCircle, AlertTriangle, Send } from "lucide-react";
 import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "./supabaseClient";
@@ -8,6 +8,32 @@ import HorariosTienda from "./HorariosTienda";
 function fmt(n) {
   const r = Math.round(n * 100) / 100;
   return Number.isInteger(r) ? String(r) : String(r);
+}
+
+// Mismas reglas que en HorariosTienda.jsx: estados que constituyen una "novedad"
+// administrativa que debe reportarse a Recursos Humanos.
+function esNovedadRRHH(estado) {
+  return ["incapacitado", "licencia_maternidad", "luto"].includes(estado);
+}
+
+const DIAS_LIMITE_ENVIO_RRHH = 3;
+
+const NOVEDAD_LABEL = {
+  incapacitado: "Incapacidad",
+  licencia_maternidad: "Licencia de maternidad",
+  luto: "Luto",
+};
+
+// Calcula cuántos días han pasado desde que se registró realmente la novedad
+// (entry.fechaRegistroNovedad), igual que en HorariosTienda.jsx.
+function diasVencidosRRHH(entry) {
+  if (!esNovedadRRHH(entry.estado) || entry.enviadoRRHH || !entry.fechaRegistroNovedad) return null;
+  const fechaRegistro = new Date(entry.fechaRegistroNovedad + "T00:00:00");
+  const hoy = new Date();
+  const hoySinHora = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const diffMs = hoySinHora - fechaRegistro;
+  const diffDias = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+  return diffDias;
 }
 
 function calcularConsolidadoTienda(datos) {
@@ -73,6 +99,36 @@ function extraerFilasConExtras(datos, tiendaCodigo, semanaFecha) {
   return resultado;
 }
 
+// Extrae todas las filas con novedad RRHH (incapacitado/licencia/luto) de la
+// planilla de una tienda, sin importar si ya fueron enviadas o no -el filtrado
+// de "pendientes/vencidas" se hace después, al consolidar entre tiendas-.
+function extraerNovedadesRRHH(datos, tiendaCodigo, tiendaNombre, semanaFecha) {
+  const resultado = [];
+  const days = (datos && datos.days) || [];
+  days.forEach((d) => {
+    (d.entries || []).forEach((e) => {
+      const nombre = (e.nombre || "").trim();
+      const cedula = (e.cedula || "").trim();
+      if (!nombre || !esNovedadRRHH(e.estado)) return;
+      resultado.push({
+        entryId: e.id,
+        tiendaCodigo,
+        tiendaNombre,
+        semanaFecha,
+        dia: d.dia,
+        fecha: e.fecha || "",
+        nombre,
+        cedula,
+        estado: e.estado,
+        enviadoRRHH: !!e.enviadoRRHH,
+        fechaRegistroNovedad: e.fechaRegistroNovedad || "",
+        diasVencidos: diasVencidosRRHH(e),
+      });
+    });
+  });
+  return resultado;
+}
+
 export default function PanelAdmin() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
@@ -81,6 +137,7 @@ export default function PanelAdmin() {
   const [tiendaSeleccionada, setTiendaSeleccionada] = useState("");
   const [filasExtras, setFilasExtras] = useState([]);
   const [aprobaciones, setAprobaciones] = useState({});
+  const [novedadesRRHH, setNovedadesRRHH] = useState([]);
 
   const cargarDatos = async () => {
     setCargando(true);
@@ -146,9 +203,19 @@ export default function PanelAdmin() {
       setFilas(resultado);
 
       const todasFilasExtras = [];
+      const todasNovedades = [];
       (horarios || []).forEach((h) => {
-        const filas = extraerFilasConExtras(h.datos, h.tienda_codigo, h.semana_fecha);
-        todasFilasExtras.push(...filas);
+        const filasH = extraerFilasConExtras(h.datos, h.tienda_codigo, h.semana_fecha);
+        todasFilasExtras.push(...filasH);
+
+        const tiendaInfo = (tiendas || []).find((t) => t.codigo === h.tienda_codigo);
+        const novedadesH = extraerNovedadesRRHH(
+          h.datos,
+          h.tienda_codigo,
+          tiendaInfo ? tiendaInfo.nombre : h.tienda_codigo,
+          h.semana_fecha
+        );
+        todasNovedades.push(...novedadesH);
       });
 
       const { data: aprobacionesData } = await supabase
@@ -168,6 +235,7 @@ export default function PanelAdmin() {
 
       setFilasExtras(todasFilasExtras);
       setAprobaciones(mapaAprobaciones);
+      setNovedadesRRHH(todasNovedades);
     } catch (e) {
       setError("No se pudieron cargar los datos. Intenta de nuevo.");
     } finally {
@@ -209,6 +277,18 @@ export default function PanelAdmin() {
       alert("Error al guardar la aprobación. Intenta de nuevo.");
     }
   };
+
+  // Novedades que llevan 3+ días sin marcarse como enviadas a RRHH, sin importar
+  // si son visibles en la tienda actualmente seleccionada o no -se ve TODA la red-.
+  const novedadesVencidasGlobal = novedadesRRHH
+    .filter((n) => !n.enviadoRRHH && n.diasVencidos !== null && n.diasVencidos >= DIAS_LIMITE_ENVIO_RRHH)
+    .sort((a, b) => (b.diasVencidos || 0) - (a.diasVencidos || 0));
+
+  // Novedades pendientes pero que aún no han vencido (menos de 3 días), para dar
+  // visibilidad de lo que está "en curso" sin ser todavía una alerta crítica.
+  const novedadesPendientesGlobal = novedadesRRHH
+    .filter((n) => !n.enviadoRRHH && n.diasVencidos !== null && n.diasVencidos < DIAS_LIMITE_ENVIO_RRHH)
+    .sort((a, b) => (b.diasVencidos || 0) - (a.diasVencidos || 0));
 
   const totalesPorTienda = (() => {
     const mapa = {};
@@ -291,6 +371,24 @@ export default function PanelAdmin() {
     XLSX.writeFile(libro, "Consolidado_General_RITMO.xlsx");
   };
 
+  const exportarNovedadesExcel = () => {
+    const data = [...novedadesVencidasGlobal, ...novedadesPendientesGlobal].map((n) => ({
+      Tienda: n.tiendaNombre,
+      "Código Tienda": n.tiendaCodigo,
+      Operario: n.nombre,
+      Cédula: n.cedula,
+      Tipo: NOVEDAD_LABEL[n.estado] || n.estado,
+      "Fecha registro": n.fechaRegistroNovedad,
+      "Días sin enviar": n.diasVencidos,
+      Estado: n.diasVencidos >= DIAS_LIMITE_ENVIO_RRHH ? "VENCIDO" : "Pendiente",
+    }));
+    const hoja = XLSX.utils.json_to_sheet(data);
+    hoja["!cols"] = [{ wch: 22 }, { wch: 14 }, { wch: 26 }, { wch: 14 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Novedades RRHH");
+    XLSX.writeFile(libro, "Novedades_Pendientes_RRHH.xlsx");
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: "#FFF6EE", fontFamily: "'Inter', system-ui, sans-serif", color: "#241C14" }}>
       <div style={{ background: "#E85D1F", color: "white", padding: "18px 28px" }}>
@@ -311,6 +409,103 @@ export default function PanelAdmin() {
       </div>
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 28px 60px" }}>
+        {/* ─── Alerta de novedades RRHH (incapacidad / licencia / luto) ─── */}
+        {!cargando && !error && (novedadesVencidasGlobal.length > 0 || novedadesPendientesGlobal.length > 0) && (
+          <div
+            style={{
+              background: "white",
+              borderRadius: 10,
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+              padding: 22,
+              marginBottom: 22,
+              border: novedadesVencidasGlobal.length > 0 ? "1.5px solid #E53935" : "1px solid #EDEBE4",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <AlertTriangle size={18} color={novedadesVencidasGlobal.length > 0 ? "#E53935" : "#946800"} />
+                <div style={{ fontSize: 15, fontWeight: 700, color: novedadesVencidasGlobal.length > 0 ? "#E53935" : "#241C14" }}>
+                  Novedades pendientes de envío a RRHH
+                </div>
+                {novedadesVencidasGlobal.length > 0 && (
+                  <span
+                    style={{
+                      background: "#E53935", color: "white", borderRadius: 999,
+                      padding: "2px 9px", fontSize: 12, fontWeight: 700,
+                    }}
+                  >
+                    {novedadesVencidasGlobal.length} vencida{novedadesVencidasGlobal.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+              <button onClick={exportarNovedadesExcel} style={btnStyle("#3FBFC4", "#FFFFFF")}>
+                <Send size={13} /> Exportar novedades
+              </button>
+            </div>
+
+            <div style={{ fontSize: 12, color: "#5C5F5A", marginBottom: 14 }}>
+              Incapacidades, licencias de maternidad y casos de luto que el supervisor de tienda aún no ha
+              marcado como enviados a Recursos Humanos. Las novedades con {DIAS_LIMITE_ENVIO_RRHH} o más días sin
+              enviar se muestran en rojo como vencidas.
+            </div>
+
+            {novedadesVencidasGlobal.length === 0 && novedadesPendientesGlobal.length === 0 ? (
+              <div style={{ fontSize: 13, color: "#5C5F5A" }}>No hay novedades pendientes en este momento.</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                    <th style={thStyle}>Tienda</th>
+                    <th style={thStyle}>Operario</th>
+                    <th style={thStyle}>Cédula</th>
+                    <th style={thStyle}>Tipo</th>
+                    <th style={thStyle}>Fecha registro</th>
+                    <th style={thStyle}>Días sin enviar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...novedadesVencidasGlobal, ...novedadesPendientesGlobal].map((n, i) => {
+                    const vencido = n.diasVencidos >= DIAS_LIMITE_ENVIO_RRHH;
+                    return (
+                      <tr
+                        key={`${n.tiendaCodigo}-${n.semanaFecha}-${n.entryId}-${i}`}
+                        style={{ borderTop: "1px solid #EDEBE4", background: vencido ? "#FDECEA" : "transparent" }}
+                      >
+                        <td style={tdStyle}>
+                          <button
+                            onClick={() => setTiendaSeleccionada(n.tiendaCodigo)}
+                            style={{ background: "transparent", border: "none", color: "#E85D1F", fontWeight: 600, cursor: "pointer", padding: 0, fontSize: 12.5, textDecoration: "underline" }}
+                          >
+                            {n.tiendaNombre}
+                          </button>
+                        </td>
+                        <td style={{ ...tdStyle, fontWeight: 600 }}>{n.nombre}</td>
+                        <td style={tdStyle}>{n.cedula || "—"}</td>
+                        <td style={tdStyle}>{NOVEDAD_LABEL[n.estado] || n.estado}</td>
+                        <td style={tdStyle}>{n.fechaRegistroNovedad || "—"}</td>
+                        <td style={tdStyle}>
+                          <span
+                            style={{
+                              fontWeight: 700,
+                              color: vencido ? "#E53935" : "#946800",
+                              background: vencido ? "#FCEBEB" : "#FFF6DC",
+                              padding: "2px 8px",
+                              borderRadius: 4,
+                              fontSize: 12,
+                            }}
+                          >
+                            {vencido ? "⚠ " : ""}{n.diasVencidos} día{n.diasVencidos !== 1 ? "s" : ""}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
         <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 24 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "#E85D1F", marginBottom: 16 }}>Consolidado por tienda</div>
 
@@ -333,11 +528,13 @@ export default function PanelAdmin() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
               {listaTiendas.map((t) => {
                 const activo = tiendaSeleccionada === t.codigo;
+                const vencidasTienda = novedadesVencidasGlobal.filter((n) => n.tiendaCodigo === t.codigo).length;
                 return (
                   <button
                     key={t.codigo}
                     onClick={() => setTiendaSeleccionada(activo ? "" : t.codigo)}
                     style={{
+                      position: "relative",
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 6,
@@ -353,6 +550,21 @@ export default function PanelAdmin() {
                     }}
                   >
                     <Store size={14} /> {t.nombre} ({t.codigo})
+                    {vencidasTienda > 0 && (
+                      <span
+                        title={`${vencidasTienda} novedad(es) vencida(s) sin enviar a RRHH`}
+                        style={{
+                          position: "absolute", top: -7, right: -7,
+                          background: "#E53935", color: "#FFFFFF",
+                          borderRadius: "50%", width: 18, height: 18,
+                          fontSize: 10.5, fontWeight: 700,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          border: "2px solid #FFF6EE",
+                        }}
+                      >
+                        {vencidasTienda}
+                      </span>
+                    )}
                   </button>
                 );
               })}
