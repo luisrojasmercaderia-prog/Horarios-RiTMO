@@ -439,6 +439,26 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       }
     }
 
+    // Validación de break: dos colaboradores con el MISMO turno (mismo día, misma
+    // hora de llegada y salida) no pueden tomar el break a la misma hora.
+    if (field === "breakInicio" && value) {
+      const diaActual = days.find((d) => d.dia === dia);
+      const entryActual = entryParaChequeo;
+      if (diaActual && entryActual && entryActual.llegada && entryActual.salida) {
+        const conflicto = diaActual.entries.find((e) =>
+          e.id !== entryId &&
+          e.nombre.trim() !== "" &&
+          e.llegada === entryActual.llegada &&
+          e.salida === entryActual.salida &&
+          e.breakInicio === value
+        );
+        if (conflicto) {
+          alert(`⚠️ No se puede asignar este horario de break.\n\n${conflicto.nombre} tiene el mismo turno (${entryActual.llegada}–${entryActual.salida}) el día ${dia} y ya tiene su break a las ${value}. Debe asignarse un horario distinto para mantener cobertura en la tienda.`);
+          return;
+        }
+      }
+    }
+
     setDays((prev) =>
       prev.map((d) => {
         if (d.dia !== dia) return d;
