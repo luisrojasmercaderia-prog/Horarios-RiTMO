@@ -255,30 +255,39 @@ const PASO_AJUSTE_COLISION_MIN = 15;
 // Calcula la hora de break predeterminada para un colaborador, según su hora de
 // llegada: por ley debe iniciar después de 3:30 horas trabajadas y nunca después
 // de 4:00 horas. Por defecto se asigna el extremo más tardío permitido (Llegada + 4:00).
-// Si esa hora coincide con la de otro colaborador del MISMO turno (misma llegada y
-// salida) que ya tiene break asignado, se desplaza hacia atrás en pasos de 15 minutos
-// sin bajar del mínimo legal (Llegada + 3:30), buscando un horario libre.
+// Cada break dura 1 hora completa; si el rango (inicio a fin) se solapa con el de otro
+// colaborador del MISMO turno (misma llegada y salida) que ya tiene break asignado, se
+// desplaza hacia atrás en pasos de 15 minutos sin bajar del mínimo legal (Llegada + 3:30),
+// buscando un horario completamente libre de cruces.
 function calcularBreakPredeterminado(llegada, entriesMismoTurno, entryIdActual) {
   const llegadaMin = horaAMinutos(llegada);
   if (llegadaMin === null) return null;
 
   const minimoMin = llegadaMin + MIN_HORAS_PARA_BREAK * 60; // Llegada + 3:30
   const maximoMin = llegadaMin + MAX_HORAS_PARA_BREAK * 60; // Llegada + 4:00
+  const DURACION_BREAK_MIN = 60;
 
-  const horasOcupadas = new Set(
-    entriesMismoTurno
-      .filter((e) => e.id !== entryIdActual && e.breakInicio)
-      .map((e) => e.breakInicio)
-  );
+  // Rangos de inicio/fin de los breaks ya asignados a compañeros del mismo turno.
+  const rangosOcupados = entriesMismoTurno
+    .filter((e) => e.id !== entryIdActual && e.breakInicio)
+    .map((e) => {
+      const inicio = horaAMinutos(e.breakInicio);
+      return inicio === null ? null : { inicio, fin: inicio + DURACION_BREAK_MIN };
+    })
+    .filter((r) => r !== null);
+
+  const seCruza = (candidatoInicio) => {
+    const candidatoFin = candidatoInicio + DURACION_BREAK_MIN;
+    return rangosOcupados.some((r) => candidatoInicio < r.fin && candidatoFin > r.inicio);
+  };
 
   for (let candidato = maximoMin; candidato >= minimoMin; candidato -= PASO_AJUSTE_COLISION_MIN) {
-    const horaCandidata = minutosAHora(candidato);
-    if (!horasOcupadas.has(horaCandidata)) {
-      return horaCandidata;
+    if (!seCruza(candidato)) {
+      return minutosAHora(candidato);
     }
   }
-  // No se encontró un horario libre dentro de la ventana: se deja el máximo permitido
-  // (la validación de colisión existente avisará si aún así coincide).
+  // No se encontró un horario sin cruce dentro de la ventana legal: se deja el máximo
+  // permitido (la validación de colisión existente avisará si aún así se cruza).
   return minutosAHora(maximoMin);
 }
 
@@ -659,20 +668,24 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     }
 
     // Validación de break: dos colaboradores con el MISMO turno (mismo día, misma
-    // hora de llegada y salida) no pueden tomar el break a la misma hora.
+    // hora de llegada y salida) no pueden tener breaks que se crucen en el tiempo
+    // (cada break dura 1 hora; se valida solapamiento de rango, no solo coincidencia exacta).
     if (field === "breakInicio" && value) {
       const diaActual = days.find((d) => d.dia === dia);
       const entryActual = entryParaChequeo;
       if (diaActual && entryActual && entryActual.llegada && entryActual.salida) {
-        const conflicto = diaActual.entries.find((e) =>
-          e.id !== entryId &&
-          e.nombre.trim() !== "" &&
-          e.llegada === entryActual.llegada &&
-          e.salida === entryActual.salida &&
-          e.breakInicio === value
-        );
+        const inicioNuevoMin = horaAMinutos(value);
+        const finNuevoMin = inicioNuevoMin !== null ? inicioNuevoMin + 60 : null;
+        const conflicto = diaActual.entries.find((e) => {
+          if (e.id === entryId || e.nombre.trim() === "" || !e.breakInicio) return false;
+          if (e.llegada !== entryActual.llegada || e.salida !== entryActual.salida) return false;
+          const inicioOtroMin = horaAMinutos(e.breakInicio);
+          if (inicioOtroMin === null || finNuevoMin === null) return false;
+          const finOtroMin = inicioOtroMin + 60;
+          return inicioNuevoMin < finOtroMin && finNuevoMin > inicioOtroMin;
+        });
         if (conflicto) {
-          alert(`⚠️ No se puede asignar este horario de break.\n\n${conflicto.nombre} tiene el mismo turno (${entryActual.llegada}–${entryActual.salida}) el día ${dia} y ya tiene su break a las ${value}. Debe asignarse un horario distinto para mantener cobertura en la tienda.`);
+          alert(`⚠️ No se puede asignar este horario de break.\n\n${conflicto.nombre} tiene el mismo turno (${entryActual.llegada}–${entryActual.salida}) el día ${dia} y su break (${conflicto.breakInicio}–${sumarUnaHora(conflicto.breakInicio)}) se cruza con este horario. Debe asignarse un horario que no se solape, para mantener cobertura en la tienda.`);
           return;
         }
       }
