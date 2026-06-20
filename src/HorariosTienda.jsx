@@ -353,6 +353,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [saveState, setSaveState] = useState("idle");
   const [loaded, setLoaded] = useState(false);
   const [showConsolidado, setShowConsolidado] = useState(false);
+  const [diasAcumuladosPeriodo, setDiasAcumuladosPeriodo] = useState(null);
+  const [cargandoConsolidado, setCargandoConsolidado] = useState(false);
 
   // Periodo de nómina: corte el día 20. Se detecta automáticamente según la fecha de hoy,
   // así la tienda no tiene que seleccionar nada manualmente al entrar.
@@ -696,9 +698,42 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
 
   const handlePrint = () => window.print();
 
+  // Carga los datos de TODAS las semanas del periodo de nómina actual desde Supabase,
+  // combinando los días de cada semana en un solo arreglo para el cálculo acumulado.
+  const cargarConsolidadoPeriodo = useCallback(async () => {
+    setCargandoConsolidado(true);
+    try {
+      const todasLasSemanas = [];
+      for (let i = 0; i < semanasDelPeriodo.length; i++) {
+        const keyDeEsaSemana = `${anioPeriodo}-${String(mesPeriodo).padStart(2, "0")}_semana_${i + 1}`;
+        if (keyDeEsaSemana === semanaKey) {
+          // La semana actualmente en pantalla puede tener cambios sin guardar todavía:
+          // usamos el estado local en vez de lo que haya en Supabase.
+          todasLasSemanas.push(...days);
+          continue;
+        }
+        const { data, error } = await supabase
+          .from("horarios_semana")
+          .select("datos")
+          .eq("tienda_codigo", codigoTienda)
+          .eq("semana_fecha", keyDeEsaSemana)
+          .maybeSingle();
+        if (!error && data && data.datos && data.datos.days) {
+          todasLasSemanas.push(...data.datos.days);
+        }
+      }
+      setDiasAcumuladosPeriodo(todasLasSemanas);
+    } catch (e) {
+      setDiasAcumuladosPeriodo(days); // fallback: al menos mostrar la semana actual
+    } finally {
+      setCargandoConsolidado(false);
+    }
+  }, [semanasDelPeriodo, anioPeriodo, mesPeriodo, semanaKey, days, codigoTienda]);
+
   const consolidadoPorOperario = (() => {
     const mapa = {};
-    days.forEach((d) => {
+    const fuenteDeDatos = diasAcumuladosPeriodo || days;
+    fuenteDeDatos.forEach((d) => {
       d.entries.forEach((e) => {
         const nombre = e.nombre.trim();
         const cedula = e.cedula.trim();
@@ -740,7 +775,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     hoja["!cols"] = [{ wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 18 }];
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Consolidado");
-    const nombreArchivo = `Consolidado_${tienda || "Tienda"}_${semanaKey}_${fecha || "sin_fecha"}.xlsx`.replace(/\s+/g, "_");
+    const nombreArchivo = `Consolidado_${tienda || "Tienda"}_${anioPeriodo}-${String(mesPeriodo).padStart(2, "0")}.xlsx`.replace(/\s+/g, "_");
     XLSX.writeFile(libro, nombreArchivo);
   };
 
@@ -899,7 +934,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             </select>
             <SaveIndicator state={saveState} />
             <button onClick={() => setShowEmpleados(true)} style={btnStyle("#FFFFFF", "#E85D1F")}><Users size={15} /> Empleados</button>
-            <button onClick={() => setShowConsolidado(true)} style={btnStyle("#FFFFFF", "#E85D1F")}><Clock size={15} /> Consolidado</button>
+            <button onClick={() => { setShowConsolidado(true); cargarConsolidadoPeriodo(); }} style={btnStyle("#FFFFFF", "#E85D1F")}><Clock size={15} /> Consolidado</button>
             <button onClick={handlePrint} style={btnStyle("#3FBFC4", "#FFFFFF")}><Printer size={15} /> Imprimir</button>
             <button onClick={onSalir} title="Salir" style={{ ...btnStyle("transparent", "#FFFFFF"), padding: 8 }}><LogOut size={16} /></button>
           </div>
@@ -984,7 +1019,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                         }}
                       >
                         <td style={tdStyle}>
-                          <input className="cell-input" value={entry.fecha} onChange={(e) => updateEntry(d.dia, entry.id, "fecha", e.target.value)} placeholder="06/16" />
+                          <input
+                            className="cell-input"
+                            value={entry.fecha}
+                            readOnly
+                            placeholder="06/16"
+                            style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }}
+                          />
                         </td>
                         <td style={tdStyle}>
                           <select className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} style={{ fontWeight: 600, minWidth: 140, cursor: "pointer" }}>
@@ -1090,9 +1131,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           {entry.nombre.trim() !== "" && <span className="firma-line-print" />}
                         </td>
                         <td className="col-obs no-print" style={tdStyle}>
-                          <input disabled={estaBloqueado(entry)} className="cell-input" value={entry.observacion}
+                          <input disabled={entry.cedula.trim() === ""} className="cell-input" value={entry.observacion}
                             onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)}
-                            placeholder="—" style={estaBloqueado(entry) ? disabledCellStyle : undefined} />
+                            placeholder="—" style={entry.cedula.trim() === "" ? disabledCellStyle : undefined} />
                         </td>
                         <td className="col-acciones no-print" style={tdStyle}>
                           {d.entries.length > 1 && (
@@ -1140,14 +1181,21 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           onClick={() => setShowConsolidado(false)}>
           <div style={{ background: "white", borderRadius: 10, padding: 24, maxWidth: 720, width: "100%", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}
             onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#E85D1F" }}>Consolidado Semanal por Operario</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#E85D1F" }}>Consolidado Acumulado del Periodo</div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <button onClick={exportarConsolidadoExcel} style={btnStyle("#3FBFC4", "#FFFFFF")}><FileSpreadsheet size={15} /> Exportar a Excel</button>
                 <button onClick={() => setShowConsolidado(false)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 18, color: "#5C5F5A" }}>✕</button>
               </div>
             </div>
-            {consolidadoPorOperario.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#5C5F5A", marginBottom: 16 }}>
+              {getPeriodoLabel(anioPeriodo, mesPeriodo)} (21 de {NOMBRES_MESES[(mesPeriodo - 2 + 12) % 12]} – 20 de {NOMBRES_MESES[mesPeriodo - 1]}) · Suma de las {semanasDelPeriodo.length} semanas del periodo
+            </div>
+            {cargandoConsolidado ? (
+              <div style={{ fontSize: 13, color: "#5C5F5A", display: "flex", alignItems: "center", gap: 8 }}>
+                <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> Calculando acumulado del periodo...
+              </div>
+            ) : consolidadoPorOperario.length === 0 ? (
               <div style={{ fontSize: 13, color: "#5C5F5A" }}>No hay colaboradores con datos registrados todavía.</div>
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
