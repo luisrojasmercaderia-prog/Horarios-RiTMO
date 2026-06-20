@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2, FileSpreadsheet, LogOut, Users, X } from "lucide-react";
+import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2, FileSpreadsheet, LogOut, Users, X, Lock, Unlock } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase } from "./supabaseClient";
 import logoRitmo from "./logo-ritmo.png";
@@ -85,6 +85,7 @@ function emptyEntry(id) {
     saldo: "",
     firma: "",
     observacion: "",
+    validado: false,
   };
 }
 
@@ -376,6 +377,34 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [empleados, setEmpleados] = useState([]);
   const [aprobaciones, setAprobaciones] = useState({});
   const [showEmpleados, setShowEmpleados] = useState(false);
+  const [modoSupervisor, setModoSupervisor] = useState(false);
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  const SUPERVISOR_PASSWORD = "spv1234";
+
+  const handleSupervisorClick = () => {
+    if (modoSupervisor) {
+      setModoSupervisor(false);
+      return;
+    }
+    setPasswordInput("");
+    setPasswordError("");
+    setShowPasswordPrompt(true);
+  };
+
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault();
+    if (passwordInput === SUPERVISOR_PASSWORD) {
+      setModoSupervisor(true);
+      setShowPasswordPrompt(false);
+      setPasswordInput("");
+      setPasswordError("");
+    } else {
+      setPasswordError("Contraseña incorrecta. Intenta de nuevo.");
+    }
+  };
 
   const cargarAprobaciones = useCallback(async (semana) => {
     try {
@@ -862,6 +891,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           .col-nocturnas,
           .col-saldo,
           .col-saldo-festiva,
+          .col-validado,
           .col-obs,
           .col-acciones { display: none !important; }
 
@@ -933,6 +963,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               })}
             </select>
             <SaveIndicator state={saveState} />
+            <button
+              onClick={handleSupervisorClick}
+              style={btnStyle(modoSupervisor ? "#3FBFC4" : "#FFFFFF", modoSupervisor ? "#FFFFFF" : "#E85D1F")}
+              title={modoSupervisor ? "Modo Supervisor activo — clic para salir" : "Activar Modo Supervisor"}
+            >
+              {modoSupervisor ? <Unlock size={15} /> : <Lock size={15} />} {modoSupervisor ? "Supervisor activo" : "Modo Supervisor"}
+            </button>
             <button onClick={() => setShowEmpleados(true)} style={btnStyle("#FFFFFF", "#E85D1F")}><Users size={15} /> Empleados</button>
             <button onClick={() => { setShowConsolidado(true); cargarConsolidadoPeriodo(); }} style={btnStyle("#FFFFFF", "#E85D1F")}><Clock size={15} /> Consolidado</button>
             <button onClick={handlePrint} style={btnStyle("#3FBFC4", "#FFFFFF")}><Printer size={15} /> Imprimir</button>
@@ -999,6 +1036,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                       <th className="col-llegada-real no-print" style={thStyle}>Llegada Real</th>
                       <th className="col-salida-real no-print" style={thStyle}>Salida Real</th>
                       <th style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
+                      <th className="col-validado no-print" style={thStyle}>Validado</th>
                       <th className="col-nocturnas no-print" style={thStyle}>Hrs Noct.</th>
                       <th className="col-saldo no-print" style={thStyle}>Extra</th>
                       <th className="col-saldo-festiva no-print" style={thStyle}>Extra Feriada o Dominical</th>
@@ -1102,6 +1140,23 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                                 style={{ cursor: estaBloqueado(entry) ? "not-allowed" : "pointer" }} />
                             </label>
                           </div>
+                        </td>
+                        <td className="col-validado no-print" style={{ ...tdStyle, textAlign: "center" }}>
+                          {entry.nombre.trim() !== "" && (
+                            <input
+                              type="checkbox"
+                              checked={entry.validado}
+                              disabled={!modoSupervisor}
+                              onChange={(e) => updateEntry(d.dia, entry.id, "validado", e.target.checked)}
+                              title={modoSupervisor ? "Marcar horas reales como validadas" : "Solo el supervisor puede validar (activa el Modo Supervisor)"}
+                              style={{
+                                width: 18,
+                                height: 18,
+                                cursor: modoSupervisor ? "pointer" : "not-allowed",
+                                accentColor: "#3FBFC4",
+                              }}
+                            />
+                          )}
                         </td>
                         <td className="col-nocturnas no-print" style={tdStyle}>
                           <span style={{ fontSize: 12, color: "#5C5F5A", display: "block", textAlign: "center" }}>{entry.horasNocturnas || "0"}</span>
@@ -1227,6 +1282,55 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       {/* Modal Empleados */}
       {showEmpleados && (
         <ModalEmpleados codigoTienda={codigoTienda} empleados={empleados} onClose={() => setShowEmpleados(false)} onRecargar={cargarEmpleados} />
+      )}
+
+      {/* Modal contraseña Modo Supervisor */}
+      {showPasswordPrompt && (
+        <div
+          className="no-print"
+          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(36,28,20,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 20 }}
+          onClick={() => setShowPasswordPrompt(false)}
+        >
+          <div
+            style={{ background: "white", borderRadius: 10, padding: 24, maxWidth: 360, width: "100%", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#E85D1F", display: "flex", alignItems: "center", gap: 8 }}>
+                <Lock size={17} /> Modo Supervisor
+              </div>
+              <button onClick={() => setShowPasswordPrompt(false)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#5C5F5A" }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ fontSize: 12.5, color: "#5C5F5A", marginBottom: 14 }}>
+              Ingresa la contraseña de supervisor para habilitar la validación de horas reales.
+            </div>
+            <form onSubmit={handlePasswordSubmit}>
+              <input
+                type="password"
+                autoFocus
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="Contraseña"
+                style={fieldInputStyle}
+              />
+              {passwordError && (
+                <div style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 12.5, padding: "8px 10px", borderRadius: 6, marginTop: 10 }}>
+                  {passwordError}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                <button type="submit" style={{ ...btnStyle("#3FBFC4", "#FFFFFF"), flex: 1, justifyContent: "center" }}>
+                  Ingresar
+                </button>
+                <button type="button" onClick={() => setShowPasswordPrompt(false)} style={{ ...btnStyle("#FAFAF7", "#5C5F5A"), flex: 1, justifyContent: "center" }}>
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
