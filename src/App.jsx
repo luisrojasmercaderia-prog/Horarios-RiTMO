@@ -72,8 +72,8 @@ function LoginTienda({ onIngresar }) {
     <div style={{ minHeight: "100vh", background: "#3FBFC4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif", padding: 20, position: "relative", overflow: "hidden" }}>
       <svg width="0" height="0" style={{ position: "absolute" }}>
         <filter id="grain-tienda">
-          <feTurbulence type="fractalNoise" baseFrequency="0.45" numOctaves={5} stitchTiles="stitch" result="noise" />
-          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.75 0" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.25" numOctaves={6} stitchTiles="stitch" result="noise" />
+          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.95 0" />
           <feComposite operator="over" in2="SourceGraphic" />
         </filter>
       </svg>
@@ -196,8 +196,8 @@ function LoginAdmin({ onIngresar }) {
     <div style={{ minHeight: "100vh", background: "#3FBFC4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif", padding: 20, position: "relative", overflow: "hidden" }}>
       <svg width="0" height="0" style={{ position: "absolute" }}>
         <filter id="grain-admin">
-          <feTurbulence type="fractalNoise" baseFrequency="0.45" numOctaves={5} stitchTiles="stitch" result="noise" />
-          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.75 0" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.25" numOctaves={6} stitchTiles="stitch" result="noise" />
+          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.95 0" />
           <feComposite operator="over" in2="SourceGraphic" />
         </filter>
       </svg>
