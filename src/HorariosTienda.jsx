@@ -1300,13 +1300,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           {/* Info de tienda */}
           <div className="store-info-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 22 }}>
             <Field label="Nombre Tienda">
-              <input value={tienda} onChange={(e) => setTienda(e.target.value)} style={fieldInputStyle} placeholder="Ej. Santiago Centro" />
+              <input disabled={completado} value={tienda} onChange={(e) => setTienda(e.target.value)} style={completado ? { ...fieldInputStyle, background: "#F2EFE9", color: "#5C5F5A", cursor: "not-allowed" } : fieldInputStyle} placeholder="Ej. Santiago Centro" />
             </Field>
             <Field label="Código">
               <input value={codigo} disabled style={{ ...fieldInputStyle, background: "#F2EFE9", color: "#5C5F5A", cursor: "not-allowed" }} />
             </Field>
             <Field label="Fecha">
-              <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={fieldInputStyle} />
+              <input disabled={completado} type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={completado ? { ...fieldInputStyle, background: "#F2EFE9", color: "#5C5F5A", cursor: "not-allowed" } : fieldInputStyle} />
             </Field>
           </div>
 
@@ -1374,7 +1374,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           />
                         </td>
                         <td style={tdStyle}>
-                          <select className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} style={{ fontWeight: 600, minWidth: 140, cursor: "pointer" }}>
+                          <select disabled={completado} className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} style={{ fontWeight: 600, minWidth: 140, cursor: completado ? "not-allowed" : "pointer" }}>
                             <option value="">Seleccionar...</option>
                             {empleados.map((emp) => (<option key={emp.id} value={emp.nombre}>{emp.nombre}</option>))}
                             {/* Si el colaborador de esta fila ya no está en el directorio actual
@@ -1390,8 +1390,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             style={{ minWidth: 100, background: entry.cedula.trim() === "" ? "#FCEBEB" : "#F2EFE9", borderRadius: 4, color: "#5C5F5A", cursor: "default" }} />
                         </td>
                         <td style={{ ...tdStyle, minWidth: 170 }}>
-                          <select className="cell-input" value={entry.estado} onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
-                            style={{ cursor: "pointer", width: "100%", minWidth: 160, whiteSpace: "nowrap", fontWeight: estaBloqueado(entry) ? 700 : 400, color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14" }}>
+                          <select disabled={completado} className="cell-input" value={entry.estado} onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
+                            style={{ cursor: completado ? "not-allowed" : "pointer", width: "100%", minWidth: 160, whiteSpace: "nowrap", fontWeight: estaBloqueado(entry) ? 700 : 400, color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14" }}>
                             <option value="">Seleccionar...</option>
                             <option value="trabaja">Trabaja</option>
                             <option value="t_inventario_manana">T.Inventario mañana</option>
@@ -1406,7 +1406,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           </select>
                         </td>
                         <td className="col-llegada" style={tdStyle}>
-                          <select key={`${entry.id}-${entry.estado}`} disabled={estaBloqueado(entry)} className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
+                          <select key={`${entry.id}-${entry.estado}`} disabled={estaBloqueado(entry) || completado} className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
                             style={{ cursor: "pointer", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }}>
                             <option value="">--:-- --</option>
                             <option value="06:00">6:00 AM</option>
@@ -1421,9 +1421,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                         </td>
                         <td className="col-break-inicio" style={tdStyle}>
-                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.breakInicio}
+                          <input disabled={parcialBloqueado(entry) || completado} type="time" className="cell-input" value={entry.breakInicio}
                             onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)}
-                            style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
+                            style={(parcialBloqueado(entry) || completado) ? disabledCellStyle : undefined} />
                         </td>
                         <td className="col-break-fin" style={tdStyle}>
                           <input disabled readOnly type="time" className="cell-input" value={entry.breakFin}
@@ -1434,24 +1434,24 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             style={{ textAlign: "center", background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                         </td>
                         <td className="col-llegada-real" style={tdStyle}>
-                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.llegadaReal}
+                          <input disabled={parcialBloqueado(entry) || completado} type="time" className="cell-input" value={entry.llegadaReal}
                             onChange={(e) => updateEntry(d.dia, entry.id, "llegadaReal", e.target.value)}
-                            style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
+                            style={(parcialBloqueado(entry) || completado) ? disabledCellStyle : undefined} />
                         </td>
                         <td className="col-salida-real" style={tdStyle}>
-                          <input disabled={parcialBloqueado(entry)} type="time" className="cell-input" value={entry.salidaReal}
+                          <input disabled={parcialBloqueado(entry) || completado} type="time" className="cell-input" value={entry.salidaReal}
                             onChange={(e) => updateEntry(d.dia, entry.id, "salidaReal", e.target.value)}
-                            style={parcialBloqueado(entry) ? disabledCellStyle : undefined} />
+                            style={(parcialBloqueado(entry) || completado) ? disabledCellStyle : undefined} />
                         </td>
                         <td className="col-hrs-reales" style={{ ...tdStyle, minWidth: 90 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
                             <input disabled readOnly className="cell-input" value={entry.horasReales} placeholder="0"
                               style={{ textAlign: "center", minWidth: 40, width: 40, flexShrink: 0, background: entry.esFestivo ? "transparent" : "#F2EFE9", color: entry.esFestivo ? "#04342C" : "#5C5F5A", fontWeight: entry.esFestivo ? 600 : 400, cursor: "default" }} />
                             <label className="no-print" title="Marcar como festivo"
-                              style={{ display: "flex", alignItems: "center", cursor: estaBloqueado(entry) ? "not-allowed" : "pointer", paddingRight: 3 }}>
-                              <input type="checkbox" disabled={estaBloqueado(entry)} checked={entry.esFestivo}
+                              style={{ display: "flex", alignItems: "center", cursor: (estaBloqueado(entry) || completado) ? "not-allowed" : "pointer", paddingRight: 3 }}>
+                              <input type="checkbox" disabled={estaBloqueado(entry) || completado} checked={entry.esFestivo}
                                 onChange={(e) => updateEntry(d.dia, entry.id, "esFestivo", e.target.checked)}
-                                style={{ cursor: estaBloqueado(entry) ? "not-allowed" : "pointer" }} />
+                                style={{ cursor: (estaBloqueado(entry) || completado) ? "not-allowed" : "pointer" }} />
                             </label>
                           </div>
                         </td>
@@ -1460,13 +1460,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             <input
                               type="checkbox"
                               checked={entry.validado}
-                              disabled={!modoSupervisor}
+                              disabled={!modoSupervisor || completado}
                               onChange={(e) => updateEntry(d.dia, entry.id, "validado", e.target.checked)}
-                              title={modoSupervisor ? "Marcar horas reales como validadas" : "Solo el supervisor puede validar (activa el Modo Supervisor)"}
+                              title={completado ? "Planilla completada — desmarca para poder editar" : modoSupervisor ? "Marcar horas reales como validadas" : "Solo el supervisor puede validar (activa el Modo Supervisor)"}
                               style={{
                                 width: 18,
                                 height: 18,
-                                cursor: modoSupervisor ? "pointer" : "not-allowed",
+                                cursor: (!modoSupervisor || completado) ? "not-allowed" : "pointer",
                                 accentColor: "#3FBFC4",
                               }}
                             />
@@ -1504,14 +1504,15 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
                                 <label
                                   className="no-print"
-                                  title={entry.enviadoRRHH ? "Ya enviado a Recursos Humanos" : "Marcar como enviado a Recursos Humanos"}
-                                  style={{ display: "flex", alignItems: "center", cursor: "pointer" }}
+                                  title={completado ? "Planilla completada — desmarca para poder editar" : entry.enviadoRRHH ? "Ya enviado a Recursos Humanos" : "Marcar como enviado a Recursos Humanos"}
+                                  style={{ display: "flex", alignItems: "center", cursor: completado ? "not-allowed" : "pointer" }}
                                 >
                                   <input
                                     type="checkbox"
+                                    disabled={completado}
                                     checked={entry.enviadoRRHH}
                                     onChange={(ev) => updateEntry(d.dia, entry.id, "enviadoRRHH", ev.target.checked)}
-                                    style={{ width: 17, height: 17, cursor: "pointer", accentColor: "#3FBFC4" }}
+                                    style={{ width: 17, height: 17, cursor: completado ? "not-allowed" : "pointer", accentColor: "#3FBFC4" }}
                                   />
                                 </label>
                                 {vencido && (
@@ -1530,12 +1531,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           {entry.nombre.trim() !== "" && <span className="firma-line-print" />}
                         </td>
                         <td className="col-obs no-print" style={tdStyle}>
-                          <input disabled={entry.cedula.trim() === ""} className="cell-input" value={entry.observacion}
+                          <input disabled={entry.cedula.trim() === "" || completado} className="cell-input" value={entry.observacion}
                             onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)}
-                            placeholder="—" style={entry.cedula.trim() === "" ? disabledCellStyle : undefined} />
+                            placeholder="—" style={(entry.cedula.trim() === "" || completado) ? disabledCellStyle : undefined} />
                         </td>
                         <td className="col-acciones no-print" style={tdStyle}>
-                          {d.entries.length > 1 && (
+                          {d.entries.length > 1 && !completado && (
                             <button onClick={() => removeEntry(d.dia, entry.id)} style={iconBtnStyle}>
                               <Trash2 size={14} color="#B3261E" />
                             </button>
@@ -1547,11 +1548,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                 </table>
               </div>
 
-              <div style={{ padding: "8px 14px", background: "#FAFAF7" }}>
-                <button className="no-print" onClick={() => addEntry(d.dia)} style={{ ...btnStyle("transparent", "#E85D1F"), border: "1px dashed #E85D1F", padding: "5px 10px", fontSize: 12 }}>
-                  <Plus size={13} /> Agregar colaborador a {d.dia}
-                </button>
-              </div>
+              {!completado && (
+                <div style={{ padding: "8px 14px", background: "#FAFAF7" }}>
+                  <button className="no-print" onClick={() => addEntry(d.dia)} style={{ ...btnStyle("transparent", "#E85D1F"), border: "1px dashed #E85D1F", padding: "5px 10px", fontSize: 12 }}>
+                    <Plus size={13} /> Agregar colaborador a {d.dia}
+                  </button>
+                </div>
+              )}
             </div>
             );
           })}
@@ -1560,7 +1563,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           <div className="footer-supervisor" style={{ paddingTop: 20, borderTop: "2px solid #E85D1F", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 20 }}>
             <div style={{ maxWidth: 420 }}>
               <Field label="Nombre Supervisor">
-                <input value={supervisor} onChange={(e) => setSupervisor(e.target.value)} style={fieldInputStyle} placeholder="Nombre del supervisor" />
+                <input disabled={completado} value={supervisor} onChange={(e) => setSupervisor(e.target.value)} style={completado ? { ...fieldInputStyle, background: "#F2EFE9", color: "#5C5F5A", cursor: "not-allowed" } : fieldInputStyle} placeholder="Nombre del supervisor" />
               </Field>
               <div className="firma-line" style={{ marginTop: 36, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>
                 Firma Supervisor
