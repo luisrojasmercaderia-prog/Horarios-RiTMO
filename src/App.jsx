@@ -69,7 +69,7 @@ function LoginTienda({ onIngresar }) {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#FFF6EE", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif", padding: 20 }}>
+    <div style={{ minHeight: "100vh", background: "#3FBFC4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif", padding: 20 }}>
       <div style={{ background: "white", borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", overflow: "hidden", display: "flex", maxWidth: 720, width: "100%", flexWrap: "wrap" }}>
 
         <div style={{ background: "#E85D1F", flex: "1 1 260px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2.5rem 1.75rem", textAlign: "center" }}>
@@ -185,7 +185,7 @@ function LoginAdmin({ onIngresar }) {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#FFF6EE", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif", padding: 20 }}>
+    <div style={{ minHeight: "100vh", background: "#3FBFC4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif", padding: 20 }}>
       <form onSubmit={handleSubmit} style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 32, maxWidth: 380, width: "100%" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, color: "#E85D1F" }}>
           <ShieldCheck size={20} />
