@@ -74,7 +74,7 @@ function LoginTienda({ onIngresar }) {
 
         <div style={{ background: "#E85D1F", flex: "1 1 260px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2.5rem 1.75rem", textAlign: "center" }}>
           <img src={logoRitmo} alt="Tiendas RITMO" style={{ width: "100%", maxWidth: 220, marginBottom: 16, objectFit: "contain" }} />
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.9)", margin: 0, lineHeight: 1.5 }}>
+          <p style={{ fontSize: 16, color: "rgba(255,255,255,0.9)", margin: 0, lineHeight: 1.5 }}>
             Planilla de Horarios Semanal
           </p>
         </div>
