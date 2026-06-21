@@ -390,7 +390,7 @@ export default function PanelAdmin() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#FFF6EE", fontFamily: "'Inter', system-ui, sans-serif", color: "#241C14" }}>
+    <div style={{ minHeight: "100vh", background: "#FFF6EE", fontFamily: "'Century Gothic', 'CenturyGothic', 'AppleGothic', Futura, sans-serif", color: "#241C14" }}>
       <div style={{ background: "#E85D1F", color: "white", padding: "18px 28px" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
