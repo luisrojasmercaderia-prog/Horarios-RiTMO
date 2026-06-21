@@ -72,12 +72,12 @@ function LoginTienda({ onIngresar }) {
     <div style={{ minHeight: "100vh", background: "#3FBFC4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif", padding: 20, position: "relative", overflow: "hidden" }}>
       <svg width="0" height="0" style={{ position: "absolute" }}>
         <filter id="grain-tienda">
-          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves={2} stitchTiles="stitch" result="noise" />
-          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.06 0" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves={3} stitchTiles="stitch" result="noise" />
+          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0" />
           <feComposite operator="over" in2="SourceGraphic" />
         </filter>
       </svg>
-      <div style={{ position: "absolute", inset: 0, filter: "url(#grain-tienda)", mixBlendMode: "overlay", opacity: 0.5, pointerEvents: "none" }} />
+      <div style={{ position: "absolute", inset: 0, filter: "url(#grain-tienda)", mixBlendMode: "overlay", opacity: 0.85, pointerEvents: "none" }} />
       <div style={{ background: "white", borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", overflow: "hidden", display: "flex", maxWidth: 720, width: "100%", flexWrap: "wrap", position: "relative", zIndex: 1 }}>
 
         <div style={{ background: "#E85D1F", flex: "1 1 260px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2.5rem 1.75rem", textAlign: "center" }}>
@@ -196,12 +196,12 @@ function LoginAdmin({ onIngresar }) {
     <div style={{ minHeight: "100vh", background: "#3FBFC4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif", padding: 20, position: "relative", overflow: "hidden" }}>
       <svg width="0" height="0" style={{ position: "absolute" }}>
         <filter id="grain-admin">
-          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves={2} stitchTiles="stitch" result="noise" />
-          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.06 0" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves={3} stitchTiles="stitch" result="noise" />
+          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0" />
           <feComposite operator="over" in2="SourceGraphic" />
         </filter>
       </svg>
-      <div style={{ position: "absolute", inset: 0, filter: "url(#grain-admin)", mixBlendMode: "overlay", opacity: 0.5, pointerEvents: "none" }} />
+      <div style={{ position: "absolute", inset: 0, filter: "url(#grain-admin)", mixBlendMode: "overlay", opacity: 0.85, pointerEvents: "none" }} />
       <form onSubmit={handleSubmit} style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 32, maxWidth: 380, width: "100%", position: "relative", zIndex: 1 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, color: "#E85D1F" }}>
           <ShieldCheck size={20} />
