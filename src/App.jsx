@@ -69,7 +69,7 @@ function LoginTienda({ onIngresar }) {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#3FBFC4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif", padding: 20, position: "relative", overflow: "hidden" }}>
+    <div style={{ minHeight: "100vh", background: "#3FBFC4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Century Gothic', 'CenturyGothic', 'AppleGothic', Futura, sans-serif", padding: 20, position: "relative", overflow: "hidden" }}>
       <svg width="0" height="0" style={{ position: "absolute" }}>
         <filter id="grain-tienda">
           <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves={4} stitchTiles="stitch" result="noise" />
@@ -193,7 +193,7 @@ function LoginAdmin({ onIngresar }) {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#3FBFC4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', system-ui, sans-serif", padding: 20, position: "relative", overflow: "hidden" }}>
+    <div style={{ minHeight: "100vh", background: "#3FBFC4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Century Gothic', 'CenturyGothic', 'AppleGothic', Futura, sans-serif", padding: 20, position: "relative", overflow: "hidden" }}>
       <svg width="0" height="0" style={{ position: "absolute" }}>
         <filter id="grain-admin">
           <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves={4} stitchTiles="stitch" result="noise" />
