@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2, FileSpreadsheet, LogOut, Users, X, Lock, Unlock } from "lucide-react";
+import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2, FileSpreadsheet, LogOut, Users, X, Lock, Unlock, ChevronLeft, ChevronRight } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase } from "./supabaseClient";
 import logoRitmo from "./logo-ritmo.png";
@@ -63,6 +63,36 @@ function getSemanasDelPeriodo(anio, mes) {
     cursor.setDate(cursor.getDate() + 7);
   }
   return semanas;
+}
+
+// ─── Navegación de semanas en la PLANILLA (independiente del corte de nómina) ───
+// La planilla de horarios navega semana tras semana de forma continua y natural
+// (Domingo a Sábado), sin agruparse por el periodo de nómina 21-20. El corte de
+// nómina solo se usa para efectos de pago/cierre en el Panel Administrativo.
+
+// Dada cualquier fecha, retorna el Domingo de esa semana calendario.
+function getDomingoDeSemana(fecha) {
+  const d = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+  d.setDate(d.getDate() - d.getDay());
+  return d;
+}
+
+// Genera los 7 días (Domingo a Sábado) de la semana que contiene fechaDomingo.
+function getDiasDeSemana(fechaDomingo) {
+  const dias = [];
+  for (let i = 0; i < 7; i++) {
+    const dia = new Date(fechaDomingo);
+    dia.setDate(fechaDomingo.getDate() + i);
+    dias.push(dia);
+  }
+  return dias;
+}
+
+// Desplaza una fecha de domingo hacia adelante/atrás N semanas.
+function desplazarSemana(fechaDomingo, n) {
+  const d = new Date(fechaDomingo);
+  d.setDate(d.getDate() + n * 7);
+  return d;
 }
 
 function emptyEntry(id) {
@@ -432,11 +462,11 @@ function diasVacios(semanaFechas) {
 // para esa cédula en ese día exacto, y retorna su estado ("descanso", "trabaja", etc.)
 // o null si no hay datos guardados para ese día/cédula. Se usa para validar el
 // descanso continuo entre el Sábado saliente y el Domingo entrante, que pueden
-// pertenecer a semanas/periodos de nómina distintos.
+// pertenecer a semanas distintas.
 async function buscarEstadoGuardado(codigoTienda, fechaCalendario, cedula) {
   try {
-    const periodo = getPeriodoActual(fechaCalendario);
-    const semanaKeyBuscada = `${periodo.anio}-${String(periodo.mes).padStart(2, "0")}_semana_${periodo.semanaIdx + 1}`;
+    const domingoDeEsaSemana = getDomingoDeSemana(fechaCalendario);
+    const semanaKeyBuscada = formatFechaISO(domingoDeEsaSemana);
     const { data, error } = await supabase
       .from("horarios_semana")
       .select("datos")
@@ -474,22 +504,26 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [diasAcumuladosPeriodo, setDiasAcumuladosPeriodo] = useState(null);
   const [cargandoConsolidado, setCargandoConsolidado] = useState(false);
 
-  // Periodo de nómina: corte el día 20. Se detecta automáticamente según la fecha de hoy,
-  // así la tienda no tiene que seleccionar nada manualmente al entrar.
+  // Navegación de semanas: continua y natural (Domingo a Sábado), sin agruparse
+  // por el periodo de nómina. Se identifica cada semana por la fecha ISO de su Domingo.
   const hoy = new Date();
-  const periodoInicial = getPeriodoActual(hoy);
-  const [anioPeriodo, setAnioPeriodo] = useState(periodoInicial.anio);
-  const [mesPeriodo, setMesPeriodo] = useState(periodoInicial.mes);
-  const [semanaIdx, setSemanaIdx] = useState(periodoInicial.semanaIdx);
+  const domingoInicial = getDomingoDeSemana(hoy);
+  const [domingoSemanaActual, setDomingoSemanaActual] = useState(domingoInicial);
 
-  const semanasDelPeriodo = getSemanasDelPeriodo(anioPeriodo, mesPeriodo);
-  // Si el índice quedó fuera de rango (ej. al cambiar de periodo), lo corregimos
-  const semanaIdxSegura = Math.min(semanaIdx, semanasDelPeriodo.length - 1);
-  const semanaFechas = semanasDelPeriodo[semanaIdxSegura] || [];
-  const semanaKey = `${anioPeriodo}-${String(mesPeriodo).padStart(2, "0")}_semana_${semanaIdxSegura + 1}`;
-  // Fecha del primer día válido de la semana actual, usada para autocompletar el campo "Fecha"
-  const primerDiaSemana = semanaFechas.find((d) => d !== null);
-  const fechaInicioSemana = primerDiaSemana ? formatFechaISO(primerDiaSemana) : "";
+  const semanaFechasCompleta = getDiasDeSemana(domingoSemanaActual);
+  // Mantenemos el nombre semanaFechas para minimizar cambios en el resto del código;
+  // ahora siempre son 7 días reales (nunca null), ya que no hay recorte por periodo.
+  const semanaFechas = semanaFechasCompleta;
+  const semanaKey = formatFechaISO(domingoSemanaActual); // ej. "2026-06-14"
+
+  // Fecha del primer día de la semana actual, usada para autocompletar el campo "Fecha"
+  const fechaInicioSemana = formatFechaISO(domingoSemanaActual);
+
+  // Label del mes/periodo solo para referencia visual (no afecta la navegación).
+  const periodoVisual = getPeriodoActual(domingoSemanaActual);
+  const anioPeriodo = periodoVisual.anio;
+  const mesPeriodo = periodoVisual.mes;
+
 
   const [empleados, setEmpleados] = useState([]);
   const [aprobaciones, setAprobaciones] = useState({});
@@ -923,14 +957,24 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     setTimeout(() => window.print(), 50);
   };
 
-  // Carga los datos de TODAS las semanas del periodo de nómina actual desde Supabase,
-  // combinando los días de cada semana en un solo arreglo para el cálculo acumulado.
+  // Carga los datos de TODAS las semanas del periodo de nómina (21 al 20) que
+  // contiene la semana actualmente en pantalla, combinando los días de cada
+  // semana en un solo arreglo para el cálculo acumulado. La navegación de la
+  // planilla es continua; este cálculo solo se usa para el resumen de pago.
   const cargarConsolidadoPeriodo = useCallback(async () => {
     setCargandoConsolidado(true);
     try {
+      const { inicio, fin } = getRangoPeriodo(anioPeriodo, mesPeriodo);
+      // Generamos las claves (domingo ISO) de todas las semanas que tocan el rango 21-20.
+      const clavesSemanas = [];
+      let cursor = getDomingoDeSemana(inicio);
+      while (cursor <= fin) {
+        clavesSemanas.push(formatFechaISO(cursor));
+        cursor = desplazarSemana(cursor, 1);
+      }
+
       const todasLasSemanas = [];
-      for (let i = 0; i < semanasDelPeriodo.length; i++) {
-        const keyDeEsaSemana = `${anioPeriodo}-${String(mesPeriodo).padStart(2, "0")}_semana_${i + 1}`;
+      for (const keyDeEsaSemana of clavesSemanas) {
         if (keyDeEsaSemana === semanaKey) {
           // La semana actualmente en pantalla puede tener cambios sin guardar todavía:
           // usamos el estado local en vez de lo que haya en Supabase.
@@ -944,7 +988,15 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           .eq("semana_fecha", keyDeEsaSemana)
           .maybeSingle();
         if (!error && data && data.datos && data.datos.days) {
-          todasLasSemanas.push(...data.datos.days);
+          // Solo incluir los días de esa semana que realmente caen dentro del
+          // rango 21-20 (la primera/última semana puede tener días fuera de rango).
+          data.datos.days.forEach((d) => {
+            if (!d.fechaDate) return;
+            const fechaDia = new Date(d.fechaDate + "T00:00:00");
+            if (fechaDia >= inicio && fechaDia <= fin) {
+              todasLasSemanas.push(d);
+            }
+          });
         }
       }
       setDiasAcumuladosPeriodo(todasLasSemanas);
@@ -953,7 +1005,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     } finally {
       setCargandoConsolidado(false);
     }
-  }, [semanasDelPeriodo, anioPeriodo, mesPeriodo, semanaKey, days, codigoTienda]);
+  }, [anioPeriodo, mesPeriodo, semanaKey, days, codigoTienda]);
 
   const consolidadoPorOperario = (() => {
     const mapa = {};
@@ -1168,19 +1220,32 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             <div style={{ fontSize: 20, fontWeight: 700 }}>Programación de Horarios Semanales</div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <select
-              value={semanaIdxSegura}
-              onChange={(e) => setSemanaIdx(Number(e.target.value))}
-              title="Semana dentro del periodo de nómina actual"
-              style={{ border: "none", borderRadius: 7, padding: "8px 12px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", background: "#FFFFFF", color: "#E85D1F", cursor: "pointer" }}
-            >
-              {semanasDelPeriodo.map((semana, i) => {
-                const primerDia = semana.find((d) => d !== null);
-                const ultimoDia = [...semana].reverse().find((d) => d !== null);
-                const rango = primerDia && ultimoDia ? ` (${formatFechaCorta(primerDia)}–${formatFechaCorta(ultimoDia)})` : "";
-                return <option key={i} value={i}>Semana {i + 1}{rango}</option>;
-              })}
-            </select>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#FFFFFF", borderRadius: 7, padding: "4px 4px 4px 10px" }}>
+              <button
+                onClick={() => setDomingoSemanaActual((prev) => desplazarSemana(prev, -1))}
+                title="Semana anterior"
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: "#E85D1F", display: "flex", alignItems: "center", padding: 4 }}
+              >
+                <ChevronLeft size={17} />
+              </button>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#E85D1F", whiteSpace: "nowrap" }}>
+                {formatFechaCorta(semanaFechas[0])}–{formatFechaCorta(semanaFechas[6])}
+              </span>
+              <button
+                onClick={() => setDomingoSemanaActual((prev) => desplazarSemana(prev, 1))}
+                title="Semana siguiente"
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: "#E85D1F", display: "flex", alignItems: "center", padding: 4 }}
+              >
+                <ChevronRight size={17} />
+              </button>
+              <button
+                onClick={() => setDomingoSemanaActual(getDomingoDeSemana(new Date()))}
+                title="Ir a la semana actual"
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: "#1B8388", fontSize: 12, fontWeight: 600, padding: "4px 8px" }}
+              >
+                Hoy
+              </button>
+            </div>
             <SaveIndicator state={saveState} />
             <button
               onClick={handleSupervisorClick}
@@ -1555,7 +1620,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               </div>
             </div>
             <div style={{ fontSize: 12, color: "#5C5F5A", marginBottom: 16 }}>
-              {getPeriodoLabel(anioPeriodo, mesPeriodo)} (21 de {NOMBRES_MESES[(mesPeriodo - 2 + 12) % 12]} – 20 de {NOMBRES_MESES[mesPeriodo - 1]}) · Suma de las {semanasDelPeriodo.length} semanas del periodo
+              {getPeriodoLabel(anioPeriodo, mesPeriodo)} (21 de {NOMBRES_MESES[(mesPeriodo - 2 + 12) % 12]} – 20 de {NOMBRES_MESES[mesPeriodo - 1]}) · Suma de las {(() => {
+                const { inicio, fin } = getRangoPeriodo(anioPeriodo, mesPeriodo);
+                let n = 0;
+                let cursor = getDomingoDeSemana(inicio);
+                while (cursor <= fin) { n++; cursor = desplazarSemana(cursor, 1); }
+                return n;
+              })()} semanas del periodo
             </div>
             {cargandoConsolidado ? (
               <div style={{ fontSize: 13, color: "#5C5F5A", display: "flex", alignItems: "center", gap: 8 }}>
