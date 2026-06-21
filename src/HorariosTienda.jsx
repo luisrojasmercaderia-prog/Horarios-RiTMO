@@ -1322,7 +1322,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             return (
             <div key={d.dia} className="day-block" style={{ marginBottom: 22, border: "1px solid #E5E3DC", borderRadius: 8, overflow: "hidden" }}>
               <div className="day-header" style={{ background: "#E6F7F8", padding: "10px 14px" }}>
-                <span className="day-title" style={{ fontWeight: 700, color: "#1B8388", fontSize: 13.5 }}>
+                <span className="day-title" style={{ fontWeight: 700, color: "#1B8388", fontSize: 17 }}>
                   {d.dia}{fechaLabel ? ` — ${fechaLabel}` : ""}
                 </span>
               </div>
