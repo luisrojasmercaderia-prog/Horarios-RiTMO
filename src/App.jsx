@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Lock, Store, ShieldCheck } from "lucide-react";
+import { Lock, Store, ShieldCheck, Clock } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import HorariosTienda from "./HorariosTienda";
 import PanelAdmin from "./PanelAdmin";
+import Fichaje from "./Fichaje";
 
 const SESSION_KEY = "ritmo-sesion-tienda";
 const ADMIN_PASSWORD = "RiTMO1234";
@@ -14,6 +15,7 @@ function LoginTienda({ onIngresar }) {
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
   const [modo, setModo] = useState("ingresar"); // "ingresar" | "crear"
+  const [showFichaje, setShowFichaje] = useState(false);
 
   const handleIngresar = async (e) => {
     e.preventDefault();
@@ -108,7 +110,55 @@ function LoginTienda({ onIngresar }) {
         >
           {modo === "ingresar" ? "¿Primera vez? Crear nueva tienda" : "Ya tengo una tienda, ingresar"}
         </button>
+
+        <div style={{ borderTop: "1px solid #EDEBE4", marginTop: 18, paddingTop: 14 }}>
+          <button
+            type="button"
+            onClick={() => setShowFichaje(true)}
+            style={{
+              width: "100%",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 7,
+              background: "#3FBFC4",
+              color: "white",
+              border: "none",
+              borderRadius: 7,
+              padding: "10px 14px",
+              fontSize: 13.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            <Clock size={15} /> ¿Eres colaborador? Fichar entrada o salida
+          </button>
+        </div>
       </form>
+
+      {showFichaje && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(36,28,20,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+            padding: 20,
+          }}
+          onClick={() => setShowFichaje(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()}>
+            <Fichaje onCerrar={() => setShowFichaje(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
