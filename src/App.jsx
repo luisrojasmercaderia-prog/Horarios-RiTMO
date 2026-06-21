@@ -73,7 +73,7 @@ function LoginTienda({ onIngresar }) {
       <svg width="0" height="0" style={{ position: "absolute" }}>
         <filter id="grain-tienda">
           <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves={4} stitchTiles="stitch" result="noise" />
-          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.35 0" />
+          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0" />
           <feComposite operator="over" in2="SourceGraphic" />
         </filter>
       </svg>
@@ -197,7 +197,7 @@ function LoginAdmin({ onIngresar }) {
       <svg width="0" height="0" style={{ position: "absolute" }}>
         <filter id="grain-admin">
           <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves={4} stitchTiles="stitch" result="noise" />
-          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.35 0" />
+          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0" />
           <feComposite operator="over" in2="SourceGraphic" />
         </filter>
       </svg>
