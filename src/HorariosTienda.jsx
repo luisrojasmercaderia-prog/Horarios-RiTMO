@@ -1057,7 +1057,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   };
 
   return (
-    <div className={`root-wrap print-mode-${modoImpresion}`} style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#FFF6EE", minHeight: "100vh", color: "#241C14" }}>
+    <div className={`root-wrap print-mode-${modoImpresion}`} style={{ fontFamily: "'Century Gothic', 'CenturyGothic', 'AppleGothic', Futura, sans-serif", background: "#FFF6EE", minHeight: "100vh", color: "#241C14" }}>
       <style>{`
         @media print {
           .no-print { display: none !important; }
