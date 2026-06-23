@@ -783,6 +783,16 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               updated.enviadoRRHH = false;
             }
           }
+          // Al marcar "Enviado a RRHH", limpiar la novedad de la fila completamente
+          // para que no quede rastro en Supabase y desaparezca del reporte del panel.
+          if (field === "enviadoRRHH" && value === true) {
+            updated = {
+              ...updated,
+              estado: "",
+              enviadoRRHH: false,
+              fechaRegistroNovedad: "",
+            };
+          }
           if (field === "estado" && esTurnoFijo(value)) {
             const turno = TURNOS_FIJOS[value];
             updated = { ...updated, llegada: turno.llegada, salida: turno.salida, horasProgramadas: turno.horasProgramadas, llegadaReal: "", salidaReal: "", horasReales: "", breakInicio: "", breakFin: "" };
