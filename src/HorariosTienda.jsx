@@ -6,12 +6,14 @@ import logoRitmo from "./logo-ritmo.png";
 
 const DIAS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
-// ─── Lógica de periodos de nómina (corte del día 20) ───
-// Un periodo de nómina va del 21 del mes anterior al 20 del mes actual.
-// Ej: periodo "Junio 2026" = 21 mayo 2026 → 20 junio 2026
+// ─── Tolerancias de fichaje ───
+// Si el operario llega tarde pero dentro de este margen, se usa la hora programada.
+// Si sale un poco después pero dentro de este margen, se usa la hora programada.
+const TOLERANCIA_ENTRADA_MIN = 10; // minutos de gracia en llegada
+const TOLERANCIA_SALIDA_MIN  = 15; // minutos de gracia en salida
 
+// ─── Lógica de periodos de nómina (corte del día 20) ───
 function getRangoPeriodo(anio, mes) {
-  // mes: 1-12, representa el mes de CORTE (el mes cuyo día 20 cierra el periodo)
   const fin = new Date(anio, mes - 1, 20);
   const inicio = new Date(anio, mes - 2, 21);
   return { inicio, fin };
@@ -36,23 +38,16 @@ function getPeriodoLabel(anio, mes) {
   return `${NOMBRES_MESES[mes - 1]} ${anio}`;
 }
 
-// Genera la lista de semanas (Domingo-Sábado) dentro de un periodo de nómina.
-// Cada semana es un array de 7 fechas (Date), puede tener días fuera del periodo
-// en la primera/última semana - esos se marcan como null.
 function getSemanasDelPeriodo(anio, mes) {
   const { inicio, fin } = getRangoPeriodo(anio, mes);
   const semanas = [];
-
-  // Retrocedemos al domingo de la semana que contiene "inicio"
   const cursor = new Date(inicio);
   cursor.setDate(cursor.getDate() - cursor.getDay());
-
   while (cursor <= fin) {
     const semana = [];
     for (let i = 0; i < 7; i++) {
       const dia = new Date(cursor);
       dia.setDate(cursor.getDate() + i);
-      // Solo incluir el día si cae dentro del rango del periodo
       if (dia >= inicio && dia <= fin) {
         semana.push(dia);
       } else {
@@ -65,19 +60,12 @@ function getSemanasDelPeriodo(anio, mes) {
   return semanas;
 }
 
-// ─── Navegación de semanas en la PLANILLA (independiente del corte de nómina) ───
-// La planilla de horarios navega semana tras semana de forma continua y natural
-// (Domingo a Sábado), sin agruparse por el periodo de nómina 21-20. El corte de
-// nómina solo se usa para efectos de pago/cierre en el Panel Administrativo.
-
-// Dada cualquier fecha, retorna el Domingo de esa semana calendario.
 function getDomingoDeSemana(fecha) {
   const d = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
   d.setDate(d.getDate() - d.getDay());
   return d;
 }
 
-// Genera los 7 días (Domingo a Sábado) de la semana que contiene fechaDomingo.
 function getDiasDeSemana(fechaDomingo) {
   const dias = [];
   for (let i = 0; i < 7; i++) {
@@ -88,7 +76,6 @@ function getDiasDeSemana(fechaDomingo) {
   return dias;
 }
 
-// Desplaza una fecha de domingo hacia adelante/atrás N semanas.
 function desplazarSemana(fechaDomingo, n) {
   const d = new Date(fechaDomingo);
   d.setDate(d.getDate() + n * 7);
@@ -145,9 +132,6 @@ function calcSaldo(prog, real) {
 
 const LIMITE_HORAS_FERIADO = 8;
 
-// Calcula cuánto de "Extra Feriada" corresponde a una fila (entry) de un día (dia).
-// Regla: en Domingo o en día marcado manualmente como festivo, todo lo que
-// exceda las 8 horas REALES trabajadas se considera extra feriada.
 function calcularExtraFeriada(dia, entry) {
   const esDomingo = dia === "Domingo";
   const esDiaFeriado = esDomingo || entry.esFestivo;
@@ -159,17 +143,51 @@ function calcularExtraFeriada(dia, entry) {
 
 const MIN_HORAS_PARA_BREAK = 3;
 
-function calcularHorasRealesDesdeLlegadaSalida(llegadaReal, salidaReal) {
+// ─── Cálculo de horas reales CON tolerancias de fichaje ───
+// - Entrada: si llegó tarde pero dentro de TOLERANCIA_ENTRADA_MIN, se usa la hora programada.
+// - Salida:  si salió después pero dentro de TOLERANCIA_SALIDA_MIN, se usa la hora programada.
+function calcularHorasRealesDesdeLlegadaSalida(llegadaReal, salidaReal, llegadaProg, salidaProg) {
   if (!llegadaReal || !salidaReal) return "";
-  const [lh, lm] = llegadaReal.split(":").map(Number);
-  const [sh, sm] = salidaReal.split(":").map(Number);
-  if (isNaN(lh) || isNaN(lm) || isNaN(sh) || isNaN(sm)) return "";
-  let llegadaMin = lh * 60 + lm;
-  let salidaMin = sh * 60 + sm;
+
+  const toMin = (hora) => {
+    const [h, m] = hora.split(":").map(Number);
+    return isNaN(h) || isNaN(m) ? null : h * 60 + m;
+  };
+
+  let llegadaMin = toMin(llegadaReal);
+  let salidaMin  = toMin(salidaReal);
+  if (llegadaMin === null || salidaMin === null) return "";
   if (salidaMin < llegadaMin) salidaMin += 24 * 60;
+
+  // Tolerancia de ENTRADA
+  if (llegadaProg) {
+    const llegadaProgMin = toMin(llegadaProg);
+    if (
+      llegadaProgMin !== null &&
+      llegadaMin > llegadaProgMin &&
+      llegadaMin <= llegadaProgMin + TOLERANCIA_ENTRADA_MIN
+    ) {
+      llegadaMin = llegadaProgMin;
+    }
+  }
+
+  // Tolerancia de SALIDA
+  if (salidaProg) {
+    const salidaProgMin = toMin(salidaProg);
+    if (salidaProgMin !== null) {
+      let salidaProgAdj = salidaProgMin;
+      // Ajuste por cruce de medianoche en la salida programada
+      if (salidaProgAdj < toMin(llegadaReal)) salidaProgAdj += 24 * 60;
+      if (
+        salidaMin > salidaProgAdj &&
+        salidaMin <= salidaProgAdj + TOLERANCIA_SALIDA_MIN
+      ) {
+        salidaMin = salidaProgAdj;
+      }
+    }
+  }
+
   const minutosBrutos = salidaMin - llegadaMin;
-  // Solo se descuenta 1 hora de break si el turno trabajado dura 3.5 horas (210 min) o más.
-  // Si dura menos, no le corresponde break y se cuenta el tiempo completo.
   const minutosTotales = minutosBrutos >= MIN_HORAS_PARA_BREAK * 60 ? minutosBrutos - 60 : minutosBrutos;
   if (minutosTotales <= 0) return "0";
   const horas = minutosTotales / 60;
@@ -180,17 +198,12 @@ function esNoLaborable(estado) {
   return ["descanso", "incapacitado", "licencia_maternidad", "luto"].includes(estado);
 }
 
-// Estados que constituyen una "novedad" administrativa que debe reportarse a
-// Recursos Humanos (no incluye "descanso", que es parte del horario normal).
 function esNovedadRRHH(estado) {
   return ["incapacitado", "licencia_maternidad", "luto"].includes(estado);
 }
 
 const DIAS_LIMITE_ENVIO_RRHH = 3;
 
-// Calcula cuántos días han pasado desde que se REGISTRÓ realmente la novedad
-// (Incapacitado/Licencia/Luto) en el sistema -no la fecha calendario de la fila de
-// la planilla-, para una entry que aún no ha sido marcada como enviada a RRHH.
 function diasVencidosRRHH(entry) {
   if (!esNovedadRRHH(entry.estado) || entry.enviadoRRHH || !entry.fechaRegistroNovedad) return null;
   const fechaRegistro = new Date(entry.fechaRegistroNovedad + "T00:00:00");
@@ -239,19 +252,12 @@ function minutosAHora(minutos) {
 }
 
 function turnoMuyCortoParaBreak(entry) {
-  // Prioridad 1: si hay horasProgramadas válido, usarlo.
   const horasProg = parseFloat(entry.horasProgramadas);
   if (!isNaN(horasProg)) return horasProg < MIN_HORAS_PARA_BREAK;
-
-  // Prioridad 2: calcular directamente desde Hora Llegada / Hora Salida programadas.
   const duracionProgramada = calcularDuracionHoras(entry.llegada, entry.salida);
   if (duracionProgramada !== null) return duracionProgramada < MIN_HORAS_PARA_BREAK;
-
-  // Prioridad 3: si tampoco hay llegada/salida programada, usar Llegada Real / Salida Real.
   const duracionReal = calcularDuracionHoras(entry.llegadaReal, entry.salidaReal);
   if (duracionReal !== null) return duracionReal < MIN_HORAS_PARA_BREAK;
-
-  // Sin datos suficientes para evaluar: no bloquear (se evaluará de nuevo cuando haya datos).
   return false;
 }
 
@@ -305,22 +311,14 @@ function sumarUnaHora(hora) {
 const MAX_HORAS_PARA_BREAK = 5;
 const PASO_AJUSTE_COLISION_MIN = 15;
 
-// Calcula la hora de break predeterminada para un colaborador, según su hora de
-// llegada: por ley debe iniciar después de 3:00 horas trabajadas y nunca después
-// de 5:00 horas. Por defecto se asigna el extremo más tardío permitido (Llegada + 5:00).
-// Cada break dura 1 hora completa; si el rango (inicio a fin) se solapa con el de otro
-// colaborador del MISMO turno (misma llegada y salida) que ya tiene break asignado, se
-// desplaza hacia atrás en pasos de 15 minutos sin bajar del mínimo legal (Llegada + 3:00),
-// buscando un horario completamente libre de cruces.
 function calcularBreakPredeterminado(llegada, entriesMismoTurno, entryIdActual) {
   const llegadaMin = horaAMinutos(llegada);
   if (llegadaMin === null) return null;
 
-  const minimoMin = llegadaMin + MIN_HORAS_PARA_BREAK * 60; // Llegada + 3:00
-  const maximoMin = llegadaMin + MAX_HORAS_PARA_BREAK * 60; // Llegada + 5:00
+  const minimoMin = llegadaMin + MIN_HORAS_PARA_BREAK * 60;
+  const maximoMin = llegadaMin + MAX_HORAS_PARA_BREAK * 60;
   const DURACION_BREAK_MIN = 60;
 
-  // Rangos de inicio/fin de los breaks ya asignados a compañeros del mismo turno.
   const rangosOcupados = entriesMismoTurno
     .filter((e) => e.id !== entryIdActual && e.breakInicio)
     .map((e) => {
@@ -339,17 +337,10 @@ function calcularBreakPredeterminado(llegada, entriesMismoTurno, entryIdActual) 
       return minutosAHora(candidato);
     }
   }
-  // No se encontró un horario sin cruce dentro de la ventana legal: se deja el máximo
-  // permitido (la validación de colisión existente avisará si aún así se cruza).
   return minutosAHora(maximoMin);
 }
 
-// Pasada final de seguridad: revisa TODAS las filas de un día y corrige cualquier
-// cruce de horario de break entre colaboradores del MISMO turno (misma llegada y
-// salida), sin importar el orden en que se hayan asignado. Se ejecuta después de
-// cada actualización de fila para garantizar consistencia independiente del timing.
 function resolverCrucesBreak(entries) {
-  // Agrupamos por turno (llegada+salida) para revisar cruces solo dentro de cada grupo.
   const grupos = {};
   entries.forEach((e) => {
     if (e.nombre.trim() === "" || !e.llegada || !e.salida || !e.breakInicio) return;
@@ -361,8 +352,6 @@ function resolverCrucesBreak(entries) {
   const idsAjustados = {};
   Object.values(grupos).forEach((grupo) => {
     if (grupo.length < 2) return;
-    // Ordenamos por id para procesar siempre en el mismo orden determinista,
-    // dejando el primero fijo y ajustando los siguientes si se cruzan.
     const ordenado = [...grupo].sort((a, b) => a.id - b.id);
     const fijos = [ordenado[0]];
     for (let i = 1; i < ordenado.length; i++) {
@@ -407,25 +396,18 @@ function calcularHorasNocturnas(horaSalida) {
   return horas % 1 === 0 ? String(horas) : horas.toFixed(1);
 }
 
-// Dada una fecha (por defecto hoy), determina a qué periodo de nómina pertenece
-// y qué semana del periodo le corresponde. El periodo de corte 20 funciona así:
-// si el día es 21 o posterior, el periodo pertenece al MES SIGUIENTE (cierra el 20 de ese mes).
-// si el día es 20 o anterior, el periodo pertenece al MES ACTUAL.
 function getPeriodoActual(fechaRef) {
   const ref = fechaRef || new Date();
   const dia = ref.getDate();
   let anio = ref.getFullYear();
-  let mes = ref.getMonth() + 1; // mes calendario 1-12
+  let mes = ref.getMonth() + 1;
 
   if (dia >= 21) {
-    // Pertenece al periodo que cierra el 20 del mes siguiente
     mes += 1;
     if (mes > 12) { mes = 1; anio += 1; }
   }
-  // Si dia <= 20, pertenece al periodo que cierra el 20 de este mismo mes
 
   const semanas = getSemanasDelPeriodo(anio, mes);
-  // Buscamos en qué semana cae la fecha de referencia
   const refSinHora = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
   let semanaIdx = 0;
   for (let i = 0; i < semanas.length; i++) {
@@ -436,9 +418,6 @@ function getPeriodoActual(fechaRef) {
   return { anio, mes, semanaIdx };
 }
 
-// Limpia el campo "estado" de filas que no tienen nombre asignado.
-// Sirve para corregir datos antiguos guardados con "trabaja" predeterminado
-// en filas que en realidad están vacías (sin colaborador seleccionado).
 function limpiarEstadoFilasVacias(days) {
   return days.map((d) => ({
     ...d,
@@ -458,11 +437,6 @@ function diasVacios(semanaFechas) {
   });
 }
 
-// Dada una fecha calendario (Date), busca en Supabase si existe una fila guardada
-// para esa cédula en ese día exacto, y retorna su estado ("descanso", "trabaja", etc.)
-// o null si no hay datos guardados para ese día/cédula. Se usa para validar el
-// descanso continuo entre el Sábado saliente y el Domingo entrante, que pueden
-// pertenecer a semanas distintas.
 async function buscarEstadoGuardado(codigoTienda, fechaCalendario, cedula) {
   try {
     const domingoDeEsaSemana = getDomingoDeSemana(fechaCalendario);
@@ -494,7 +468,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [fecha, setFecha] = useState("");
   const [supervisor, setSupervisor] = useState("");
   const [completado, setCompletado] = useState(false);
-  const [modoImpresion, setModoImpresion] = useState("planilla"); // "planilla" | "resumen"
+  const [modoImpresion, setModoImpresion] = useState("planilla");
   const [fechaCompletado, setFechaCompletado] = useState("");
   const [days, setDays] = useState(diasVacios);
   const [nextId, setNextId] = useState(DIAS.length * ROWS_PER_DAY + 1);
@@ -504,26 +478,18 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const [diasAcumuladosPeriodo, setDiasAcumuladosPeriodo] = useState(null);
   const [cargandoConsolidado, setCargandoConsolidado] = useState(false);
 
-  // Navegación de semanas: continua y natural (Domingo a Sábado), sin agruparse
-  // por el periodo de nómina. Se identifica cada semana por la fecha ISO de su Domingo.
   const hoy = new Date();
   const domingoInicial = getDomingoDeSemana(hoy);
   const [domingoSemanaActual, setDomingoSemanaActual] = useState(domingoInicial);
 
   const semanaFechasCompleta = getDiasDeSemana(domingoSemanaActual);
-  // Mantenemos el nombre semanaFechas para minimizar cambios en el resto del código;
-  // ahora siempre son 7 días reales (nunca null), ya que no hay recorte por periodo.
   const semanaFechas = semanaFechasCompleta;
-  const semanaKey = formatFechaISO(domingoSemanaActual); // ej. "2026-06-14"
-
-  // Fecha del primer día de la semana actual, usada para autocompletar el campo "Fecha"
+  const semanaKey = formatFechaISO(domingoSemanaActual);
   const fechaInicioSemana = formatFechaISO(domingoSemanaActual);
 
-  // Label del mes/periodo solo para referencia visual (no afecta la navegación).
   const periodoVisual = getPeriodoActual(domingoSemanaActual);
   const anioPeriodo = periodoVisual.anio;
   const mesPeriodo = periodoVisual.mes;
-
 
   const [empleados, setEmpleados] = useState([]);
   const [aprobaciones, setAprobaciones] = useState({});
@@ -606,8 +572,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           setCompletado(!!saved.completado);
           setFechaCompletado(saved.fechaCompletado || "");
           const diasLimpios = saved.days && saved.days.length ? limpiarEstadoFilasVacias(saved.days) : diasVacios(semanaFechas);
-          // Re-resolvemos posibles cruces de break que hayan quedado guardados de antes
-          // de un cambio en las reglas de horario (ventana legal mínima/máxima).
           const diasSinCruces = diasLimpios.map((d) => ({ ...d, entries: resolverCrucesBreak(d.entries) }));
           setDays(diasSinCruces);
           setNextId(saved.nextId || DIAS.length * ROWS_PER_DAY + 1);
@@ -647,8 +611,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   }, [tienda, codigo, fecha, supervisor, days, nextId, completado, fechaCompletado, loaded, persist, semanaKey]);
 
   const updateEntry = async (dia, entryId, field, value) => {
-    // Validación: prohibido descansar el Sábado saliente y el Domingo entrante (días
-    // calendario consecutivos), aunque pertenezcan a semanas/periodos de nómina distintos.
     if (field === "estado" && value === "descanso" && (dia === "Sábado" || dia === "Domingo")) {
       const diaActual = days.find((d) => d.dia === dia);
       const entryActual = diaActual?.entries.find((e) => e.id === entryId);
@@ -658,15 +620,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         const fechaAdyacente = new Date(fechaBase);
         let nombreDiaAdyacente;
         if (dia === "Sábado") {
-          fechaAdyacente.setDate(fechaAdyacente.getDate() + 1); // domingo entrante
+          fechaAdyacente.setDate(fechaAdyacente.getDate() + 1);
           nombreDiaAdyacente = "Domingo";
         } else {
-          fechaAdyacente.setDate(fechaAdyacente.getDate() - 1); // sábado saliente
+          fechaAdyacente.setDate(fechaAdyacente.getDate() - 1);
           nombreDiaAdyacente = "Sábado";
         }
 
-        // Primero revisamos si el día adyacente ya está cargado en la semana actual en pantalla
-        // (esto cubre el caso en que ambos días están visibles ahora mismo, sin esperar guardado).
         let estadoAdyacente = null;
         const diaAdyacenteEnPantalla = days.find(
           (d) => d.fechaDate === formatFechaISO(fechaAdyacente)
@@ -675,9 +635,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           const entryAdy = diaAdyacenteEnPantalla.entries.find((e) => e.cedula.trim() === cedula);
           if (entryAdy) estadoAdyacente = entryAdy.estado;
         } else {
-          // El día adyacente pertenece a otra semana/periodo: forzamos guardado inmediato
-          // de la semana actual (sin esperar el debounce de 600ms) antes de consultar Supabase,
-          // para evitar que un cambio recién hecho (ej. el Sábado) no se vea reflejado todavía.
           await persist({ tienda, codigo, fecha, supervisor, days, nextId, completado, fechaCompletado }, semanaKey);
           estadoAdyacente = await buscarEstadoGuardado(codigoTienda, fechaAdyacente, cedula);
         }
@@ -689,10 +646,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       }
     }
 
-    // Validación de 36 horas de descanso: solo aplica cuando el colaborador
-    // viene de un día marcado como "Descanso" y ahora se le programa a trabajar.
-    // Se dispara al fijar el estado a "trabaja"/turno fijo, o al llenar la hora de llegada
-    // de una fila que ya estaba en estado "trabaja".
     const entryParaChequeo = days.find((d) => d.dia === dia)?.entries.find((e) => e.id === entryId);
     const estadoEfectivo = field === "estado" ? value : entryParaChequeo?.estado;
     const esCambioATrabajar =
@@ -709,9 +662,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         const diaAnterior = days[diaAnteriorIdx];
         const entryDiaAnterior = diaAnterior.entries.find((e) => e.cedula.trim() === cedula);
 
-        // Solo validamos si el día inmediatamente anterior fue un descanso para este colaborador.
         if (entryDiaAnterior && entryDiaAnterior.estado === "descanso") {
-          // Buscamos la última salida registrada ANTES de ese descanso (puede estar 2 días atrás).
           let ultimaSalidaMin = null;
           let ultimoDiaNombre = "";
           for (let i = diaAnteriorIdx - 1; i >= 0; i--) {
@@ -723,11 +674,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                 ultimaSalidaMin = i * 24 * 60 + h * 60 + m;
                 ultimoDiaNombre = diaPrevio.dia;
               }
-              break; // nos quedamos con el día más cercano que tenga salida registrada
+              break;
             }
           }
 
-          // Hora de llegada que tendrá el operario en el día actual.
           let llegadaNueva;
           if (field === "estado" && esTurnoFijo(value)) {
             llegadaNueva = TURNOS_FIJOS[value].llegada;
@@ -752,8 +702,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       }
     }
 
-    // Validación: no se puede registrar break (programado ni real) si el turno
-    // programado dura menos de 3 horas.
     if ((field === "breakInicio" || field === "llegadaReal" || field === "salidaReal") && value) {
       if (turnoMuyCortoParaBreak(entryParaChequeo)) {
         alert(`⚠️ No se puede registrar break para este colaborador.\n\nEl turno programado es de menos de 3 horas, por lo que no le corresponde tomar break.`);
@@ -761,8 +709,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       }
     }
 
-    // Validación: el break debe iniciar al menos 3:00 horas después de la hora de
-    // llegada (tanto la programada como la real, si están disponibles).
     if (field === "breakInicio" && value) {
       const breakMin = horaAMinutos(value);
       const llegadaProgMin = horaAMinutos(entryParaChequeo.llegada);
@@ -784,9 +730,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       }
     }
 
-    // Validación de break: dos colaboradores con el MISMO turno (mismo día, misma
-    // hora de llegada y salida) no pueden tener breaks que se crucen en el tiempo
-    // (cada break dura 1 hora; se valida solapamiento de rango, no solo coincidencia exacta).
     if (field === "breakInicio" && value) {
       const diaActual = days.find((d) => d.dia === dia);
       const entryActual = entryParaChequeo;
@@ -817,7 +760,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
 
           if (field === "nombre") {
             if (value.trim() === "") {
-              // Se quitó el colaborador de la fila: limpiar toda la información asociada.
               const idOriginal = updated.id;
               updated = { ...emptyEntry(idOriginal), fecha: e.fecha };
             } else {
@@ -834,12 +776,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           }
           if (field === "estado") {
             if (esNovedadRRHH(value) && !esNovedadRRHH(e.estado)) {
-              // Primera vez que se marca esta novedad: registramos la fecha real de hoy
-              // (no la fecha calendario de la fila), para contar los días vencidos desde aquí.
               updated.fechaRegistroNovedad = formatFechaISO(new Date());
               updated.enviadoRRHH = false;
             } else if (!esNovedadRRHH(value)) {
-              // Se quitó la novedad: limpiamos el registro y el estado de envío.
               updated.fechaRegistroNovedad = "";
               updated.enviadoRRHH = false;
             }
@@ -864,14 +803,11 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             const salidaAuto = HORARIOS_PREDETERMINADOS[value];
             updated.salida = salidaAuto || "";
             updated.horasProgramadas = salidaAuto ? "7.5" : "";
-            // Al cambiar la hora de llegada, el break y las horas reales quedan desactualizados.
             updated.breakInicio = "";
             updated.breakFin = "";
             updated.llegadaReal = "";
             updated.salidaReal = "";
             updated.horasReales = "";
-            // Calculamos automáticamente el break predeterminado dentro de la ventana legal
-            // (Llegada + 3:00 a Llegada + 5:00), evitando coincidir con compañeros del mismo turno.
             if (value && salidaAuto && !turnoMuyCortoParaBreak({ ...updated, horasProgramadas: "7.5" })) {
               const diaActualBreak = prev.find((dd) => dd.dia === dia);
               const entriesMismoTurno = diaActualBreak
@@ -888,11 +824,18 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             const breakFinAuto = sumarUnaHora(value);
             if (breakFinAuto) updated.breakFin = breakFinAuto;
           }
+
+          // ─── Horas reales con tolerancia de fichaje ───
           if (field === "llegadaReal" || field === "salidaReal") {
-            updated.horasReales = calcularHorasRealesDesdeLlegadaSalida(updated.llegadaReal, updated.salidaReal);
+            updated.horasReales = calcularHorasRealesDesdeLlegadaSalida(
+              updated.llegadaReal,
+              updated.salidaReal,
+              updated.llegada,  // hora programada de llegada
+              updated.salida    // hora programada de salida
+            );
           }
+
           if (field === "llegadaReal" && value && !updated.breakInicio && !turnoMuyCortoParaBreak(updated)) {
-            // Si todavía no hay break asignado, lo calculamos a partir de la llegada real.
             const diaActualBreak = prev.find((dd) => dd.dia === dia);
             const entriesMismoTurno = diaActualBreak
               ? diaActualBreak.entries.filter((ee) => ee.llegadaReal === value)
@@ -936,8 +879,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
   const totalProgramadas = days.reduce((sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasProgramadas) || 0), 0), 0);
   const totalReales = days.reduce((sum, d) => sum + d.entries.reduce((s, e) => s + (parseFloat(e.horasReales) || 0), 0), 0);
 
-  // Cantidad de novedades (incapacidad/licencia/luto) vencidas (2+ días sin marcar
-  // como enviadas a RRHH) en la semana actualmente visible en pantalla.
   const novedadesVencidas = days.reduce(
     (sum, d) =>
       sum +
@@ -957,15 +898,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     setTimeout(() => window.print(), 50);
   };
 
-  // Carga los datos de TODAS las semanas del periodo de nómina (21 al 20) que
-  // contiene la semana actualmente en pantalla, combinando los días de cada
-  // semana en un solo arreglo para el cálculo acumulado. La navegación de la
-  // planilla es continua; este cálculo solo se usa para el resumen de pago.
   const cargarConsolidadoPeriodo = useCallback(async () => {
     setCargandoConsolidado(true);
     try {
       const { inicio, fin } = getRangoPeriodo(anioPeriodo, mesPeriodo);
-      // Generamos las claves (domingo ISO) de todas las semanas que tocan el rango 21-20.
       const clavesSemanas = [];
       let cursor = getDomingoDeSemana(inicio);
       while (cursor <= fin) {
@@ -976,8 +912,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       const todasLasSemanas = [];
       for (const keyDeEsaSemana of clavesSemanas) {
         if (keyDeEsaSemana === semanaKey) {
-          // La semana actualmente en pantalla puede tener cambios sin guardar todavía:
-          // usamos el estado local en vez de lo que haya en Supabase.
           todasLasSemanas.push(...days);
           continue;
         }
@@ -988,8 +922,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           .eq("semana_fecha", keyDeEsaSemana)
           .maybeSingle();
         if (!error && data && data.datos && data.datos.days) {
-          // Solo incluir los días de esa semana que realmente caen dentro del
-          // rango 21-20 (la primera/última semana puede tener días fuera de rango).
           data.datos.days.forEach((d) => {
             if (!d.fechaDate) return;
             const fechaDia = new Date(d.fechaDate + "T00:00:00");
@@ -1001,7 +933,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
       }
       setDiasAcumuladosPeriodo(todasLasSemanas);
     } catch (e) {
-      setDiasAcumuladosPeriodo(days); // fallback: al menos mostrar la semana actual
+      setDiasAcumuladosPeriodo(days);
     } finally {
       setCargandoConsolidado(false);
     }
@@ -1024,7 +956,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         mapa[cedula].nocturnas += nocturnas;
         if (esDiaFeriado) mapa[cedula].festivas += reales;
         if (esDiaFeriado) {
-          // Domingo o festivo marcado: el excedente sobre 8h reales es extra feriada.
           if (extraFeriada > 0) mapa[cedula].extrasFestivas += extraFeriada;
         } else if (saldo > 0) {
           mapa[cedula].extrasNormales += saldo;
@@ -1062,43 +993,11 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; margin: 0 !important; padding: 0 !important; }
-
-          /* Página landscape con márgenes mínimos */
           @page { size: landscape; margin: 3mm; }
-
-          /* Zoom para llenar toda la hoja */
-          html, body {
-            zoom: 0.68;
-            width: 100%;
-            overflow: visible;
-            min-height: 0 !important;
-            height: auto !important;
-          }
-
-          /* Eliminar minHeight: 100vh que genera el espacio vacío */
-          body > div, #root, #root > div {
-            min-height: 0 !important;
-            height: auto !important;
-            background: white !important;
-          }
-
-          .print-wrapper {
-            padding: 0 !important;
-            margin: 0 !important;
-            max-width: 100% !important;
-            width: 100% !important;
-            min-height: 0 !important;
-            height: auto !important;
-          }
-
-          .sheet {
-            box-shadow: none !important;
-            padding: 4px 6px !important;
-            margin: 0 !important;
-            border-radius: 0 !important;
-          }
-
-          /* Tipografía compacta pero legible */
+          html, body { zoom: 0.68; width: 100%; overflow: visible; min-height: 0 !important; height: auto !important; }
+          body > div, #root, #root > div { min-height: 0 !important; height: auto !important; background: white !important; }
+          .print-wrapper { padding: 0 !important; margin: 0 !important; max-width: 100% !important; width: 100% !important; min-height: 0 !important; height: auto !important; }
+          .sheet { box-shadow: none !important; padding: 4px 6px !important; margin: 0 !important; border-radius: 0 !important; }
           table { font-size: 8.5px !important; border-collapse: collapse !important; width: 100% !important; }
           th, td { padding: 2px 4px !important; line-height: 1.3 !important; }
           .cell-input { font-size: 8.5px !important; padding: 0 !important; height: auto !important; width: 100% !important; }
@@ -1106,113 +1005,35 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           .day-block { margin-bottom: 3px !important; padding: 0 !important; border-radius: 0 !important; }
           .print-table { min-width: 0 !important; width: 100% !important; }
           .day-header { padding: 3px 5px !important; }
-
           .print-nota { margin-bottom: 4px !important; padding-bottom: 3px !important; }
           .store-info-grid { margin-bottom: 5px !important; }
-
           tr { height: auto !important; }
           input, select { height: auto !important; line-height: 1.3 !important; }
-
-          /* Filas vacías ocultas */
           .empty-row { display: none !important; }
-
-          /* Evitar que el encabezado de la tabla se repita solo (sin datos) al cortar página,
-             y evitar que una fila se parta a la mitad entre dos páginas */
           thead { display: table-row-group !important; }
           tr { page-break-inside: avoid !important; break-inside: avoid !important; }
           .day-block { page-break-inside: avoid !important; break-inside: avoid !important; }
-
-          /* Inputs y selects sin bordes */
-          input, select {
-            border: none !important;
-            background: transparent !important;
-            font-size: 8px !important;
-            -webkit-appearance: none !important;
-            appearance: none !important;
-          }
-
-          /* Ocultar por defecto todas las columnas que no son fijas (Mes/Día, Nombre,
-             Cédula, Estado, Firma); cada modo de impresión decide cuáles mostrar. */
-          .col-llegada,
-          .col-salida,
-          .col-break-inicio,
-          .col-break-fin,
-          .col-hrs-prog,
-          .col-llegada-real,
-          .col-salida-real,
-          .col-hrs-reales,
-          .col-nocturnas,
-          .col-saldo,
-          .col-saldo-festiva,
-          .col-validado,
-          .col-rrhh,
-          .col-obs,
-          .col-acciones { display: none !important; }
-
-          /* Modo "Planilla": Mes/Día, Nombre, Cédula, Estado, Hora Llegada, Hora Salida,
-             Break Inicio, Break Fin, Hrs Prog., Firma. */
-          .print-mode-planilla .col-llegada,
-          .print-mode-planilla .col-salida,
-          .print-mode-planilla .col-break-inicio,
-          .print-mode-planilla .col-break-fin,
-          .print-mode-planilla .col-hrs-prog { display: table-cell !important; }
-
-          /* Modo "Resumen": Mes/Día, Nombre, Cédula, Estado, Llegada Real, Salida Real,
-             Hrs Reales, Hrs Noct., Extra, Extra Feriada o Dominical, Firma. */
-          .print-mode-resumen .col-llegada-real,
-          .print-mode-resumen .col-salida-real,
-          .print-mode-resumen .col-hrs-reales,
-          .print-mode-resumen .col-nocturnas,
-          .print-mode-resumen .col-saldo,
-          .print-mode-resumen .col-saldo-festiva { display: table-cell !important; }
-
-          /* Notas del encabezado compactas */
+          input, select { border: none !important; background: transparent !important; font-size: 8px !important; -webkit-appearance: none !important; appearance: none !important; }
+          .col-llegada, .col-salida, .col-break-inicio, .col-break-fin, .col-hrs-prog, .col-llegada-real, .col-salida-real, .col-hrs-reales, .col-nocturnas, .col-saldo, .col-saldo-festiva, .col-validado, .col-rrhh, .col-obs, .col-acciones { display: none !important; }
+          .print-mode-planilla .col-llegada, .print-mode-planilla .col-salida, .print-mode-planilla .col-break-inicio, .print-mode-planilla .col-break-fin, .print-mode-planilla .col-hrs-prog { display: table-cell !important; }
+          .print-mode-resumen .col-llegada-real, .print-mode-resumen .col-salida-real, .print-mode-resumen .col-hrs-reales, .print-mode-resumen .col-nocturnas, .print-mode-resumen .col-saldo, .print-mode-resumen .col-saldo-festiva { display: table-cell !important; }
           .print-nota { font-size: 7px !important; padding-bottom: 3px !important; margin-bottom: 4px !important; line-height: 1.3 !important; }
           .store-info-grid { margin-bottom: 5px !important; gap: 6px !important; }
           .footer-supervisor { padding-top: 5px !important; }
           .firma-line { margin-top: 12px !important; }
-
-          /* Mostrar la columna Firma solo al imprimir */
           .col-firma-screen { display: table-cell !important; }
-
-          /* La celda de Firma se ve como un espacio en blanco con línea inferior para firmar a mano */
-          .firma-line-print {
-            display: block !important;
-            border-bottom: 1px solid #C9C6BC !important;
-            min-height: 14px !important;
-            width: 100% !important;
-          }
-
-          /* Header de pantalla oculto */
+          .firma-line-print { display: block !important; border-bottom: 1px solid #C9C6BC !important; min-height: 14px !important; width: 100% !important; }
           .top-bar { display: none !important; }
-
-          /* Eliminar altura mínima del contenedor raíz */
-          .root-wrap {
-            min-height: 0 !important;
-            height: auto !important;
-            background: white !important;
-          }
+          .root-wrap { min-height: 0 !important; height: auto !important; background: white !important; }
         }
-
-        /* Columna Firma oculta en pantalla, solo visible al imprimir (ver regla @media print arriba) */
         .col-firma-screen { display: none; }
-
         input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.5; }
-        .cell-input {
-          width: 100%;
-          border: none;
-          background: transparent;
-          font-size: 12.5px;
-          font-family: inherit;
-          color: #241C14;
-          padding: 4px 2px;
-          outline: none;
-        }
+        .cell-input { width: 100%; border: none; background: transparent; font-size: 12.5px; font-family: inherit; color: #241C14; padding: 4px 2px; outline: none; }
         .cell-input:focus { background: #FFF1DC; border-radius: 3px; }
         .entry-row:hover { background: #FFFBF5; }
       `}</style>
 
-      {/* Barra superior (oculta al imprimir) */}
+      {/* Barra superior */}
       <div className="top-bar no-print" style={{ background: "#E85D1F", color: "#FFFFFF", padding: "18px 28px" }}>
         <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div>
@@ -1221,54 +1042,28 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4, background: "#FFFFFF", borderRadius: 7, padding: "4px 4px 4px 10px" }}>
-              <button
-                onClick={() => setDomingoSemanaActual((prev) => desplazarSemana(prev, -1))}
-                title="Semana anterior"
-                style={{ background: "transparent", border: "none", cursor: "pointer", color: "#E85D1F", display: "flex", alignItems: "center", padding: 4 }}
-              >
+              <button onClick={() => setDomingoSemanaActual((prev) => desplazarSemana(prev, -1))} title="Semana anterior" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#E85D1F", display: "flex", alignItems: "center", padding: 4 }}>
                 <ChevronLeft size={17} />
               </button>
               <span style={{ fontSize: 13, fontWeight: 600, color: "#E85D1F", whiteSpace: "nowrap" }}>
                 {formatFechaCorta(semanaFechas[0])}–{formatFechaCorta(semanaFechas[6])}
               </span>
-              <button
-                onClick={() => setDomingoSemanaActual((prev) => desplazarSemana(prev, 1))}
-                title="Semana siguiente"
-                style={{ background: "transparent", border: "none", cursor: "pointer", color: "#E85D1F", display: "flex", alignItems: "center", padding: 4 }}
-              >
+              <button onClick={() => setDomingoSemanaActual((prev) => desplazarSemana(prev, 1))} title="Semana siguiente" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#E85D1F", display: "flex", alignItems: "center", padding: 4 }}>
                 <ChevronRight size={17} />
               </button>
-              <button
-                onClick={() => setDomingoSemanaActual(getDomingoDeSemana(new Date()))}
-                title="Ir a la semana actual"
-                style={{ background: "transparent", border: "none", cursor: "pointer", color: "#1B8388", fontSize: 12, fontWeight: 600, padding: "4px 8px" }}
-              >
+              <button onClick={() => setDomingoSemanaActual(getDomingoDeSemana(new Date()))} title="Ir a la semana actual" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#1B8388", fontSize: 12, fontWeight: 600, padding: "4px 8px" }}>
                 Hoy
               </button>
             </div>
             <SaveIndicator state={saveState} />
-            <button
-              onClick={handleSupervisorClick}
-              style={btnStyle(modoSupervisor ? "#3FBFC4" : "#FFFFFF", modoSupervisor ? "#FFFFFF" : "#E85D1F")}
-              title={modoSupervisor ? "Modo Supervisor activo — clic para salir" : "Activar Modo Supervisor"}
-            >
+            <button onClick={handleSupervisorClick} style={btnStyle(modoSupervisor ? "#3FBFC4" : "#FFFFFF", modoSupervisor ? "#FFFFFF" : "#E85D1F")} title={modoSupervisor ? "Modo Supervisor activo — clic para salir" : "Activar Modo Supervisor"}>
               {modoSupervisor ? <Unlock size={15} /> : <Lock size={15} />} {modoSupervisor ? "Supervisor activo" : "Modo Supervisor"}
             </button>
             <button onClick={() => setShowEmpleados(true)} style={btnStyle("#FFFFFF", "#E85D1F")}><Users size={15} /> Empleados</button>
             <button onClick={() => { setShowConsolidado(true); cargarConsolidadoPeriodo(); }} style={{ ...btnStyle("#FFFFFF", "#E85D1F"), position: "relative" }}>
               <Clock size={15} /> Consolidado
               {novedadesVencidas > 0 && (
-                <span
-                  title={`${novedadesVencidas} novedad(es) sin enviar a RRHH hace 2+ días`}
-                  style={{
-                    position: "absolute", top: -7, right: -7,
-                    background: "#B3261E", color: "#FFFFFF",
-                    borderRadius: "50%", width: 19, height: 19,
-                    fontSize: 11, fontWeight: 700,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    border: "2px solid #FFFFFF",
-                  }}
-                >
+                <span title={`${novedadesVencidas} novedad(es) sin enviar a RRHH hace 2+ días`} style={{ position: "absolute", top: -7, right: -7, background: "#B3261E", color: "#FFFFFF", borderRadius: "50%", width: 19, height: 19, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #FFFFFF" }}>
                   {novedadesVencidas}
                 </span>
               )}
@@ -1288,16 +1083,15 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
         </div>
       </div>
 
-      {/* Contenido principal — este div se escala al imprimir */}
+      {/* Contenido principal */}
       <div className="print-wrapper" style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 28px 60px" }}>
         <div className="sheet" style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 28 }}>
 
-          {/* Nota de encabezado */}
           <div className="print-nota" style={{ fontSize: 11.5, color: "#6B5A4A", borderBottom: "2px solid #E85D1F", paddingBottom: 14, marginBottom: 18, lineHeight: 1.6 }}>
             <strong style={{ color: "#E85D1F" }}>NOTA:</strong> Cada colaborador debe disfrutar de 36 horas continuas de descanso semanal. El turno de inventario de la mañana entra a las 6:00 a.m. y sale a la 1:30 p.m. Toda hora extra requiere observación y aprobación del Jefe de Zona.
+            {" "}<em style={{ color: "#1B8388" }}>Tolerancia de fichaje: entrada ±{TOLERANCIA_ENTRADA_MIN} min · salida ±{TOLERANCIA_SALIDA_MIN} min.</em>
           </div>
 
-          {/* Info de tienda */}
           <div className="store-info-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 22 }}>
             <Field label="Nombre Tienda">
               <input disabled={completado} value={tienda} onChange={(e) => setTienda(e.target.value)} style={completado ? { ...fieldInputStyle, background: "#F2EFE9", color: "#5C5F5A", cursor: "not-allowed" } : fieldInputStyle} placeholder="Ej. Santiago Centro" />
@@ -1310,252 +1104,213 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             </Field>
           </div>
 
-          {/* Días */}
           {days.map((d) => {
-            if (d.fechaDate === null && semanaFechas.length) {
-              // Día fuera del rango del periodo de nómina (primera/última semana parcial)
-              return null;
-            }
-            const fechaLabel = d.fechaDate
-              ? formatFechaCorta(new Date(d.fechaDate + "T00:00:00"))
-              : "";
+            if (d.fechaDate === null && semanaFechas.length) return null;
+            const fechaLabel = d.fechaDate ? formatFechaCorta(new Date(d.fechaDate + "T00:00:00")) : "";
             return (
-            <div key={d.dia} className="day-block" style={{ marginBottom: 22, border: "1px solid #E5E3DC", borderRadius: 8, overflow: "hidden" }}>
-              <div className="day-header" style={{ background: "#E6F7F8", padding: "10px 14px" }}>
-                <span className="day-title" style={{ fontWeight: 700, color: "#1B8388", fontSize: 17 }}>
-                  {d.dia}{fechaLabel ? ` — ${fechaLabel}` : ""}
-                </span>
-              </div>
-
-              <div style={{ overflowX: "auto" }}>
-                <table className="print-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
-                  <thead>
-                    <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
-                      <th style={thStyle}>Mes/Día</th>
-                      <th style={thStyle}>Nombre</th>
-                      <th style={thStyle}>Cédula</th>
-                      <th style={{ ...thStyle, minWidth: 170 }}>Estado</th>
-                      <th className="col-llegada" style={thStyle}>Hora Llegada</th>
-                      <th className="col-salida" style={thStyle}>Hora Salida</th>
-                      <th className="col-break-inicio" style={thStyle}>Break Inicio</th>
-                      <th className="col-break-fin" style={thStyle}>Break Fin</th>
-                      <th className="col-hrs-prog" style={thStyle}>Hrs Prog.</th>
-                      <th className="col-llegada-real" style={thStyle}>Llegada Real</th>
-                      <th className="col-salida-real" style={thStyle}>Salida Real</th>
-                      <th className="col-hrs-reales" style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
-                      <th className="col-validado no-print" style={thStyle}>Validado por SPV</th>
-                      <th className="col-nocturnas" style={thStyle}>Hrs Noct.</th>
-                      <th className="col-saldo" style={thStyle}>Extra</th>
-                      <th className="col-saldo-festiva" style={thStyle}>Extra Feriada o Dominical</th>
-                      <th className="col-rrhh no-print" style={thStyle}>Enviado a RRHH</th>
-                      <th className="col-firma-screen" style={thStyle}>Firma</th>
-                      <th className="col-obs no-print" style={thStyle}>Observación</th>
-                      <th className="col-acciones no-print" style={thStyle}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {d.entries.map((entry) => (
-                      <tr
-                        key={entry.id}
-                        className={`entry-row ${entry.nombre.trim() === "" ? "empty-row" : ""}`}
-                        style={{
-                          background: aprobaciones[entry.id] === "aprobado" ? "#43A047" : aprobaciones[entry.id] === "rechazado" ? "#E53935" : undefined,
-                          borderLeft: aprobaciones[entry.id] === "aprobado" ? "5px solid #1B5E20" : aprobaciones[entry.id] === "rechazado" ? "5px solid #B71C1C" : undefined,
-                          color: aprobaciones[entry.id] ? "white" : undefined,
-                        }}
-                      >
-                        <td style={tdStyle}>
-                          <input
-                            className="cell-input"
-                            value={entry.fecha}
-                            readOnly
-                            placeholder="06/16"
-                            style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }}
-                          />
-                        </td>
-                        <td style={tdStyle}>
-                          <select disabled={completado} className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} style={{ fontWeight: 600, minWidth: 140, cursor: completado ? "not-allowed" : "pointer" }}>
-                            <option value="">Seleccionar...</option>
-                            {empleados.map((emp) => (<option key={emp.id} value={emp.nombre}>{emp.nombre}</option>))}
-                            {/* Si el colaborador de esta fila ya no está en el directorio actual
-                                (fue eliminado), igual mostramos su nombre para no perder el
-                                historial de planillas pasadas. */}
-                            {entry.nombre.trim() !== "" && !empleados.some((emp) => emp.nombre === entry.nombre) && (
-                              <option value={entry.nombre}>{entry.nombre} (ya no está en el directorio)</option>
-                            )}
-                          </select>
-                        </td>
-                        <td style={tdStyle}>
-                          <input className="cell-input" value={entry.cedula} readOnly placeholder="Selecciona un nombre"
-                            style={{ minWidth: 100, background: entry.cedula.trim() === "" ? "#FCEBEB" : "#F2EFE9", borderRadius: 4, color: "#5C5F5A", cursor: "default" }} />
-                        </td>
-                        <td style={{ ...tdStyle, minWidth: 170 }}>
-                          <select disabled={completado} className="cell-input" value={entry.estado} onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
-                            style={{ cursor: completado ? "not-allowed" : "pointer", width: "100%", minWidth: 160, whiteSpace: "nowrap", fontWeight: estaBloqueado(entry) ? 700 : 400, color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14" }}>
-                            <option value="">Seleccionar...</option>
-                            <option value="trabaja">Trabaja</option>
-                            <option value="t_inventario_manana">T.Inventario mañana</option>
-                            <option value="domingo_t_manana">Domingo T. mañana</option>
-                            <option value="domingo_t_tarde">Domingo T. tarde</option>
-                            <option value="feriado_manana">Feriado mañana</option>
-                            <option value="feriado_tarde">Feriado tarde</option>
-                            <option value="descanso">Descanso</option>
-                            <option value="incapacitado">Incapacitado</option>
-                            <option value="licencia_maternidad">Licencia de maternidad</option>
-                            <option value="luto">Luto</option>
-                          </select>
-                        </td>
-                        <td className="col-llegada" style={tdStyle}>
-                          <select key={`${entry.id}-${entry.estado}`} disabled={estaBloqueado(entry) || completado} className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
-                            style={{ cursor: "pointer", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }}>
-                            <option value="">--:-- --</option>
-                            <option value="06:00">6:00 AM</option>
-                            <option value="07:00">7:00 AM</option>
-                            <option value="07:30">7:30 AM</option>
-                            <option value="12:30">12:30 PM</option>
-                            <option value="13:30">1:30 PM</option>
-                          </select>
-                        </td>
-                        <td className="col-salida" style={tdStyle}>
-                          <input disabled readOnly type="time" className="cell-input" value={entry.salida}
-                            style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
-                        </td>
-                        <td className="col-break-inicio" style={tdStyle}>
-                          <input disabled={parcialBloqueado(entry) || completado} type="time" className="cell-input" value={entry.breakInicio}
-                            onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)}
-                            style={(parcialBloqueado(entry) || completado) ? disabledCellStyle : undefined} />
-                        </td>
-                        <td className="col-break-fin" style={tdStyle}>
-                          <input disabled readOnly type="time" className="cell-input" value={entry.breakFin}
-                            style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
-                        </td>
-                        <td className="col-hrs-prog" style={tdStyle}>
-                          <input disabled readOnly className="cell-input" value={entry.horasProgramadas} placeholder="0"
-                            style={{ textAlign: "center", background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
-                        </td>
-                        <td className="col-llegada-real" style={tdStyle}>
-                          <input disabled={parcialBloqueado(entry) || completado} type="time" className="cell-input" value={entry.llegadaReal}
-                            onChange={(e) => updateEntry(d.dia, entry.id, "llegadaReal", e.target.value)}
-                            style={(parcialBloqueado(entry) || completado) ? disabledCellStyle : undefined} />
-                        </td>
-                        <td className="col-salida-real" style={tdStyle}>
-                          <input disabled={parcialBloqueado(entry) || completado} type="time" className="cell-input" value={entry.salidaReal}
-                            onChange={(e) => updateEntry(d.dia, entry.id, "salidaReal", e.target.value)}
-                            style={(parcialBloqueado(entry) || completado) ? disabledCellStyle : undefined} />
-                        </td>
-                        <td className="col-hrs-reales" style={{ ...tdStyle, minWidth: 90 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
-                            <input disabled readOnly className="cell-input" value={entry.horasReales} placeholder="0"
-                              style={{ textAlign: "center", minWidth: 40, width: 40, flexShrink: 0, background: entry.esFestivo ? "transparent" : "#F2EFE9", color: entry.esFestivo ? "#04342C" : "#5C5F5A", fontWeight: entry.esFestivo ? 600 : 400, cursor: "default" }} />
-                            <label className="no-print" title="Marcar como festivo"
-                              style={{ display: "flex", alignItems: "center", cursor: (estaBloqueado(entry) || completado) ? "not-allowed" : "pointer", paddingRight: 3 }}>
-                              <input type="checkbox" disabled={estaBloqueado(entry) || completado} checked={entry.esFestivo}
-                                onChange={(e) => updateEntry(d.dia, entry.id, "esFestivo", e.target.checked)}
-                                style={{ cursor: (estaBloqueado(entry) || completado) ? "not-allowed" : "pointer" }} />
-                            </label>
-                          </div>
-                        </td>
-                        <td className="col-validado no-print" style={{ ...tdStyle, textAlign: "center" }}>
-                          {entry.nombre.trim() !== "" && (
-                            <input
-                              type="checkbox"
-                              checked={entry.validado}
-                              disabled={!modoSupervisor || completado}
-                              onChange={(e) => updateEntry(d.dia, entry.id, "validado", e.target.checked)}
-                              title={completado ? "Planilla completada — desmarca para poder editar" : modoSupervisor ? "Marcar horas reales como validadas" : "Solo el supervisor puede validar (activa el Modo Supervisor)"}
-                              style={{
-                                width: 18,
-                                height: 18,
-                                cursor: (!modoSupervisor || completado) ? "not-allowed" : "pointer",
-                                accentColor: "#3FBFC4",
-                              }}
-                            />
-                          )}
-                        </td>
-                        <td className="col-nocturnas" style={tdStyle}>
-                          <span style={{ fontSize: 12, color: "#5C5F5A", display: "block", textAlign: "center" }}>{entry.horasNocturnas || "0"}</span>
-                        </td>
-                        <td className="col-saldo" style={tdStyle}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: entry.saldo.startsWith("+") ? "#B3261E" : entry.saldo.startsWith("-") ? "#946800" : "#5C5F5A" }}>
-                            {(() => {
-                              const esDiaFeriado = d.dia === "Domingo" || entry.esFestivo;
-                              // Día feriado/domingo: el excedente sobre 8h reales se muestra en "Extra Feriada", aquí se oculta.
-                              if (esDiaFeriado) {
-                                const extraFeriada = calcularExtraFeriada(d.dia, entry);
-                                if (extraFeriada > 0) return entry.saldo.startsWith("-") ? entry.saldo : "0";
-                              }
-                              return entry.saldo;
-                            })()}
-                          </span>
-                        </td>
-                        <td className="col-saldo-festiva" style={tdStyle}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: "#B3261E" }}>
-                            {(() => {
-                              const extraFeriada = calcularExtraFeriada(d.dia, entry);
-                              return extraFeriada > 0 ? `+${extraFeriada}` : "0";
-                            })()}
-                          </span>
-                        </td>
-                        <td className="col-rrhh no-print" style={{ ...tdStyle, textAlign: "center" }}>
-                          {esNovedadRRHH(entry.estado) && (() => {
-                            const dias = diasVencidosRRHH(entry);
-                            const vencido = dias !== null && dias >= DIAS_LIMITE_ENVIO_RRHH;
-                            return (
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                                <label
-                                  className="no-print"
-                                  title={completado ? "Planilla completada — desmarca para poder editar" : entry.enviadoRRHH ? "Ya enviado a Recursos Humanos" : "Marcar como enviado a Recursos Humanos"}
-                                  style={{ display: "flex", alignItems: "center", cursor: completado ? "not-allowed" : "pointer" }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    disabled={completado}
-                                    checked={entry.enviadoRRHH}
-                                    onChange={(ev) => updateEntry(d.dia, entry.id, "enviadoRRHH", ev.target.checked)}
-                                    style={{ width: 17, height: 17, cursor: completado ? "not-allowed" : "pointer", accentColor: "#3FBFC4" }}
-                                  />
-                                </label>
-                                {vencido && (
-                                  <span
-                                    title={`Sin enviar a RRHH hace ${dias} día(s)`}
-                                    style={{ fontSize: 11, fontWeight: 700, color: "#B3261E", background: "#FCEBEB", padding: "2px 6px", borderRadius: 4 }}
-                                  >
-                                    ⚠ {dias}d
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </td>
-                        <td className="col-firma-screen" style={tdStyle}>
-                          {entry.nombre.trim() !== "" && <span className="firma-line-print" />}
-                        </td>
-                        <td className="col-obs no-print" style={tdStyle}>
-                          <input disabled={entry.cedula.trim() === "" || completado} className="cell-input" value={entry.observacion}
-                            onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)}
-                            placeholder="—" style={(entry.cedula.trim() === "" || completado) ? disabledCellStyle : undefined} />
-                        </td>
-                        <td className="col-acciones no-print" style={tdStyle}>
-                          {d.entries.length > 1 && !completado && (
-                            <button onClick={() => removeEntry(d.dia, entry.id)} style={iconBtnStyle}>
-                              <Trash2 size={14} color="#B3261E" />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {!completado && (
-                <div style={{ padding: "8px 14px", background: "#FAFAF7" }}>
-                  <button className="no-print" onClick={() => addEntry(d.dia)} style={{ ...btnStyle("transparent", "#E85D1F"), border: "1px dashed #E85D1F", padding: "5px 10px", fontSize: 12 }}>
-                    <Plus size={13} /> Agregar colaborador a {d.dia}
-                  </button>
+              <div key={d.dia} className="day-block" style={{ marginBottom: 22, border: "1px solid #E5E3DC", borderRadius: 8, overflow: "hidden" }}>
+                <div className="day-header" style={{ background: "#E6F7F8", padding: "10px 14px" }}>
+                  <span className="day-title" style={{ fontWeight: 700, color: "#1B8388", fontSize: 17 }}>
+                    {d.dia}{fechaLabel ? ` — ${fechaLabel}` : ""}
+                  </span>
                 </div>
-              )}
-            </div>
+
+                <div style={{ overflowX: "auto" }}>
+                  <table className="print-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
+                    <thead>
+                      <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                        <th style={thStyle}>Mes/Día</th>
+                        <th style={thStyle}>Nombre</th>
+                        <th style={thStyle}>Cédula</th>
+                        <th style={{ ...thStyle, minWidth: 170 }}>Estado</th>
+                        <th className="col-llegada" style={thStyle}>Hora Llegada</th>
+                        <th className="col-salida" style={thStyle}>Hora Salida</th>
+                        <th className="col-break-inicio" style={thStyle}>Break Inicio</th>
+                        <th className="col-break-fin" style={thStyle}>Break Fin</th>
+                        <th className="col-hrs-prog" style={thStyle}>Hrs Prog.</th>
+                        <th className="col-llegada-real" style={thStyle}>Llegada Real</th>
+                        <th className="col-salida-real" style={thStyle}>Salida Real</th>
+                        <th className="col-hrs-reales" style={{ ...thStyle, minWidth: 90 }}>Hrs Reales</th>
+                        <th className="col-validado no-print" style={thStyle}>Validado por SPV</th>
+                        <th className="col-nocturnas" style={thStyle}>Hrs Noct.</th>
+                        <th className="col-saldo" style={thStyle}>Extra</th>
+                        <th className="col-saldo-festiva" style={thStyle}>Extra Feriada o Dominical</th>
+                        <th className="col-rrhh no-print" style={thStyle}>Enviado a RRHH</th>
+                        <th className="col-firma-screen" style={thStyle}>Firma</th>
+                        <th className="col-obs no-print" style={thStyle}>Observación</th>
+                        <th className="col-acciones no-print" style={thStyle}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.entries.map((entry) => (
+                        <tr
+                          key={entry.id}
+                          className={`entry-row ${entry.nombre.trim() === "" ? "empty-row" : ""}`}
+                          style={{
+                            background: aprobaciones[entry.id] === "aprobado" ? "#43A047" : aprobaciones[entry.id] === "rechazado" ? "#E53935" : undefined,
+                            borderLeft: aprobaciones[entry.id] === "aprobado" ? "5px solid #1B5E20" : aprobaciones[entry.id] === "rechazado" ? "5px solid #B71C1C" : undefined,
+                            color: aprobaciones[entry.id] ? "white" : undefined,
+                          }}
+                        >
+                          <td style={tdStyle}>
+                            <input className="cell-input" value={entry.fecha} readOnly placeholder="06/16" style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
+                          </td>
+                          <td style={tdStyle}>
+                            <select disabled={completado} className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} style={{ fontWeight: 600, minWidth: 140, cursor: completado ? "not-allowed" : "pointer" }}>
+                              <option value="">Seleccionar...</option>
+                              {empleados.map((emp) => (<option key={emp.id} value={emp.nombre}>{emp.nombre}</option>))}
+                              {entry.nombre.trim() !== "" && !empleados.some((emp) => emp.nombre === entry.nombre) && (
+                                <option value={entry.nombre}>{entry.nombre} (ya no está en el directorio)</option>
+                              )}
+                            </select>
+                          </td>
+                          <td style={tdStyle}>
+                            <input className="cell-input" value={entry.cedula} readOnly placeholder="Selecciona un nombre"
+                              style={{ minWidth: 100, background: entry.cedula.trim() === "" ? "#FCEBEB" : "#F2EFE9", borderRadius: 4, color: "#5C5F5A", cursor: "default" }} />
+                          </td>
+                          <td style={{ ...tdStyle, minWidth: 170 }}>
+                            <select disabled={completado} className="cell-input" value={entry.estado} onChange={(e) => updateEntry(d.dia, entry.id, "estado", e.target.value)}
+                              style={{ cursor: completado ? "not-allowed" : "pointer", width: "100%", minWidth: 160, whiteSpace: "nowrap", fontWeight: estaBloqueado(entry) ? 700 : 400, color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14" }}>
+                              <option value="">Seleccionar...</option>
+                              <option value="trabaja">Trabaja</option>
+                              <option value="t_inventario_manana">T.Inventario mañana</option>
+                              <option value="domingo_t_manana">Domingo T. mañana</option>
+                              <option value="domingo_t_tarde">Domingo T. tarde</option>
+                              <option value="feriado_manana">Feriado mañana</option>
+                              <option value="feriado_tarde">Feriado tarde</option>
+                              <option value="descanso">Descanso</option>
+                              <option value="incapacitado">Incapacitado</option>
+                              <option value="licencia_maternidad">Licencia de maternidad</option>
+                              <option value="luto">Luto</option>
+                            </select>
+                          </td>
+                          <td className="col-llegada" style={tdStyle}>
+                            <select key={`${entry.id}-${entry.estado}`} disabled={estaBloqueado(entry) || completado} className="cell-input" value={entry.llegada} onChange={(e) => updateEntry(d.dia, entry.id, "llegada", e.target.value)}
+                              style={{ cursor: "pointer", ...(estaBloqueado(entry) ? disabledCellStyle : {}) }}>
+                              <option value="">--:-- --</option>
+                              <option value="06:00">6:00 AM</option>
+                              <option value="07:00">7:00 AM</option>
+                              <option value="07:30">7:30 AM</option>
+                              <option value="12:30">12:30 PM</option>
+                              <option value="13:30">1:30 PM</option>
+                            </select>
+                          </td>
+                          <td className="col-salida" style={tdStyle}>
+                            <input disabled readOnly type="time" className="cell-input" value={entry.salida} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
+                          </td>
+                          <td className="col-break-inicio" style={tdStyle}>
+                            <input disabled={parcialBloqueado(entry) || completado} type="time" className="cell-input" value={entry.breakInicio}
+                              onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)}
+                              style={(parcialBloqueado(entry) || completado) ? disabledCellStyle : undefined} />
+                          </td>
+                          <td className="col-break-fin" style={tdStyle}>
+                            <input disabled readOnly type="time" className="cell-input" value={entry.breakFin} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
+                          </td>
+                          <td className="col-hrs-prog" style={tdStyle}>
+                            <input disabled readOnly className="cell-input" value={entry.horasProgramadas} placeholder="0" style={{ textAlign: "center", background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
+                          </td>
+                          <td className="col-llegada-real" style={tdStyle}>
+                            <input disabled={parcialBloqueado(entry) || completado} type="time" className="cell-input" value={entry.llegadaReal}
+                              onChange={(e) => updateEntry(d.dia, entry.id, "llegadaReal", e.target.value)}
+                              style={(parcialBloqueado(entry) || completado) ? disabledCellStyle : undefined} />
+                          </td>
+                          <td className="col-salida-real" style={tdStyle}>
+                            <input disabled={parcialBloqueado(entry) || completado} type="time" className="cell-input" value={entry.salidaReal}
+                              onChange={(e) => updateEntry(d.dia, entry.id, "salidaReal", e.target.value)}
+                              style={(parcialBloqueado(entry) || completado) ? disabledCellStyle : undefined} />
+                          </td>
+                          <td className="col-hrs-reales" style={{ ...tdStyle, minWidth: 90 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
+                              <input disabled readOnly className="cell-input" value={entry.horasReales} placeholder="0"
+                                style={{ textAlign: "center", minWidth: 40, width: 40, flexShrink: 0, background: entry.esFestivo ? "transparent" : "#F2EFE9", color: entry.esFestivo ? "#04342C" : "#5C5F5A", fontWeight: entry.esFestivo ? 600 : 400, cursor: "default" }} />
+                              <label className="no-print" title="Marcar como festivo"
+                                style={{ display: "flex", alignItems: "center", cursor: (estaBloqueado(entry) || completado) ? "not-allowed" : "pointer", paddingRight: 3 }}>
+                                <input type="checkbox" disabled={estaBloqueado(entry) || completado} checked={entry.esFestivo}
+                                  onChange={(e) => updateEntry(d.dia, entry.id, "esFestivo", e.target.checked)}
+                                  style={{ cursor: (estaBloqueado(entry) || completado) ? "not-allowed" : "pointer" }} />
+                              </label>
+                            </div>
+                          </td>
+                          <td className="col-validado no-print" style={{ ...tdStyle, textAlign: "center" }}>
+                            {entry.nombre.trim() !== "" && (
+                              <input type="checkbox" checked={entry.validado} disabled={!modoSupervisor || completado}
+                                onChange={(e) => updateEntry(d.dia, entry.id, "validado", e.target.checked)}
+                                title={completado ? "Planilla completada" : modoSupervisor ? "Marcar horas reales como validadas" : "Solo el supervisor puede validar"}
+                                style={{ width: 18, height: 18, cursor: (!modoSupervisor || completado) ? "not-allowed" : "pointer", accentColor: "#3FBFC4" }} />
+                            )}
+                          </td>
+                          <td className="col-nocturnas" style={tdStyle}>
+                            <span style={{ fontSize: 12, color: "#5C5F5A", display: "block", textAlign: "center" }}>{entry.horasNocturnas || "0"}</span>
+                          </td>
+                          <td className="col-saldo" style={tdStyle}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: entry.saldo.startsWith("+") ? "#B3261E" : entry.saldo.startsWith("-") ? "#946800" : "#5C5F5A" }}>
+                              {(() => {
+                                const esDiaFeriado = d.dia === "Domingo" || entry.esFestivo;
+                                if (esDiaFeriado) {
+                                  const extraFeriada = calcularExtraFeriada(d.dia, entry);
+                                  if (extraFeriada > 0) return entry.saldo.startsWith("-") ? entry.saldo : "0";
+                                }
+                                return entry.saldo;
+                              })()}
+                            </span>
+                          </td>
+                          <td className="col-saldo-festiva" style={tdStyle}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "#B3261E" }}>
+                              {(() => {
+                                const extraFeriada = calcularExtraFeriada(d.dia, entry);
+                                return extraFeriada > 0 ? `+${extraFeriada}` : "0";
+                              })()}
+                            </span>
+                          </td>
+                          <td className="col-rrhh no-print" style={{ ...tdStyle, textAlign: "center" }}>
+                            {esNovedadRRHH(entry.estado) && (() => {
+                              const dias = diasVencidosRRHH(entry);
+                              const vencido = dias !== null && dias >= DIAS_LIMITE_ENVIO_RRHH;
+                              return (
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                                  <label className="no-print" style={{ display: "flex", alignItems: "center", cursor: completado ? "not-allowed" : "pointer" }}>
+                                    <input type="checkbox" disabled={completado} checked={entry.enviadoRRHH}
+                                      onChange={(ev) => updateEntry(d.dia, entry.id, "enviadoRRHH", ev.target.checked)}
+                                      style={{ width: 17, height: 17, cursor: completado ? "not-allowed" : "pointer", accentColor: "#3FBFC4" }} />
+                                  </label>
+                                  {vencido && (
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: "#B3261E", background: "#FCEBEB", padding: "2px 6px", borderRadius: 4 }}>
+                                      ⚠ {dias}d
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </td>
+                          <td className="col-firma-screen" style={tdStyle}>
+                            {entry.nombre.trim() !== "" && <span className="firma-line-print" />}
+                          </td>
+                          <td className="col-obs no-print" style={tdStyle}>
+                            <input disabled={entry.cedula.trim() === "" || completado} className="cell-input" value={entry.observacion}
+                              onChange={(e) => updateEntry(d.dia, entry.id, "observacion", e.target.value)}
+                              placeholder="—" style={(entry.cedula.trim() === "" || completado) ? disabledCellStyle : undefined} />
+                          </td>
+                          <td className="col-acciones no-print" style={tdStyle}>
+                            {d.entries.length > 1 && !completado && (
+                              <button onClick={() => removeEntry(d.dia, entry.id)} style={iconBtnStyle}>
+                                <Trash2 size={14} color="#B3261E" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {!completado && (
+                  <div style={{ padding: "8px 14px", background: "#FAFAF7" }}>
+                    <button className="no-print" onClick={() => addEntry(d.dia)} style={{ ...btnStyle("transparent", "#E85D1F"), border: "1px dashed #E85D1F", padding: "5px 10px", fontSize: 12 }}>
+                      <Plus size={13} /> Agregar colaborador a {d.dia}
+                    </button>
+                  </div>
+                )}
+              </div>
             );
           })}
 
@@ -1565,18 +1320,14 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               <Field label="Nombre Supervisor">
                 <input disabled={completado} value={supervisor} onChange={(e) => setSupervisor(e.target.value)} style={completado ? { ...fieldInputStyle, background: "#F2EFE9", color: "#5C5F5A", cursor: "not-allowed" } : fieldInputStyle} placeholder="Nombre del supervisor" />
               </Field>
-              <div className="firma-line" style={{ marginTop: 36, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>
-                Firma Supervisor
-              </div>
-              <div className="firma-line" style={{ marginTop: 28, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>
-                Aprobado por JDZ
-              </div>
+              <div className="firma-line" style={{ marginTop: 36, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>Firma Supervisor</div>
+              <div className="firma-line" style={{ marginTop: 28, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>Aprobado por JDZ</div>
             </div>
             <div className="no-print" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
               <button
                 onClick={() => {
                   if (completado) {
-                    if (window.confirm("Esta planilla ya está marcada como completada.\n\n¿Quieres desmarcarla? (por ejemplo, si necesitas corregir algo más)")) {
+                    if (window.confirm("Esta planilla ya está marcada como completada.\n\n¿Quieres desmarcarla?")) {
                       setCompletado(false);
                       setFechaCompletado("");
                     }
@@ -1587,21 +1338,13 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                     setFechaCompletado(formatFechaISO(new Date()));
                   }
                 }}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 8,
-                  background: completado ? "#2E7D32" : "#3FBFC4",
-                  color: "#FFFFFF", border: "none", borderRadius: 8,
-                  padding: "11px 20px", fontSize: 14, fontWeight: 700,
-                  cursor: "pointer", fontFamily: "inherit",
-                }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, background: completado ? "#2E7D32" : "#3FBFC4", color: "#FFFFFF", border: "none", borderRadius: 8, padding: "11px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
               >
                 <CheckCircle2 size={17} />
                 {completado ? "Planilla completada — Marcar de nuevo" : "Marcar planilla como completada"}
               </button>
               {completado && fechaCompletado && (
-                <span style={{ fontSize: 12, color: "#5C5F5A" }}>
-                  Completada el {formatFechaCorta(new Date(fechaCompletado + "T00:00:00"))}
-                </span>
+                <span style={{ fontSize: 12, color: "#5C5F5A" }}>Completada el {formatFechaCorta(new Date(fechaCompletado + "T00:00:00"))}</span>
               )}
             </div>
           </div>
@@ -1610,11 +1353,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
 
       {/* Modal Consolidado */}
       {showConsolidado && (
-        <div className="no-print"
-          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(36,28,20,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}
-          onClick={() => setShowConsolidado(false)}>
-          <div style={{ background: "white", borderRadius: 10, padding: 24, maxWidth: 720, width: "100%", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}
-            onClick={(e) => e.stopPropagation()}>
+        <div className="no-print" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(36,28,20,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }} onClick={() => setShowConsolidado(false)}>
+          <div style={{ background: "white", borderRadius: 10, padding: 24, maxWidth: 720, width: "100%", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#E85D1F" }}>Consolidado Acumulado del Periodo</div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1623,13 +1363,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               </div>
             </div>
             <div style={{ fontSize: 12, color: "#5C5F5A", marginBottom: 16 }}>
-              {getPeriodoLabel(anioPeriodo, mesPeriodo)} (21 de {NOMBRES_MESES[(mesPeriodo - 2 + 12) % 12]} – 20 de {NOMBRES_MESES[mesPeriodo - 1]}) · Suma de las {(() => {
-                const { inicio, fin } = getRangoPeriodo(anioPeriodo, mesPeriodo);
-                let n = 0;
-                let cursor = getDomingoDeSemana(inicio);
-                while (cursor <= fin) { n++; cursor = desplazarSemana(cursor, 1); }
-                return n;
-              })()} semanas del periodo
+              {getPeriodoLabel(anioPeriodo, mesPeriodo)} (21 de {NOMBRES_MESES[(mesPeriodo - 2 + 12) % 12]} – 20 de {NOMBRES_MESES[mesPeriodo - 1]})
             </div>
             {cargandoConsolidado ? (
               <div style={{ fontSize: 13, color: "#5C5F5A", display: "flex", alignItems: "center", gap: 8 }}>
@@ -1671,47 +1405,25 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
 
       {/* Modal contraseña Modo Supervisor */}
       {showPasswordPrompt && (
-        <div
-          className="no-print"
-          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(36,28,20,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 20 }}
-          onClick={() => setShowPasswordPrompt(false)}
-        >
-          <div
-            style={{ background: "white", borderRadius: 10, padding: 24, maxWidth: 360, width: "100%", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="no-print" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(36,28,20,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 20 }} onClick={() => setShowPasswordPrompt(false)}>
+          <div style={{ background: "white", borderRadius: 10, padding: 24, maxWidth: 360, width: "100%", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#E85D1F", display: "flex", alignItems: "center", gap: 8 }}>
                 <Lock size={17} /> Modo Supervisor
               </div>
-              <button onClick={() => setShowPasswordPrompt(false)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#5C5F5A" }}>
-                <X size={18} />
-              </button>
+              <button onClick={() => setShowPasswordPrompt(false)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#5C5F5A" }}><X size={18} /></button>
             </div>
             <div style={{ fontSize: 12.5, color: "#5C5F5A", marginBottom: 14 }}>
               Ingresa la contraseña de supervisor para habilitar la validación de horas reales.
             </div>
             <form onSubmit={handlePasswordSubmit}>
-              <input
-                type="password"
-                autoFocus
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="Contraseña"
-                style={fieldInputStyle}
-              />
+              <input type="password" autoFocus value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} placeholder="Contraseña" style={fieldInputStyle} />
               {passwordError && (
-                <div style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 12.5, padding: "8px 10px", borderRadius: 6, marginTop: 10 }}>
-                  {passwordError}
-                </div>
+                <div style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 12.5, padding: "8px 10px", borderRadius: 6, marginTop: 10 }}>{passwordError}</div>
               )}
               <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-                <button type="submit" style={{ ...btnStyle("#3FBFC4", "#FFFFFF"), flex: 1, justifyContent: "center" }}>
-                  Ingresar
-                </button>
-                <button type="button" onClick={() => setShowPasswordPrompt(false)} style={{ ...btnStyle("#FAFAF7", "#5C5F5A"), flex: 1, justifyContent: "center" }}>
-                  Cancelar
-                </button>
+                <button type="submit" style={{ ...btnStyle("#3FBFC4", "#FFFFFF"), flex: 1, justifyContent: "center" }}>Ingresar</button>
+                <button type="button" onClick={() => setShowPasswordPrompt(false)} style={{ ...btnStyle("#FAFAF7", "#5C5F5A"), flex: 1, justifyContent: "center" }}>Cancelar</button>
               </div>
             </form>
           </div>
@@ -1730,7 +1442,6 @@ function ModalEmpleados({ codigoTienda, empleados, onClose, onRecargar }) {
   const [guardando, setGuardando] = useState(false);
 
   const limpiarFormulario = () => { setNombre(""); setCedula(""); setEditandoId(null); setError(""); };
-
   const handleEditar = (emp) => { setNombre(emp.nombre); setCedula(emp.cedula); setEditandoId(emp.id); setError(""); };
 
   const handleGuardar = async (e) => {
@@ -1759,16 +1470,12 @@ function ModalEmpleados({ codigoTienda, empleados, onClose, onRecargar }) {
   };
 
   return (
-    <div className="no-print"
-      style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(36,28,20,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}
-      onClick={onClose}>
-      <div style={{ background: "white", borderRadius: 10, padding: 24, maxWidth: 520, width: "100%", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}
-        onClick={(e) => e.stopPropagation()}>
+    <div className="no-print" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(36,28,20,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }} onClick={onClose}>
+      <div style={{ background: "white", borderRadius: 10, padding: 24, maxWidth: 520, width: "100%", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#E85D1F" }}>Empleados de la tienda</div>
           <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#5C5F5A" }}><X size={18} /></button>
         </div>
-
         <form onSubmit={handleGuardar} style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
           <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre completo" style={{ ...fieldInputStyle, flex: "1 1 180px" }} />
           <input value={cedula} onChange={(e) => setCedula(e.target.value)} placeholder="Cédula" style={{ ...fieldInputStyle, flex: "1 1 140px" }} />
@@ -1777,9 +1484,7 @@ function ModalEmpleados({ codigoTienda, empleados, onClose, onRecargar }) {
           </button>
           {editandoId && (<button type="button" onClick={limpiarFormulario} style={btnStyle("#FAFAF7", "#5C5F5A")}>Cancelar</button>)}
         </form>
-
         {error && (<div style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 12.5, padding: "8px 10px", borderRadius: 6, marginBottom: 14 }}>{error}</div>)}
-
         {empleados.length === 0 ? (
           <div style={{ fontSize: 13, color: "#5C5F5A" }}>Todavía no hay empleados registrados para esta tienda.</div>
         ) : (
