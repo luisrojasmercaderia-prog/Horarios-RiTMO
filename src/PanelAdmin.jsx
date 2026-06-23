@@ -117,11 +117,15 @@ function extraerFilasConExtras(datos, tiendaCodigo, semanaFecha) {
       if (!nombre || !cedula) return;
       const saldo = parseFloat(e.saldo) || 0;
       if (saldo <= 0) return;
+      const esFestivo = d.dia === "Domingo" || e.esFestivo;
+      const realesNum = parseFloat(e.horasReales) || 0;
+      const excedente = esFestivo ? Math.max(0, realesNum - 8) : 0;
       resultado.push({
         entryId: e.id, tiendaCodigo, semanaFecha, dia: d.dia, nombre, cedula,
         llegada: e.llegada || "", salida: e.salida || "",
         horasProgramadas: e.horasProgramadas || "", horasReales: e.horasReales || "",
-        saldo: e.saldo || "", esFestivo: d.dia === "Domingo" || e.esFestivo,
+        saldo: e.saldo || "", esFestivo,
+        extraFeriada: excedente > 0 ? `+${excedente}` : "0",
         observacion: e.observacion || "", aprobacionEstado: null,
       });
     });
@@ -678,7 +682,7 @@ function PanelConRol({ sesion, onCerrarSesion }) {
                         <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
                           <th style={thStyle}>Semana</th><th style={thStyle}>Día</th><th style={thStyle}>Operario</th>
                           <th style={thStyle}>Cédula</th><th style={thStyle}>Entrada</th><th style={thStyle}>Salida</th>
-                          <th style={thStyle}>Saldo</th><th style={thStyle}>Tipo</th><th style={thStyle}>Observación</th>
+                          <th style={thStyle}>Extras</th><th style={thStyle}>Extra Feriada</th><th style={thStyle}>Tipo</th><th style={thStyle}>Observación</th>
                           <th style={thStyle}>Estado</th><th style={thStyle}>Acción</th>
                         </tr>
                       </thead>
@@ -696,6 +700,7 @@ function PanelConRol({ sesion, onCerrarSesion }) {
                               <td style={tdStyle}>{f.llegada}</td>
                               <td style={tdStyle}>{f.salida}</td>
                               <td style={{ ...tdStyle, color: rol.color, fontWeight: 700 }}>{f.saldo}</td>
+                              <td style={{ ...tdStyle, color: "#B3261E", fontWeight: 700 }}>{f.extraFeriada || "0"}</td>
                               <td style={tdStyle}>{f.esFestivo ? "Festivo" : "Normal"}</td>
                               <td style={{ ...tdStyle, maxWidth: 200, fontSize: 12, color: "#5C5F5A", fontStyle: f.observacion ? "normal" : "italic" }}>{f.observacion || "Sin observación"}</td>
                               <td style={tdStyle}>
