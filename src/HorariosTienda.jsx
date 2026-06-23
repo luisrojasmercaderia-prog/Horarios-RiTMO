@@ -783,12 +783,11 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               updated.enviadoRRHH = false;
             }
           }
-          // Al marcar "Enviado a RRHH", limpiar la novedad de la fila completamente
-          // para que no quede rastro en Supabase y desaparezca del reporte del panel.
+          // Al marcar "Enviado a RRHH", solo limpiar los campos de seguimiento de novedad
+          // para que desaparezca del reporte del panel, pero SIN tocar el estado de la fila.
           if (field === "enviadoRRHH" && value === true) {
             updated = {
               ...updated,
-              estado: "",
               enviadoRRHH: false,
               fechaRegistroNovedad: "",
             };
