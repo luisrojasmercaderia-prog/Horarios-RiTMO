@@ -575,7 +575,7 @@ function PanelConRol({ sesion, onCerrarSesion }) {
               <thead>
                 <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
                   <th style={thStyle}>Tienda</th><th style={thStyle}>Operario</th><th style={thStyle}>Cédula</th>
-                  <th style={thStyle}>Tipo</th><th style={thStyle}>Fecha registro</th><th style={thStyle}>Días sin enviar</th>
+                  <th style={thStyle}>Tipo</th><th style={thStyle}>Semana</th><th style={thStyle}>Fecha registro</th><th style={thStyle}>Días sin enviar</th>
                 </tr>
               </thead>
               <tbody>
@@ -591,6 +591,21 @@ function PanelConRol({ sesion, onCerrarSesion }) {
                       <td style={{ ...tdStyle, fontWeight: 600 }}>{n.nombre}</td>
                       <td style={tdStyle}>{n.cedula || "—"}</td>
                       <td style={tdStyle}>{NOVEDAD_LABEL[n.estado] || n.estado}</td>
+                      <td style={tdStyle}>
+                        {(() => {
+                          // semanaFecha es la fecha ISO del domingo de esa semana (ej. "2026-06-14")
+                          if (!n.semanaFecha) return "—";
+                          const domingo = new Date(n.semanaFecha + "T00:00:00");
+                          const sabado = new Date(domingo);
+                          sabado.setDate(domingo.getDate() + 6);
+                          const fmt2 = (d) => `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;
+                          return (
+                            <span style={{ fontSize: 12, background: "#F0F4FF", color: "#3B4A9A", padding: "2px 7px", borderRadius: 4, fontWeight: 600, whiteSpace: "nowrap" }}>
+                              {fmt2(domingo)} – {fmt2(sabado)}
+                            </span>
+                          );
+                        })()}
+                      </td>
                       <td style={tdStyle}>{n.fechaRegistroNovedad || "—"}</td>
                       <td style={tdStyle}>
                         <span style={{ fontWeight: 700, color: vencido ? "#E53935" : "#946800", background: vencido ? "#FCEBEB" : "#FFF6DC", padding: "2px 8px", borderRadius: 4, fontSize: 12 }}>
