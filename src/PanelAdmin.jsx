@@ -435,12 +435,16 @@ function PanelConRol({ sesion, onCerrarSesion }) {
     } catch (e) { alert("Error al guardar la aprobación. Intenta de nuevo."); }
   };
 
+  // Solo mostramos novedades del formato nuevo (semanaFecha en ISO: "2026-06-14").
+  // Las del formato viejo ("semana_1", etc.) son datos legacy que ya no aplican.
+  const esFormatoNuevo = (semanaFecha) => /^\d{4}-\d{2}-\d{2}$/.test(semanaFecha);
+
   const novedadesVencidasGlobal = novedadesRRHH
-    .filter((n) => !n.enviadoRRHH && n.diasVencidos !== null && n.diasVencidos >= DIAS_LIMITE_ENVIO_RRHH)
+    .filter((n) => !n.enviadoRRHH && n.diasVencidos !== null && n.diasVencidos >= DIAS_LIMITE_ENVIO_RRHH && esFormatoNuevo(n.semanaFecha))
     .sort((a, b) => (b.diasVencidos || 0) - (a.diasVencidos || 0));
 
   const novedadesPendientesGlobal = novedadesRRHH
-    .filter((n) => !n.enviadoRRHH && n.diasVencidos !== null && n.diasVencidos < DIAS_LIMITE_ENVIO_RRHH)
+    .filter((n) => !n.enviadoRRHH && n.diasVencidos !== null && n.diasVencidos < DIAS_LIMITE_ENVIO_RRHH && esFormatoNuevo(n.semanaFecha))
     .sort((a, b) => (b.diasVencidos || 0) - (a.diasVencidos || 0));
 
   const totalesPorTienda = (() => {
@@ -593,8 +597,14 @@ function PanelConRol({ sesion, onCerrarSesion }) {
                       <td style={tdStyle}>{NOVEDAD_LABEL[n.estado] || n.estado}</td>
                       <td style={tdStyle}>
                         {(() => {
-                          // semanaFecha es la fecha ISO del domingo de esa semana (ej. "2026-06-14")
+                          // semanaFecha puede ser "2026-06-14" (nuevo) o "semana_1" (viejo)
                           if (!n.semanaFecha) return "—";
+                          // Formato viejo: semana_1, semana_2, etc. — mostrar tal cual
+                          if (!n.semanaFecha.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                            const SEMANA_LABEL = { semana_1: "Semana 1", semana_2: "Semana 2", semana_3: "Semana 3", semana_4: "Semana 4" };
+                            return <span style={{ fontSize: 12, background: "#F2EFE9", color: "#5C5F5A", padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>{SEMANA_LABEL[n.semanaFecha] || n.semanaFecha}</span>;
+                          }
+                          // Formato nuevo: ISO date
                           const domingo = new Date(n.semanaFecha + "T00:00:00");
                           const sabado = new Date(domingo);
                           sabado.setDate(domingo.getDate() + 6);
