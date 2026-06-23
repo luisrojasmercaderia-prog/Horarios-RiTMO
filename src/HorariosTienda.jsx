@@ -1275,12 +1275,18 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             {esNovedadRRHH(entry.estado) && (() => {
                               const dias = diasVencidosRRHH(entry);
                               const vencido = dias !== null && dias >= DIAS_LIMITE_ENVIO_RRHH;
+                              // El checkbox siempre visible cuando hay novedad RRHH,
+                              // sin importar si hay fechaRegistroNovedad o no.
+                              // Solo se deshabilita si la planilla está completada.
+                              const bloqueado = completado;
                               return (
                                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                                  <label className="no-print" style={{ display: "flex", alignItems: "center", cursor: completado ? "not-allowed" : "pointer" }}>
-                                    <input type="checkbox" disabled={completado} checked={entry.enviadoRRHH}
+                                  <label className="no-print"
+                                    title={bloqueado ? "Planilla completada" : "Marcar como enviado a Recursos Humanos"}
+                                    style={{ display: "flex", alignItems: "center", cursor: bloqueado ? "not-allowed" : "pointer" }}>
+                                    <input type="checkbox" disabled={bloqueado} checked={!!entry.enviadoRRHH}
                                       onChange={(ev) => updateEntry(d.dia, entry.id, "enviadoRRHH", ev.target.checked)}
-                                      style={{ width: 17, height: 17, cursor: completado ? "not-allowed" : "pointer", accentColor: "#3FBFC4" }} />
+                                      style={{ width: 17, height: 17, cursor: bloqueado ? "not-allowed" : "pointer", accentColor: "#3FBFC4" }} />
                                   </label>
                                   {vencido && (
                                     <span style={{ fontSize: 11, fontWeight: 700, color: "#B3261E", background: "#FCEBEB", padding: "2px 6px", borderRadius: 4 }}>
