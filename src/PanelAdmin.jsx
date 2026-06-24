@@ -575,11 +575,19 @@ function PanelConRol({ sesion, onCerrarSesion }) {
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingTop: 10, borderTop: "1px solid #EDEBE4" }}>
                     {tiendasGerenteVisibles.map((t) => {
                       const activo = tiendaSeleccionada === t.codigo;
+                      const empleadosTienda = new Set(
+                        filas.filter((f) => f.tiendaCodigo === t.codigo && f.cedula).map((f) => f.cedula)
+                      ).size;
                       return (
                         <button key={t.codigo} onClick={() => setTiendaSeleccionada(activo ? "" : t.codigo)}
                           style={{ display: "inline-flex", alignItems: "center", gap: 6, background: activo ? rol.color : "#FFF6EE", color: activo ? "#FFFFFF" : rol.color, border: `1px solid ${rol.color}`, borderRadius: 7, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                         >
                           <Store size={14} /> {t.nombre} ({t.codigo})
+                          {empleadosTienda > 0 && (
+                            <span style={{ background: activo ? "rgba(255,255,255,0.25)" : rol.color, color: "#FFFFFF", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>
+                              {empleadosTienda} pers.
+                            </span>
+                          )}
                         </button>
                       );
                     })}
