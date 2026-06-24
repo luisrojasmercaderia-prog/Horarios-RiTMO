@@ -256,15 +256,18 @@ function PantallaRoles({ onRolSeleccionado }) {
 
 export default function PanelAdmin() {
   const [sesion, setSesion] = useState(null);
+  const [asignacionesJefes, setAsignacionesJefes] = useState(() =>
+    Object.fromEntries(Object.entries(JEFES_ZONA).map(([k, v]) => [k, { ...v, tiendas: [...v.tiendas] }]))
+  );
   if (!sesion) return <PantallaRoles onRolSeleccionado={setSesion} />;
-  return <PanelConRol sesion={sesion} onCerrarSesion={() => setSesion(null)} />;
+  return <PanelConRol sesion={sesion} onCerrarSesion={() => setSesion(null)} asignacionesJefes={asignacionesJefes} setAsignacionesJefes={setAsignacionesJefes} />;
 }
 
-function PanelConRol({ sesion, onCerrarSesion }) {
+function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacionesJefes }) {
   const { rol: rolKey, jefeKey } = sesion;
   const rol = ROLES[rolKey];
   const jefe = jefeKey ? JEFES_ZONA[jefeKey] : null;
-  const tiendasPermitidas = jefe ? jefe.tiendas : null;
+  const tiendasPermitidas = jefe ? (asignacionesJefes[jefeKey]?.tiendas || jefe.tiendas) : null;
   const esGerenteVentas = rolKey === "gerente_ventas";
 
   const [cargando, setCargando] = useState(true);
@@ -277,9 +280,6 @@ function PanelConRol({ sesion, onCerrarSesion }) {
   const [aprobaciones, setAprobaciones] = useState({});
   const [novedadesRRHH, setNovedadesRRHH] = useState([]);
   const [modoEdicion, setModoEdicion] = useState(false);
-  const [asignacionesJefes, setAsignacionesJefes] = useState(() =>
-    Object.fromEntries(Object.entries(JEFES_ZONA).map(([k, v]) => [k, { ...v, tiendas: [...v.tiendas] }]))
-  );
 
   const cargarDatos = async () => {
     setCargando(true); setError("");
