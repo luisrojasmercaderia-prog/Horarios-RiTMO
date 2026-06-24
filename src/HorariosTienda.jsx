@@ -1300,7 +1300,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                               placeholder="—" style={(entry.cedula.trim() === "" || completado) ? disabledCellStyle : undefined} />
                           </td>
                           <td className="col-acciones no-print" style={tdStyle}>
-                            {d.entries.length > 1 && !completado && !entry.validado && (
+                            {d.entries.length > 1 && !completado && !entry.validado && modoSupervisor && (
                               <button onClick={() => removeEntry(d.dia, entry.id)} style={iconBtnStyle}>
                                 <Trash2 size={14} color="#B3261E" />
                               </button>
