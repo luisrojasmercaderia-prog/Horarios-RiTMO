@@ -126,7 +126,7 @@ function calcSaldo(prog, real) {
   const p = parseFloat(prog);
   const r = parseFloat(real);
   if (isNaN(p) || isNaN(r)) return "";
-  const diff = r - p;
+  const diff = Math.round((r - p) * 100) / 100;
   return diff === 0 ? "0" : diff > 0 ? `+${diff}` : `${diff}`;
 }
 
@@ -783,8 +783,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               updated.enviadoRRHH = false;
             }
           }
-          // Al marcar "Enviado a RRHH", solo limpiar los campos de seguimiento de novedad
-          // para que desaparezca del reporte del panel, pero SIN tocar el estado de la fila.
           if (field === "enviadoRRHH" && value === true) {
             updated = {
               ...updated,
@@ -834,13 +832,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             if (breakFinAuto) updated.breakFin = breakFinAuto;
           }
 
-          // ─── Horas reales con tolerancia de fichaje ───
           if (field === "llegadaReal" || field === "salidaReal") {
             updated.horasReales = calcularHorasRealesDesdeLlegadaSalida(
               updated.llegadaReal,
               updated.salidaReal,
-              updated.llegada,  // hora programada de llegada
-              updated.salida    // hora programada de salida
+              updated.llegada,
+              updated.salida
             );
           }
 
@@ -1275,9 +1272,6 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             {esNovedadRRHH(entry.estado) && (() => {
                               const dias = diasVencidosRRHH(entry);
                               const vencido = dias !== null && dias >= DIAS_LIMITE_ENVIO_RRHH;
-                              // El checkbox siempre visible cuando hay novedad RRHH,
-                              // sin importar si hay fechaRegistroNovedad o no.
-                              // Solo se deshabilita si la planilla está completada.
                               const bloqueado = completado;
                               return (
                                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
