@@ -282,6 +282,8 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
   const [modoEdicion, setModoEdicion] = useState(false);
   const [llegadasTardes, setLlegadasTardes] = useState([]);
   const [mostrarReporteTardes, setMostrarReporteTardes] = useState(false);
+  const [alertasAusencias, setAlertasAusencias] = useState([]);
+  const [mostrarAusencias, setMostrarAusencias] = useState(false);
 
   const cargarDatos = async () => {
     setCargando(true); setError("");
@@ -376,6 +378,38 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
         });
       });
       setLlegadasTardes(todasLlegadasTardes);
+
+      // Alerta: empleados con 2+ días programados sin fichar (excluye estados no laborables)
+      const ESTADOS_EXCLUIDOS = ["descanso", "incapacitado", "luto", "vacaciones", "licencia_maternidad"];
+      const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+
+      const mapaAusentes = {}; // key: tienda+cedula → { nombre, cedula, tienda, dias[] }
+      (horarios || []).forEach((h) => {
+        if (!h.semana_fecha || !h.semana_fecha.match(/^\d{4}-\d{2}-\d{2}$/)) return;
+        const tiendaInfo = (tiendas || []).find((t) => t.codigo === h.tienda_codigo);
+        const inicioSemana = new Date(h.semana_fecha + "T00:00:00");
+        const days = (h.datos && h.datos.days) || [];
+        days.forEach((d, idx) => {
+          const fechaDia = new Date(inicioSemana);
+          fechaDia.setDate(inicioSemana.getDate() + idx);
+          if (fechaDia >= hoy) return; // solo días pasados
+          (d.entries || []).forEach((e) => {
+            const nombre = (e.nombre || "").trim();
+            const cedula = (e.cedula || "").trim();
+            if (!nombre || !cedula) return;
+            if (ESTADOS_EXCLUIDOS.includes(e.estado)) return;
+            if (!e.estado || e.estado === "") return; // sin estado asignado
+            if (e.llegadaReal && e.llegadaReal.trim() !== "") return; // fichó OK
+            const key = `${h.tienda_codigo}__${cedula}`;
+            if (!mapaAusentes[key]) mapaAusentes[key] = { nombre, cedula, tiendaCodigo: h.tienda_codigo, tiendaNombre: tiendaInfo?.nombre || h.tienda_codigo, dias: [] };
+            mapaAusentes[key].dias.push(d.dia);
+          });
+        });
+      });
+      const alertasAusentes = Object.values(mapaAusentes).filter((a) => a.dias.length >= 2);
+      setAlertasAusencias(alertasAusentes);
     } catch (e) {
       setError("No se pudieron cargar los datos. Intenta de nuevo.");
     } finally {
@@ -509,6 +543,55 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       </div>
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 28px 60px" }}>
+
+        {/* Alerta ausencias +2 días sin fichar — solo jefe_zona */}
+        {rolKey === "jefe_zona" && !cargando && !error && alertasAusencias.length > 0 && (
+          <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 22, marginBottom: 22, border: "1.5px solid #E53935" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: mostrarAusencias ? 14 : 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <AlertTriangle size={18} color="#E53935" />
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#E53935" }}>Empleados sin fichar hace 2+ días</div>
+                <span style={{ background: "#E53935", color: "white", borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 700 }}>
+                  {alertasAusencias.length} empleado{alertasAusencias.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <button onClick={() => setMostrarAusencias(!mostrarAusencias)} style={{ ...btnStyle("#FFF6EE", rol.color, false), border: `1px solid ${rol.color}` }}>
+                {mostrarAusencias ? "Ocultar" : "Ver detalle"}
+              </button>
+            </div>
+            {mostrarAusencias && (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                    <th style={thStyle}>Tienda</th>
+                    <th style={thStyle}>Operario</th>
+                    <th style={thStyle}>Cédula</th>
+                    <th style={thStyle}>Días sin fichar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {alertasAusencias.map((a, i) => (
+                    <tr key={i} style={{ borderTop: "1px solid #EDEBE4", background: a.dias.length >= 4 ? "#FDECEA" : "white" }}>
+                      <td style={tdStyle}>
+                        <button onClick={() => setTiendaSeleccionada(a.tiendaCodigo === tiendaSeleccionada ? "" : a.tiendaCodigo)}
+                          style={{ background: "transparent", border: "none", color: rol.color, fontWeight: 600, cursor: "pointer", padding: 0, fontSize: 12.5, textDecoration: "underline" }}>
+                          {a.tiendaNombre}
+                        </button>
+                      </td>
+                      <td style={{ ...tdStyle, fontWeight: 600 }}>{a.nombre}</td>
+                      <td style={tdStyle}>{a.cedula}</td>
+                      <td style={tdStyle}>
+                        <span style={{ fontWeight: 700, color: "#E53935", background: "#FCEBEB", padding: "2px 8px", borderRadius: 4, fontSize: 12 }}>
+                          {a.dias.length} día{a.dias.length !== 1 ? "s" : ""}: {a.dias.join(", ")}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
 
         {/* Novedades RRHH — oculto para Gerente de Ventas */}
         {!esGerenteVentas && !cargando && !error && (novedadesVencidasGlobal.length > 0 || novedadesPendientesGlobal.length > 0) && (
