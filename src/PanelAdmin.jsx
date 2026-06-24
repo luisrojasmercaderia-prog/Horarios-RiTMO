@@ -709,7 +709,7 @@ function PanelConRol({ sesion, onCerrarSesion }) {
         )}
       </div>
 
-      {tiendaSeleccionada && (
+      {tiendaSeleccionada && !esGerenteVentas && (
         <div style={{ borderTop: `4px solid ${rol.color}`, marginTop: 8 }}>
           <HorariosTienda codigoTienda={tiendaSeleccionada} onSalir={() => setTiendaSeleccionada("")} />
         </div>
