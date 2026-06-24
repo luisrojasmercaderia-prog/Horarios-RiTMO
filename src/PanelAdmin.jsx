@@ -353,24 +353,23 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
             const nombre = (e.nombre || "").trim();
             const cedula = (e.cedula || "").trim();
             if (!nombre || !cedula) return;
-            if (!e.llegada || !e.horasProgramadas) return;
-            // Extraer hora programada de entrada (ej: "08:00 - 17:00" → "08:00")
-            const match = String(e.horasProgramadas).match(/(\d{1,2}:\d{2})/);
-            if (!match) return;
-            const [hProg, mProg] = match[1].split(":").map(Number);
-            const [hLleg, mLleg] = String(e.llegada).split(":").map(Number);
-            if (isNaN(hProg) || isNaN(hLleg)) return;
-            const minutosProg = hProg * 60 + mProg;
-            const minutosLleg = hLleg * 60 + mLleg;
-            const diff = minutosLleg - minutosProg;
-            if (diff <= 0) return; // llegó a tiempo o antes
+            // llegada = hora programada, llegadaReal = hora que fichó
+            const horaProg = (e.llegada || "").trim();
+            const horaReal = (e.llegadaReal || "").trim();
+            if (!horaProg || !horaReal) return;
+            const parseMin = (t) => { const [h, m] = t.split(":").map(Number); return isNaN(h) ? null : h * 60 + m; };
+            const minProg = parseMin(horaProg);
+            const minReal = parseMin(horaReal);
+            if (minProg === null || minReal === null) return;
+            const diff = minReal - minProg;
+            if (diff <= 0) return;
             todasLlegadasTardes.push({
               tiendaCodigo: h.tienda_codigo,
               tiendaNombre: tiendaInfo?.nombre || h.tienda_codigo,
               semanaFecha: h.semana_fecha,
               dia: d.dia, nombre, cedula,
-              horaProgramada: match[1],
-              horaLlegada: e.llegada,
+              horaProgramada: horaProg,
+              horaLlegada: horaReal,
               minutesTarde: diff,
             });
           });
