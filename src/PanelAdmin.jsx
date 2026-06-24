@@ -272,6 +272,7 @@ function PanelConRol({ sesion, onCerrarSesion }) {
   const [filas, setFilas] = useState([]);
   const [listaTiendas, setListaTiendas] = useState([]);
   const [tiendaSeleccionada, setTiendaSeleccionada] = useState("");
+  const [jefeZonaFiltro, setJefeZonaFiltro] = useState(null);
   const [filasExtras, setFilasExtras] = useState([]);
   const [aprobaciones, setAprobaciones] = useState({});
   const [novedadesRRHH, setNovedadesRRHH] = useState([]);
@@ -443,6 +444,10 @@ function PanelConRol({ sesion, onCerrarSesion }) {
     XLSX.writeFile(libro, "Novedades_Pendientes_RRHH.xlsx");
   };
 
+  const tiendasGerenteVisibles = jefeZonaFiltro
+    ? listaTiendas.filter((t) => JEFES_ZONA[jefeZonaFiltro].tiendas.includes(t.codigo))
+    : [];
+
   return (
     <div style={{ minHeight: "100vh", background: "#FFF6EE", fontFamily: "'Century Gothic', 'CenturyGothic', 'AppleGothic', Futura, sans-serif", color: "#241C14" }}>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
@@ -544,34 +549,44 @@ function PanelConRol({ sesion, onCerrarSesion }) {
 
           {!cargando && !error && listaTiendas.length > 0 && (
             esGerenteVentas ? (
-              /* Gerente de Ventas: tiendas agrupadas por Jefe de Zona */
-              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                {Object.entries(JEFES_ZONA).map(([jefeKey, jefeInfo]) => {
-                  const tiendasDeEsteJefe = listaTiendas.filter((t) => jefeInfo.tiendas.includes(t.codigo));
-                  if (tiendasDeEsteJefe.length === 0) return null;
-                  return (
-                    <div key={jefeKey}>
-                      <div style={{ fontSize: 11.5, fontWeight: 700, color: "#5C5F5A", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {/* Botones por Jefe de Zona */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {Object.entries(JEFES_ZONA).map(([key, jefeInfo]) => {
+                    const tiendasDelJefe = listaTiendas.filter((t) => jefeInfo.tiendas.includes(t.codigo));
+                    if (tiendasDelJefe.length === 0) return null;
+                    const activo = jefeZonaFiltro === key;
+                    return (
+                      <button key={key}
+                        onClick={() => { setJefeZonaFiltro(activo ? null : key); setTiendaSeleccionada(""); }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 8, background: activo ? rol.color : "#FFF6EE", color: activo ? "#FFFFFF" : rol.color, border: `2px solid ${rol.color}`, borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+                      >
                         👤 {jefeInfo.nombre}
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                        {tiendasDeEsteJefe.map((t) => {
-                          const activo = tiendaSeleccionada === t.codigo;
-                          return (
-                            <button key={t.codigo} onClick={() => setTiendaSeleccionada(activo ? "" : t.codigo)}
-                              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: activo ? rol.color : "#FFF6EE", color: activo ? "#FFFFFF" : rol.color, border: `1px solid ${rol.color}`, borderRadius: 7, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-                            >
-                              <Store size={14} /> {t.nombre} ({t.codigo})
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
+                        <span style={{ background: activo ? "rgba(255,255,255,0.25)" : rol.color, color: "#FFFFFF", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>
+                          {tiendasDelJefe.length}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Tiendas del jefe seleccionado */}
+                {jefeZonaFiltro && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingTop: 10, borderTop: "1px solid #EDEBE4" }}>
+                    {tiendasGerenteVisibles.map((t) => {
+                      const activo = tiendaSeleccionada === t.codigo;
+                      return (
+                        <button key={t.codigo} onClick={() => setTiendaSeleccionada(activo ? "" : t.codigo)}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 6, background: activo ? rol.color : "#FFF6EE", color: activo ? "#FFFFFF" : rol.color, border: `1px solid ${rol.color}`, borderRadius: 7, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                        >
+                          <Store size={14} /> {t.nombre} ({t.codigo})
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ) : (
-              /* Otros roles: todos los botones juntos con badge de novedades */
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                 {listaTiendas.map((t) => {
                   const activo = tiendaSeleccionada === t.codigo;
