@@ -276,6 +276,10 @@ function PanelConRol({ sesion, onCerrarSesion }) {
   const [filasExtras, setFilasExtras] = useState([]);
   const [aprobaciones, setAprobaciones] = useState({});
   const [novedadesRRHH, setNovedadesRRHH] = useState([]);
+  const [modoEdicion, setModoEdicion] = useState(false);
+  const [asignacionesJefes, setAsignacionesJefes] = useState(() =>
+    Object.fromEntries(Object.entries(JEFES_ZONA).map(([k, v]) => [k, { ...v, tiendas: [...v.tiendas] }]))
+  );
 
   const cargarDatos = async () => {
     setCargando(true); setError("");
@@ -550,48 +554,94 @@ function PanelConRol({ sesion, onCerrarSesion }) {
           {!cargando && !error && listaTiendas.length > 0 && (
             esGerenteVentas ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {/* Botones por Jefe de Zona */}
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-                  {Object.entries(JEFES_ZONA).map(([key, jefeInfo]) => {
-                    const tiendasDelJefe = listaTiendas.filter((t) => jefeInfo.tiendas.includes(t.codigo));
-                    if (tiendasDelJefe.length === 0) return null;
-                    const activo = jefeZonaFiltro === key;
-                    return (
-                      <button key={key}
-                        onClick={() => { setJefeZonaFiltro(activo ? null : key); setTiendaSeleccionada(""); }}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 8, background: activo ? rol.color : "#FFF6EE", color: activo ? "#FFFFFF" : rol.color, border: `2px solid ${rol.color}`, borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-                      >
-                        👤 {jefeInfo.nombre}
-                        <span style={{ background: activo ? "rgba(255,255,255,0.25)" : rol.color, color: "#FFFFFF", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>
-                          {tiendasDelJefe.length}
-                        </span>
-                      </button>
-                    );
-                  })}
+
+                {/* Botón editar asignaciones */}
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button onClick={() => { setModoEdicion(!modoEdicion); setJefeZonaFiltro(null); setTiendaSeleccionada(""); }}
+                    style={{ ...btnStyle(modoEdicion ? rol.color : "#FFF6EE", modoEdicion ? "#FFFFFF" : rol.color, false), border: `1px solid ${rol.color}` }}>
+                    {modoEdicion ? "✓ Listo" : "✏ Editar asignaciones"}
+                  </button>
                 </div>
 
-                {/* Tiendas del jefe seleccionado */}
-                {jefeZonaFiltro && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingTop: 10, borderTop: "1px solid #EDEBE4" }}>
-                    {tiendasGerenteVisibles.map((t) => {
-                      const activo = tiendaSeleccionada === t.codigo;
-                      const empleadosTienda = new Set(
-                        filas.filter((f) => f.tiendaCodigo === t.codigo && f.cedula).map((f) => f.cedula)
-                      ).size;
-                      return (
-                        <button key={t.codigo} onClick={() => setTiendaSeleccionada(activo ? "" : t.codigo)}
-                          style={{ display: "inline-flex", alignItems: "center", gap: 6, background: activo ? rol.color : "#FFF6EE", color: activo ? "#FFFFFF" : rol.color, border: `1px solid ${rol.color}`, borderRadius: 7, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-                        >
-                          <Store size={14} /> {t.nombre} ({t.codigo})
-                          {empleadosTienda > 0 && (
-                            <span style={{ background: activo ? "rgba(255,255,255,0.25)" : rol.color, color: "#FFFFFF", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>
-                              {empleadosTienda} pers.
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
+                {/* Modo edición: reasignar tiendas */}
+                {modoEdicion ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ fontSize: 12, color: "#5C5F5A", marginBottom: 4 }}>Selecciona a qué Jefe de Zona pertenece cada tienda:</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 8 }}>
+                      {listaTiendas.map((t) => {
+                        const jefeActual = Object.entries(asignacionesJefes).find(([, j]) => j.tiendas.includes(t.codigo))?.[0] || "";
+                        return (
+                          <div key={t.codigo} style={{ display: "flex", alignItems: "center", gap: 10, background: "#FAFAF7", border: "1px solid #EDEBE4", borderRadius: 7, padding: "8px 12px" }}>
+                            <Store size={13} color={rol.color} style={{ flexShrink: 0 }} />
+                            <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>{t.nombre} <span style={{ color: "#5C5F5A", fontWeight: 400 }}>({t.codigo})</span></span>
+                            <select value={jefeActual}
+                              onChange={(e) => {
+                                const nuevoJefe = e.target.value;
+                                setAsignacionesJefes((prev) => {
+                                  const copia = Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, { ...v, tiendas: [...v.tiendas] }]));
+                                  Object.keys(copia).forEach((k) => { copia[k].tiendas = copia[k].tiendas.filter((c) => c !== t.codigo); });
+                                  if (nuevoJefe) copia[nuevoJefe].tiendas.push(t.codigo);
+                                  return copia;
+                                });
+                              }}
+                              style={{ border: `1px solid ${rol.color}`, borderRadius: 5, padding: "4px 8px", fontSize: 12, fontFamily: "inherit", color: "#241C14", background: "white", cursor: "pointer" }}
+                            >
+                              <option value="">— Sin asignar —</option>
+                              {Object.entries(asignacionesJefes).map(([k, j]) => (
+                                <option key={k} value={k}>{j.nombre}</option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
+                ) : (
+                  <>
+                    {/* Botones por Jefe de Zona */}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                      {Object.entries(asignacionesJefes).map(([key, jefeInfo]) => {
+                        const tiendasDelJefe = listaTiendas.filter((t) => jefeInfo.tiendas.includes(t.codigo));
+                        if (tiendasDelJefe.length === 0) return null;
+                        const activo = jefeZonaFiltro === key;
+                        return (
+                          <button key={key}
+                            onClick={() => { setJefeZonaFiltro(activo ? null : key); setTiendaSeleccionada(""); }}
+                            style={{ display: "inline-flex", alignItems: "center", gap: 8, background: activo ? rol.color : "#FFF6EE", color: activo ? "#FFFFFF" : rol.color, border: `2px solid ${rol.color}`, borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+                          >
+                            👤 {jefeInfo.nombre}
+                            <span style={{ background: activo ? "rgba(255,255,255,0.25)" : rol.color, color: "#FFFFFF", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>
+                              {tiendasDelJefe.length}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Tiendas del jefe seleccionado */}
+                    {jefeZonaFiltro && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingTop: 10, borderTop: "1px solid #EDEBE4" }}>
+                        {listaTiendas.filter((t) => asignacionesJefes[jefeZonaFiltro]?.tiendas.includes(t.codigo)).map((t) => {
+                          const activo = tiendaSeleccionada === t.codigo;
+                          const empleadosTienda = new Set(
+                            filas.filter((f) => f.tiendaCodigo === t.codigo && f.cedula).map((f) => f.cedula)
+                          ).size;
+                          return (
+                            <button key={t.codigo} onClick={() => setTiendaSeleccionada(activo ? "" : t.codigo)}
+                              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: activo ? rol.color : "#FFF6EE", color: activo ? "#FFFFFF" : rol.color, border: `1px solid ${rol.color}`, borderRadius: 7, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                            >
+                              <Store size={14} /> {t.nombre} ({t.codigo})
+                              {empleadosTienda > 0 && (
+                                <span style={{ background: activo ? "rgba(255,255,255,0.25)" : rol.color, color: "#FFFFFF", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>
+                                  {empleadosTienda} pers.
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
