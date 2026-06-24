@@ -280,6 +280,8 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
   const [aprobaciones, setAprobaciones] = useState({});
   const [novedadesRRHH, setNovedadesRRHH] = useState([]);
   const [modoEdicion, setModoEdicion] = useState(false);
+  const [llegadasTardes, setLlegadasTardes] = useState([]);
+  const [mostrarReporteTardes, setMostrarReporteTardes] = useState(false);
 
   const cargarDatos = async () => {
     setCargando(true); setError("");
@@ -341,6 +343,40 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       setFilasExtras(todasFilasExtras);
       setAprobaciones(mapaAprobaciones);
       setNovedadesRRHH(todasNovedades);
+
+      const todasLlegadasTardes = [];
+      (horarios || []).forEach((h) => {
+        const tiendaInfo = (tiendas || []).find((t) => t.codigo === h.tienda_codigo);
+        const days = (h.datos && h.datos.days) || [];
+        days.forEach((d) => {
+          (d.entries || []).forEach((e) => {
+            const nombre = (e.nombre || "").trim();
+            const cedula = (e.cedula || "").trim();
+            if (!nombre || !cedula) return;
+            if (!e.llegada || !e.horasProgramadas) return;
+            // Extraer hora programada de entrada (ej: "08:00 - 17:00" → "08:00")
+            const match = String(e.horasProgramadas).match(/(\d{1,2}:\d{2})/);
+            if (!match) return;
+            const [hProg, mProg] = match[1].split(":").map(Number);
+            const [hLleg, mLleg] = String(e.llegada).split(":").map(Number);
+            if (isNaN(hProg) || isNaN(hLleg)) return;
+            const minutosProg = hProg * 60 + mProg;
+            const minutosLleg = hLleg * 60 + mLleg;
+            const diff = minutosLleg - minutosProg;
+            if (diff <= 0) return; // llegó a tiempo o antes
+            todasLlegadasTardes.push({
+              tiendaCodigo: h.tienda_codigo,
+              tiendaNombre: tiendaInfo?.nombre || h.tienda_codigo,
+              semanaFecha: h.semana_fecha,
+              dia: d.dia, nombre, cedula,
+              horaProgramada: match[1],
+              horaLlegada: e.llegada,
+              minutesTarde: diff,
+            });
+          });
+        });
+      });
+      setLlegadasTardes(todasLlegadasTardes);
     } catch (e) {
       setError("No se pudieron cargar los datos. Intenta de nuevo.");
     } finally {
@@ -756,6 +792,77 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
             );
           })()}
         </div>
+
+        {/* Reporte llegadas tardes — solo jefe_zona */}
+        {rolKey === "jefe_zona" && !cargando && !error && llegadasTardes.length > 0 && (
+          <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 22, marginTop: 24, border: "1px solid #EDEBE4" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <AlertTriangle size={18} color="#E85D1F" />
+                <div style={{ fontSize: 15, fontWeight: 700 }}>Reporte de llegadas tardes</div>
+                <span style={{ background: "#E85D1F", color: "white", borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 700 }}>
+                  {llegadasTardes.length} registro{llegadasTardes.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => {
+                  const SEMANA_LABEL = { semana_1: "Semana 1", semana_2: "Semana 2", semana_3: "Semana 3", semana_4: "Semana 4" };
+                  const data = llegadasTardes.map((r) => ({
+                    Tienda: r.tiendaNombre, Semana: SEMANA_LABEL[r.semanaFecha] || r.semanaFecha,
+                    Día: r.dia, Operario: r.nombre, Cédula: r.cedula,
+                    "Hora programada": r.horaProgramada, "Hora llegada": r.horaLlegada,
+                    "Minutos tarde": r.minutesTarde,
+                  }));
+                  const hoja = XLSX.utils.json_to_sheet(data);
+                  hoja["!cols"] = [{ wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 26 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 14 }];
+                  const libro = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(libro, hoja, "Llegadas Tardes");
+                  XLSX.writeFile(libro, `Llegadas_Tardes_${jefe ? jefe.nombre.replace(/\s+/g, "_") : "Zona"}.xlsx`);
+                }} style={btnStyle("#3FBFC4", "#FFFFFF", false)}>
+                  <FileSpreadsheet size={13} /> Exportar
+                </button>
+                <button onClick={() => setMostrarReporteTardes(!mostrarReporteTardes)} style={{ ...btnStyle("#FFF6EE", rol.color, false), border: `1px solid ${rol.color}` }}>
+                  {mostrarReporteTardes ? "Ocultar" : "Ver detalle"}
+                </button>
+              </div>
+            </div>
+            {mostrarReporteTardes && (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                    <th style={thStyle}>Tienda</th><th style={thStyle}>Semana</th><th style={thStyle}>Día</th>
+                    <th style={thStyle}>Operario</th><th style={thStyle}>Cédula</th>
+                    <th style={thStyle}>Hora prog.</th><th style={thStyle}>Hora llegada</th><th style={thStyle}>Min. tarde</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {llegadasTardes
+                    .filter((r) => !tiendaSeleccionada || r.tiendaCodigo === tiendaSeleccionada)
+                    .sort((a, b) => b.minutesTarde - a.minutesTarde)
+                    .map((r, i) => {
+                      const SEMANA_LABEL = { semana_1: "Semana 1", semana_2: "Semana 2", semana_3: "Semana 3", semana_4: "Semana 4" };
+                      return (
+                        <tr key={i} style={{ borderTop: "1px solid #EDEBE4", background: r.minutesTarde >= 30 ? "#FFF0E8" : "white" }}>
+                          <td style={tdStyle}><button onClick={() => setTiendaSeleccionada(r.tiendaCodigo === tiendaSeleccionada ? "" : r.tiendaCodigo)} style={{ background: "transparent", border: "none", color: rol.color, fontWeight: 600, cursor: "pointer", padding: 0, fontSize: 12.5, textDecoration: "underline" }}>{r.tiendaNombre}</button></td>
+                          <td style={tdStyle}>{SEMANA_LABEL[r.semanaFecha] || r.semanaFecha}</td>
+                          <td style={tdStyle}>{r.dia}</td>
+                          <td style={{ ...tdStyle, fontWeight: 600 }}>{r.nombre}</td>
+                          <td style={tdStyle}>{r.cedula}</td>
+                          <td style={tdStyle}>{r.horaProgramada}</td>
+                          <td style={{ ...tdStyle, color: "#E85D1F", fontWeight: 700 }}>{r.horaLlegada}</td>
+                          <td style={tdStyle}>
+                            <span style={{ fontWeight: 700, color: r.minutesTarde >= 30 ? "#E53935" : "#E85D1F", background: r.minutesTarde >= 30 ? "#FCEBEB" : "#FFF0E8", padding: "2px 8px", borderRadius: 4, fontSize: 12 }}>
+                              +{r.minutesTarde} min
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
 
         {/* Gráficas */}
         {!cargando && !error && totalesParaGraficas.length > 0 && (
