@@ -195,7 +195,7 @@ function calcularHorasRealesDesdeLlegadaSalida(llegadaReal, salidaReal, llegadaP
 }
 
 function esNoLaborable(estado) {
-  return ["descanso", "incapacitado", "licencia_maternidad", "luto"].includes(estado);
+  return ["descanso", "incapacitado", "licencia_maternidad", "luto", "vacaciones"].includes(estado);
 }
 
 function esNovedadRRHH(estado) {
@@ -1185,6 +1185,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                               <option value="feriado_manana">Feriado mañana</option>
                               <option value="feriado_tarde">Feriado tarde</option>
                               <option value="descanso">Descanso</option>
+                              <option value="vacaciones">Vacaciones</option>
                               <option value="incapacitado">Incapacitado</option>
                               <option value="licencia_maternidad">Licencia de maternidad</option>
                               <option value="luto">Luto</option>
