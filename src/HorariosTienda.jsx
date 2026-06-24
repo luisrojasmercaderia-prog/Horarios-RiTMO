@@ -1470,11 +1470,21 @@ function ModalEmpleados({ codigoTienda, empleados, onClose, onRecargar }) {
     finally { setGuardando(false); }
   };
 
-  const handleEliminar = async (id) => {
+  const [confirmEliminar, setConfirmEliminar] = useState(null); // { id, nombre }
+  const [motivoEliminar, setMotivoEliminar] = useState("");
+
+  const handleEliminar = (emp) => {
+    setConfirmEliminar(emp);
+    setMotivoEliminar("");
+  };
+
+  const handleConfirmarEliminar = async () => {
+    if (!motivoEliminar) return;
     try {
-      await supabase.from("empleados").delete().eq("id", id);
+      await supabase.from("empleados").delete().eq("id", confirmEliminar.id);
       await onRecargar();
-      if (editandoId === id) limpiarFormulario();
+      if (editandoId === confirmEliminar.id) limpiarFormulario();
+      setConfirmEliminar(null);
     } catch (err) { setError("No se pudo eliminar. Intenta de nuevo."); }
   };
 
@@ -1511,13 +1521,43 @@ function ModalEmpleados({ codigoTienda, empleados, onClose, onRecargar }) {
                   <td style={tdStyle}>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button onClick={() => handleEditar(emp)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#1B8388", fontSize: 12, fontWeight: 600 }}>Editar</button>
-                      <button onClick={() => handleEliminar(emp.id)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#791F1F", fontSize: 12, fontWeight: 600 }}>Eliminar</button>
+                      <button onClick={() => handleEliminar(emp)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#791F1F", fontSize: 12, fontWeight: 600 }}>Eliminar</button>
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        )}
+
+        {/* Modal confirmación de eliminación */}
+        {confirmEliminar && (
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(36,28,20,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60 }}>
+            <div style={{ background: "white", borderRadius: 10, padding: 24, maxWidth: 380, width: "100%", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#791F1F", marginBottom: 8 }}>Eliminar empleado</div>
+              <div style={{ fontSize: 13, color: "#241C14", marginBottom: 16 }}>
+                Vas a eliminar a <strong>{confirmEliminar.nombre}</strong>. Selecciona el motivo:
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
+                {["Cambio de tienda", "Ya no trabaja en Ritmo"].map((motivo) => (
+                  <label key={motivo} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, fontWeight: motivoEliminar === motivo ? 700 : 400, color: motivoEliminar === motivo ? "#791F1F" : "#241C14", background: motivoEliminar === motivo ? "#FCEBEB" : "#FAFAF7", border: motivoEliminar === motivo ? "1.5px solid #791F1F" : "1px solid #EDEBE4", borderRadius: 7, padding: "10px 14px" }}>
+                    <input type="radio" name="motivo" value={motivo} checked={motivoEliminar === motivo} onChange={() => setMotivoEliminar(motivo)} style={{ accentColor: "#791F1F" }} />
+                    {motivo}
+                  </label>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={handleConfirmarEliminar} disabled={!motivoEliminar}
+                  style={{ flex: 1, background: motivoEliminar ? "#791F1F" : "#EDEBE4", color: motivoEliminar ? "white" : "#5C5F5A", border: "none", borderRadius: 7, padding: "9px 0", fontSize: 13, fontWeight: 700, cursor: motivoEliminar ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+                  Confirmar eliminación
+                </button>
+                <button onClick={() => setConfirmEliminar(null)}
+                  style={{ flex: 1, background: "#FAFAF7", color: "#5C5F5A", border: "1px solid #EDEBE4", borderRadius: 7, padding: "9px 0", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
