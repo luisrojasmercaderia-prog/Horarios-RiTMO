@@ -106,6 +106,9 @@ function calcularConsolidadoTienda(datos) {
   return Object.values(mapa);
 }
 
+// Filas que el Jefe de Zona debe aprobar: toda fila con alguna novedad de
+// nómina por pagar — horas extra (saldo > 0), horas dominicales/festivas
+// (trabajó domingo o festivo) u horas nocturnas (desde las 21:00).
 function extraerFilasConExtras(datos, tiendaCodigo, semanaFecha) {
   const resultado = [];
   const days = (datos && datos.days) || [];
@@ -114,17 +117,20 @@ function extraerFilasConExtras(datos, tiendaCodigo, semanaFecha) {
       const nombre = (e.nombre || "").trim();
       const cedula = (e.cedula || "").trim();
       if (!nombre || !cedula) return;
-      const saldo = parseFloat(e.saldo) || 0;
-      if (saldo <= 0) return;
       const esFestivo = d.dia === "Domingo" || e.esFestivo;
       const realesNum = parseFloat(e.horasReales) || 0;
-      const excedente = esFestivo ? Math.max(0, realesNum - 8) : 0;
+      const saldo = parseFloat(e.saldo) || 0;
+      const nocturnasNum = parseFloat(e.horasNocturnas) || 0;
+      const extra = saldo > 0 ? saldo : 0;
+      const festivas = esFestivo ? realesNum : 0;
+      // Sin novedad por aprobar → no se lista.
+      if (extra <= 0 && festivas <= 0 && nocturnasNum <= 0) return;
       resultado.push({
         entryId: e.id, tiendaCodigo, semanaFecha, dia: d.dia, nombre, cedula,
         llegada: e.llegada || "", salida: e.salida || "",
         horasProgramadas: e.horasProgramadas || "", horasReales: e.horasReales || "",
         saldo: e.saldo || "", esFestivo,
-        extraFeriada: excedente > 0 ? `+${excedente}` : "0",
+        extra, festivas, nocturnas: nocturnasNum,
         observacion: e.observacion || "", aprobacionEstado: null,
       });
     });
@@ -561,42 +567,40 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
     const mapa = {};
     filasExtras.forEach((f) => {
       if (f.aprobacionEstado !== "aprobado") return;
-      const extra = parseFloat(f.saldo) || 0;
-      if (extra <= 0) return;
       const codigo = f.tiendaCodigo;
       if (!mapa[codigo]) {
         const nombre = listaTiendas.find((t) => t.codigo === codigo)?.nombre || codigo;
-        mapa[codigo] = { tiendaCodigo: codigo, tiendaNombre: nombre, extrasNormales: 0, extrasFestivas: 0, registros: 0 };
+        mapa[codigo] = { tiendaCodigo: codigo, tiendaNombre: nombre, extras: 0, festivas: 0, nocturnas: 0, registros: 0 };
       }
-      if (f.esFestivo) mapa[codigo].extrasFestivas += extra;
-      else mapa[codigo].extrasNormales += extra;
+      mapa[codigo].extras += f.extra || 0;
+      mapa[codigo].festivas += f.festivas || 0;
+      mapa[codigo].nocturnas += f.nocturnas || 0;
       mapa[codigo].registros += 1;
     });
     return Object.values(mapa)
-      .map((t) => ({ ...t, total: t.extrasNormales + t.extrasFestivas }))
-      .sort((a, b) => b.total - a.total);
+      .sort((a, b) => (b.extras + b.festivas + b.nocturnas) - (a.extras + a.festivas + a.nocturnas));
   })();
 
   const totalAprobadasGeneral = resumenAprobadasPorTienda.reduce(
     (acc, t) => ({
-      extrasNormales: acc.extrasNormales + t.extrasNormales,
-      extrasFestivas: acc.extrasFestivas + t.extrasFestivas,
-      total: acc.total + t.total,
+      extras: acc.extras + t.extras,
+      festivas: acc.festivas + t.festivas,
+      nocturnas: acc.nocturnas + t.nocturnas,
       registros: acc.registros + t.registros,
     }),
-    { extrasNormales: 0, extrasFestivas: 0, total: 0, registros: 0 }
+    { extras: 0, festivas: 0, nocturnas: 0, registros: 0 }
   );
 
   const exportarAprobadasExcel = () => {
     const data = resumenAprobadasPorTienda.map((t) => ({
       Tienda: t.tiendaNombre, "Código": t.tiendaCodigo,
-      "Extras Normales": Number(fmt(t.extrasNormales)),
-      "Extras Festivas/Dominicales": Number(fmt(t.extrasFestivas)),
-      "Total Aprobado": Number(fmt(t.total)),
+      "Horas Extra": Number(fmt(t.extras)),
+      "Horas Festivas/Dominicales": Number(fmt(t.festivas)),
+      "Horas Nocturnas": Number(fmt(t.nocturnas)),
       "N° Registros": t.registros,
     }));
     const hoja = XLSX.utils.json_to_sheet(data);
-    hoja["!cols"] = [{ wch: 24 }, { wch: 10 }, { wch: 16 }, { wch: 26 }, { wch: 16 }, { wch: 14 }];
+    hoja["!cols"] = [{ wch: 24 }, { wch: 10 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 14 }];
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Horas aprobadas");
     XLSX.writeFile(libro, "Resumen_Horas_Aprobadas_por_Tienda.xlsx");
@@ -740,28 +744,28 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
               )}
             </div>
             <div style={{ fontSize: 12, color: "#5C5F5A", marginTop: 10, marginBottom: 14 }}>
-              Horas extra que el Jefe de Zona ya <strong>aprobó</strong>, sumadas por tienda. Las extras pendientes o rechazadas no se incluyen.
+              Horas que el Jefe de Zona ya <strong>aprobó</strong>, sumadas por tienda: extras, dominicales/festivas y nocturnas. Las novedades pendientes o rechazadas no se incluyen.
             </div>
             {resumenAprobadasPorTienda.length === 0 ? (
               <div style={{ fontSize: 13, color: "#5C5F5A", background: "#FAFAF7", padding: "12px 14px", borderRadius: 6 }}>
-                Todavía no hay horas extra aprobadas por el Jefe de Zona en el periodo.
+                Todavía no hay novedades aprobadas por el Jefe de Zona en el periodo.
               </div>
             ) : (
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
-                      <th style={thStyle}>Tienda</th><th style={thStyle}>Extras normales</th>
-                      <th style={thStyle}>Extras festivas/dominicales</th><th style={thStyle}>Total aprobado</th><th style={thStyle}>Registros</th>
+                      <th style={thStyle}>Tienda</th><th style={thStyle}>Horas extra</th>
+                      <th style={thStyle}>Festivas/dominicales</th><th style={thStyle}>Nocturnas</th><th style={thStyle}>Registros</th>
                     </tr>
                   </thead>
                   <tbody>
                     {resumenAprobadasPorTienda.map((t) => (
                       <tr key={t.tiendaCodigo} style={{ borderTop: "1px solid #EDEBE4" }}>
                         <td style={{ ...tdStyle, fontWeight: 600 }}>{t.tiendaNombre} <span style={{ color: "#9A958C", fontWeight: 400 }}>({t.tiendaCodigo})</span></td>
-                        <td style={tdStyle}>{fmt(t.extrasNormales)}</td>
-                        <td style={tdStyle}>{fmt(t.extrasFestivas)}</td>
-                        <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32" }}>{fmt(t.total)}</td>
+                        <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32" }}>{fmt(t.extras)}</td>
+                        <td style={tdStyle}>{fmt(t.festivas)}</td>
+                        <td style={tdStyle}>{fmt(t.nocturnas)}</td>
                         <td style={tdStyle}>{t.registros}</td>
                       </tr>
                     ))}
@@ -769,9 +773,9 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                   <tfoot>
                     <tr style={{ borderTop: "2px solid #2E7D32", background: "#F1F8E9" }}>
                       <td style={{ ...tdStyle, fontWeight: 700 }}>TOTAL GENERAL</td>
-                      <td style={{ ...tdStyle, fontWeight: 700 }}>{fmt(totalAprobadasGeneral.extrasNormales)}</td>
-                      <td style={{ ...tdStyle, fontWeight: 700 }}>{fmt(totalAprobadasGeneral.extrasFestivas)}</td>
-                      <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32" }}>{fmt(totalAprobadasGeneral.total)}</td>
+                      <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32" }}>{fmt(totalAprobadasGeneral.extras)}</td>
+                      <td style={{ ...tdStyle, fontWeight: 700 }}>{fmt(totalAprobadasGeneral.festivas)}</td>
+                      <td style={{ ...tdStyle, fontWeight: 700 }}>{fmt(totalAprobadasGeneral.nocturnas)}</td>
                       <td style={{ ...tdStyle, fontWeight: 700 }}>{totalAprobadasGeneral.registros}</td>
                     </tr>
                   </tfoot>
@@ -1103,16 +1107,17 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                   </table>
                 )}
 
-                {/* Aprobación de extras — oculto para Gerente de Ventas */}
+                {/* Aprobación de novedades de nómina — oculto para Gerente de Ventas */}
                 {!esGerenteVentas && filasExtrasTienda.length > 0 && (
                   <div style={{ marginTop: 20 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: rol.color, marginBottom: 10 }}>Aprobación de horas extras</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: rol.color, marginBottom: 4 }}>Aprobación de novedades de nómina</div>
+                    <div style={{ fontSize: 12, color: "#5C5F5A", marginBottom: 10 }}>Aprueba o rechaza las horas extra, dominicales/festivas y nocturnas de cada colaborador.</div>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
                         <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
                           <th style={thStyle}>Semana</th><th style={thStyle}>Día</th><th style={thStyle}>Operario</th>
                           <th style={thStyle}>Cédula</th><th style={thStyle}>Entrada</th><th style={thStyle}>Salida</th>
-                          <th style={thStyle}>Extras</th><th style={thStyle}>Extra Feriada</th><th style={thStyle}>Tipo</th><th style={thStyle}>Observación</th>
+                          <th style={thStyle}>Extras</th><th style={thStyle}>Festivas/Dom.</th><th style={thStyle}>Nocturnas</th><th style={thStyle}>Observación</th>
                           <th style={thStyle}>Estado</th><th style={thStyle}>Acción</th>
                         </tr>
                       </thead>
@@ -1129,9 +1134,9 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                               <td style={tdStyle}>{f.cedula}</td>
                               <td style={tdStyle}>{f.llegada}</td>
                               <td style={tdStyle}>{f.salida}</td>
-                              <td style={{ ...tdStyle, color: rol.color, fontWeight: 700 }}>{f.saldo}</td>
-                              <td style={{ ...tdStyle, color: "#B3261E", fontWeight: 700 }}>{f.extraFeriada || "0"}</td>
-                              <td style={tdStyle}>{f.esFestivo ? "Festivo" : "Normal"}</td>
+                              <td style={{ ...tdStyle, color: rol.color, fontWeight: 700 }}>{f.extra > 0 ? fmt(f.extra) : "0"}</td>
+                              <td style={{ ...tdStyle, color: "#B3261E", fontWeight: 700 }}>{f.festivas > 0 ? fmt(f.festivas) : "0"}</td>
+                              <td style={{ ...tdStyle, color: "#7C5CFF", fontWeight: 700 }}>{f.nocturnas > 0 ? fmt(f.nocturnas) : "0"}</td>
                               <td style={{ ...tdStyle, maxWidth: 200, fontSize: 12, color: "#5C5F5A", fontStyle: f.observacion ? "normal" : "italic" }}>{f.observacion || "Sin observación"}</td>
                               <td style={tdStyle}>
                                 {aprobado && <span style={{ color: "#2E7D32", fontWeight: 600 }}>✓ Aprobado</span>}
