@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, RefreshCw, FileSpreadsheet, Loader2, Store, BarChart3, CheckCircle, XCircle, AlertTriangle, Send, Lock, X, UserCheck, ChevronLeft } from "lucide-react";
+import { ShieldCheck, RefreshCw, FileSpreadsheet, Loader2, Store, BarChart3, CheckCircle, XCircle, AlertTriangle, Send, Lock, X, UserCheck, ChevronLeft, Users, ChevronDown, ChevronRight } from "lucide-react";
 import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "./supabaseClient";
@@ -89,11 +89,12 @@ function calcularConsolidadoTienda(datos) {
       const nombre = (e.nombre || "").trim();
       const cedula = (e.cedula || "").trim();
       if (!nombre || !cedula) return;
-      if (!mapa[cedula]) mapa[cedula] = { nombre, cedula, festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0 };
+      if (!mapa[cedula]) mapa[cedula] = { nombre, cedula, reales: 0, festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0 };
       const reales = parseFloat(e.horasReales) || 0;
       const nocturnas = parseFloat(e.horasNocturnas) || 0;
       const saldo = parseFloat(e.saldo) || 0;
       const esDiaFestivo = d.dia === "Domingo" || e.esFestivo;
+      mapa[cedula].reales += reales;
       mapa[cedula].nocturnas += nocturnas;
       if (esDiaFestivo) mapa[cedula].festivas += reales;
       if (saldo > 0) {
@@ -284,6 +285,9 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
   const [mostrarReporteTardes, setMostrarReporteTardes] = useState(false);
   const [alertasAusencias, setAlertasAusencias] = useState([]);
   const [mostrarAusencias, setMostrarAusencias] = useState(false);
+  const [mostrarConsolidadoEmpleado, setMostrarConsolidadoEmpleado] = useState(false);
+  const [soloMultiTienda, setSoloMultiTienda] = useState(false);
+  const [empleadoExpandido, setEmpleadoExpandido] = useState(null);
 
   const cargarDatos = async () => {
     setCargando(true); setError("");
@@ -318,13 +322,13 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
               tiendaCodigo: t.codigo, tiendaNombre: t.nombre,
               semana: SEMANA_LABEL[registro.semana_fecha] || registro.semana_fecha,
               operario: op.nombre || "(Sin nombre)", cedula: op.cedula || "",
-              festivas: op.festivas, nocturnas: op.nocturnas,
+              reales: op.reales, festivas: op.festivas, nocturnas: op.nocturnas,
               extrasFestivas: op.extrasFestivas, extrasNormales: op.extrasNormales,
             });
           });
         });
         if (!huboDatos) {
-          resultado.push({ tiendaCodigo: t.codigo, tiendaNombre: t.nombre, semana: "—", operario: "(Sin datos registrados)", cedula: "", festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0 });
+          resultado.push({ tiendaCodigo: t.codigo, tiendaNombre: t.nombre, semana: "—", operario: "(Sin datos registrados)", cedula: "", reales: 0, festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0 });
         }
       });
       setFilas(resultado);
@@ -467,6 +471,88 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
     });
     return [total];
   })();
+
+  // Consolidado por empleado (cédula) a través de TODAS las tiendas del periodo.
+  // Reagrupa `filas` por cédula y arma el desglose por tienda donde estuvo.
+  const consolidadoEmpleados = (() => {
+    const mapa = {};
+    filas.forEach((f) => {
+      const cedula = (f.cedula || "").trim();
+      if (!cedula) return; // ignora filas "(Sin datos registrados)"
+      if (!mapa[cedula]) {
+        mapa[cedula] = {
+          cedula, nombre: f.operario,
+          reales: 0, festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0,
+          tiendas: {},
+        };
+      }
+      const emp = mapa[cedula];
+      emp.reales += f.reales || 0;
+      emp.festivas += f.festivas || 0;
+      emp.nocturnas += f.nocturnas || 0;
+      emp.extrasFestivas += f.extrasFestivas || 0;
+      emp.extrasNormales += f.extrasNormales || 0;
+      if (!emp.tiendas[f.tiendaCodigo]) {
+        emp.tiendas[f.tiendaCodigo] = {
+          tiendaCodigo: f.tiendaCodigo, tiendaNombre: f.tiendaNombre,
+          reales: 0, festivas: 0, nocturnas: 0, extrasFestivas: 0, extrasNormales: 0, semanas: new Set(),
+        };
+      }
+      const td = emp.tiendas[f.tiendaCodigo];
+      td.reales += f.reales || 0;
+      td.festivas += f.festivas || 0;
+      td.nocturnas += f.nocturnas || 0;
+      td.extrasFestivas += f.extrasFestivas || 0;
+      td.extrasNormales += f.extrasNormales || 0;
+      if (f.semana && f.semana !== "—") td.semanas.add(f.semana);
+    });
+    return Object.values(mapa)
+      .map((emp) => {
+        const desglose = Object.values(emp.tiendas)
+          .map((t) => ({ ...t, semanas: [...t.semanas].sort() }))
+          .sort((a, b) => b.reales - a.reales);
+        return { ...emp, desglose, numTiendas: desglose.length };
+      })
+      .sort((a, b) => (b.numTiendas - a.numTiendas) || (b.reales - a.reales) || a.nombre.localeCompare(b.nombre));
+  })();
+
+  const empleadosMultiTienda = consolidadoEmpleados.filter((e) => e.numTiendas >= 2);
+  const consolidadoEmpleadosVisible = soloMultiTienda ? empleadosMultiTienda : consolidadoEmpleados;
+
+  const exportarConsolidadoEmpleadosExcel = () => {
+    const base = soloMultiTienda ? empleadosMultiTienda : consolidadoEmpleados;
+    // Hoja 1: resumen por empleado
+    const resumen = base.map((e) => ({
+      Empleado: e.nombre, Cédula: e.cedula,
+      "N° Tiendas": e.numTiendas,
+      Tiendas: e.desglose.map((t) => t.tiendaNombre).join(", "),
+      "Total Horas": Number(fmt(e.reales)),
+      "Hrs Festivas": Number(fmt(e.festivas)), "Hrs Nocturnas": Number(fmt(e.nocturnas)),
+      "Extras Festivas": Number(fmt(e.extrasFestivas)), "Extras Normales": Number(fmt(e.extrasNormales)),
+    }));
+    const hoja1 = XLSX.utils.json_to_sheet(resumen);
+    hoja1["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 10 }, { wch: 34 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 16 }];
+    // Hoja 2: detalle por (empleado × tienda)
+    const detalle = [];
+    base.forEach((e) => {
+      e.desglose.forEach((t) => {
+        detalle.push({
+          Empleado: e.nombre, Cédula: e.cedula,
+          Tienda: t.tiendaNombre, "Código Tienda": t.tiendaCodigo,
+          Semanas: t.semanas.join(", "),
+          "Total Horas": Number(fmt(t.reales)),
+          "Hrs Festivas": Number(fmt(t.festivas)), "Hrs Nocturnas": Number(fmt(t.nocturnas)),
+          "Extras Festivas": Number(fmt(t.extrasFestivas)), "Extras Normales": Number(fmt(t.extrasNormales)),
+        });
+      });
+    });
+    const hoja2 = XLSX.utils.json_to_sheet(detalle);
+    hoja2["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 22 }, { wch: 14 }, { wch: 20 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 16 }];
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja1, "Resumen empleado");
+    XLSX.utils.book_append_sheet(libro, hoja2, "Detalle por tienda");
+    XLSX.writeFile(libro, "Consolidado_Empleados_MultiTienda.xlsx");
+  };
 
   const totalesParaGraficas = tiendaSeleccionada ? totalTiendaSeleccionada : totalesPorTienda;
   const datosExtrasNormales = [...totalesParaGraficas].sort((a, b) => b.extrasNormales - a.extrasNormales).map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.extrasNormales)) }));
@@ -656,6 +742,102 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Consolidado por empleado (multi-tienda) — oculto para Gerente de Ventas */}
+        {!esGerenteVentas && !cargando && !error && consolidadoEmpleados.length > 0 && (
+          <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 22, marginBottom: 22, border: empleadosMultiTienda.length > 0 ? "1.5px solid #7C4DFF" : "1px solid #EDEBE4" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Users size={18} color="#7C4DFF" />
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#241C14" }}>Consolidado por empleado (multi-tienda)</div>
+                {empleadosMultiTienda.length > 0 && (
+                  <span style={{ background: "#7C4DFF", color: "white", borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 700 }}>
+                    {empleadosMultiTienda.length} en 2+ tiendas
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <button onClick={exportarConsolidadoEmpleadosExcel} style={btnStyle("#3FBFC4", "#FFFFFF", false)}><FileSpreadsheet size={13} /> Exportar Excel</button>
+                <button onClick={() => setMostrarConsolidadoEmpleado((v) => !v)} style={btnStyle("#FFF6EE", "#7C4DFF", false)}>
+                  {mostrarConsolidadoEmpleado ? "Ocultar" : "Ver detalle"}
+                </button>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: "#5C5F5A", marginTop: 10 }}>
+              Total de horas de cada empleado a través de todas las tiendas donde fichó en el periodo. Expande un empleado para ver el desglose por tienda.
+            </div>
+
+            {mostrarConsolidadoEmpleado && (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 4px" }}>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "#5C5F5A", cursor: "pointer", userSelect: "none" }}>
+                    <input type="checkbox" checked={soloMultiTienda} onChange={(e) => setSoloMultiTienda(e.target.checked)} style={{ cursor: "pointer" }} />
+                    Mostrar solo empleados en 2+ tiendas
+                  </label>
+                  <span style={{ fontSize: 12, color: "#9A958C", marginLeft: "auto" }}>{consolidadoEmpleadosVisible.length} empleado{consolidadoEmpleadosVisible.length !== 1 ? "s" : ""}</span>
+                </div>
+                <div style={{ overflowX: "auto", marginTop: 6 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                        <th style={{ ...thStyle, width: 28 }}></th>
+                        <th style={thStyle}>Empleado</th><th style={thStyle}>Cédula</th><th style={thStyle}>Tiendas</th>
+                        <th style={thStyle}>Total horas</th><th style={thStyle}>Festivas</th><th style={thStyle}>Nocturnas</th>
+                        <th style={thStyle}>Ext. festivas</th><th style={thStyle}>Ext. normales</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {consolidadoEmpleadosVisible.map((e) => {
+                        const multi = e.numTiendas >= 2;
+                        const abierto = empleadoExpandido === e.cedula;
+                        return (
+                          <React.Fragment key={e.cedula}>
+                            <tr
+                              onClick={() => setEmpleadoExpandido(abierto ? null : e.cedula)}
+                              style={{ borderTop: "1px solid #EDEBE4", background: multi ? "#F4F0FF" : "transparent", cursor: "pointer" }}
+                            >
+                              <td style={{ ...tdStyle, textAlign: "center", color: "#7C4DFF" }}>
+                                {abierto ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                              </td>
+                              <td style={{ ...tdStyle, fontWeight: 600 }}>
+                                {e.nombre}
+                                {multi && <span style={{ marginLeft: 8, background: "#7C4DFF", color: "white", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700, verticalAlign: "middle" }}>Multi-tienda</span>}
+                              </td>
+                              <td style={tdStyle}>{e.cedula}</td>
+                              <td style={tdStyle}>{e.numTiendas}</td>
+                              <td style={{ ...tdStyle, fontWeight: 700, color: "#241C14" }}>{fmt(e.reales)}</td>
+                              <td style={tdStyle}>{fmt(e.festivas)}</td>
+                              <td style={tdStyle}>{fmt(e.nocturnas)}</td>
+                              <td style={tdStyle}>{fmt(e.extrasFestivas)}</td>
+                              <td style={tdStyle}>{fmt(e.extrasNormales)}</td>
+                            </tr>
+                            {abierto && e.desglose.map((t) => (
+                              <tr key={`${e.cedula}-${t.tiendaCodigo}`} style={{ background: "#FBFAFF", fontSize: 12.5 }}>
+                                <td style={tdStyle}></td>
+                                <td style={{ ...tdStyle, color: "#5C5F5A", paddingLeft: 18 }}>
+                                  <Store size={12} color="#7C4DFF" style={{ verticalAlign: "middle", marginRight: 6 }} />
+                                  {t.tiendaNombre} <span style={{ color: "#9A958C" }}>({t.tiendaCodigo})</span>
+                                  {t.semanas.length > 0 && <span style={{ color: "#9A958C", marginLeft: 6 }}>· {t.semanas.join(", ")}</span>}
+                                </td>
+                                <td style={tdStyle}></td>
+                                <td style={tdStyle}></td>
+                                <td style={{ ...tdStyle, fontWeight: 600 }}>{fmt(t.reales)}</td>
+                                <td style={tdStyle}>{fmt(t.festivas)}</td>
+                                <td style={tdStyle}>{fmt(t.nocturnas)}</td>
+                                <td style={tdStyle}>{fmt(t.extrasFestivas)}</td>
+                                <td style={tdStyle}>{fmt(t.extrasNormales)}</td>
+                              </tr>
+                            ))}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         )}
 
