@@ -270,6 +270,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
   const jefe = jefeKey ? JEFES_ZONA[jefeKey] : null;
   const tiendasPermitidas = jefe ? (asignacionesJefes[jefeKey]?.tiendas || jefe.tiendas) : null;
   const esGerenteVentas = rolKey === "gerente_ventas";
+  const esRRHH = rolKey === "recursos_humanos";
 
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
@@ -554,6 +555,53 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
     XLSX.writeFile(libro, "Consolidado_Empleados_MultiTienda.xlsx");
   };
 
+  // Resumen para RRHH: horas extra que el Jefe de Zona ya APROBÓ, sumadas por tienda.
+  // Solo cuenta filas con aprobacionEstado === "aprobado" (pendientes/rechazadas no suman).
+  const resumenAprobadasPorTienda = (() => {
+    const mapa = {};
+    filasExtras.forEach((f) => {
+      if (f.aprobacionEstado !== "aprobado") return;
+      const extra = parseFloat(f.saldo) || 0;
+      if (extra <= 0) return;
+      const codigo = f.tiendaCodigo;
+      if (!mapa[codigo]) {
+        const nombre = listaTiendas.find((t) => t.codigo === codigo)?.nombre || codigo;
+        mapa[codigo] = { tiendaCodigo: codigo, tiendaNombre: nombre, extrasNormales: 0, extrasFestivas: 0, registros: 0 };
+      }
+      if (f.esFestivo) mapa[codigo].extrasFestivas += extra;
+      else mapa[codigo].extrasNormales += extra;
+      mapa[codigo].registros += 1;
+    });
+    return Object.values(mapa)
+      .map((t) => ({ ...t, total: t.extrasNormales + t.extrasFestivas }))
+      .sort((a, b) => b.total - a.total);
+  })();
+
+  const totalAprobadasGeneral = resumenAprobadasPorTienda.reduce(
+    (acc, t) => ({
+      extrasNormales: acc.extrasNormales + t.extrasNormales,
+      extrasFestivas: acc.extrasFestivas + t.extrasFestivas,
+      total: acc.total + t.total,
+      registros: acc.registros + t.registros,
+    }),
+    { extrasNormales: 0, extrasFestivas: 0, total: 0, registros: 0 }
+  );
+
+  const exportarAprobadasExcel = () => {
+    const data = resumenAprobadasPorTienda.map((t) => ({
+      Tienda: t.tiendaNombre, "Código": t.tiendaCodigo,
+      "Extras Normales": Number(fmt(t.extrasNormales)),
+      "Extras Festivas/Dominicales": Number(fmt(t.extrasFestivas)),
+      "Total Aprobado": Number(fmt(t.total)),
+      "N° Registros": t.registros,
+    }));
+    const hoja = XLSX.utils.json_to_sheet(data);
+    hoja["!cols"] = [{ wch: 24 }, { wch: 10 }, { wch: 16 }, { wch: 26 }, { wch: 16 }, { wch: 14 }];
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Horas aprobadas");
+    XLSX.writeFile(libro, "Resumen_Horas_Aprobadas_por_Tienda.xlsx");
+  };
+
   const totalesParaGraficas = tiendaSeleccionada ? totalTiendaSeleccionada : totalesPorTienda;
   const datosExtrasNormales = [...totalesParaGraficas].sort((a, b) => b.extrasNormales - a.extrasNormales).map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.extrasNormales)) }));
   const datosExtrasFestivas = [...totalesParaGraficas].sort((a, b) => b.extrasFestivas - a.extrasFestivas).map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.extrasFestivas)) }));
@@ -679,8 +727,62 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
           </div>
         )}
 
-        {/* Novedades RRHH — oculto para Gerente de Ventas */}
-        {!esGerenteVentas && !cargando && !error && (novedadesVencidasGlobal.length > 0 || novedadesPendientesGlobal.length > 0) && (
+        {/* Resumen de horas aprobadas por tienda — solo RRHH (por ahora, vista simplificada) */}
+        {esRRHH && !cargando && !error && (
+          <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 22, marginBottom: 22, border: "1px solid #EDEBE4" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <CheckCircle size={18} color="#2E7D32" />
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#241C14" }}>Resumen de horas aprobadas por tienda</div>
+              </div>
+              {resumenAprobadasPorTienda.length > 0 && (
+                <button onClick={exportarAprobadasExcel} style={btnStyle("#3FBFC4", "#FFFFFF", false)}><FileSpreadsheet size={13} /> Exportar Excel</button>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: "#5C5F5A", marginTop: 10, marginBottom: 14 }}>
+              Horas extra que el Jefe de Zona ya <strong>aprobó</strong>, sumadas por tienda. Las extras pendientes o rechazadas no se incluyen.
+            </div>
+            {resumenAprobadasPorTienda.length === 0 ? (
+              <div style={{ fontSize: 13, color: "#5C5F5A", background: "#FAFAF7", padding: "12px 14px", borderRadius: 6 }}>
+                Todavía no hay horas extra aprobadas por el Jefe de Zona en el periodo.
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                      <th style={thStyle}>Tienda</th><th style={thStyle}>Extras normales</th>
+                      <th style={thStyle}>Extras festivas/dominicales</th><th style={thStyle}>Total aprobado</th><th style={thStyle}>Registros</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resumenAprobadasPorTienda.map((t) => (
+                      <tr key={t.tiendaCodigo} style={{ borderTop: "1px solid #EDEBE4" }}>
+                        <td style={{ ...tdStyle, fontWeight: 600 }}>{t.tiendaNombre} <span style={{ color: "#9A958C", fontWeight: 400 }}>({t.tiendaCodigo})</span></td>
+                        <td style={tdStyle}>{fmt(t.extrasNormales)}</td>
+                        <td style={tdStyle}>{fmt(t.extrasFestivas)}</td>
+                        <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32" }}>{fmt(t.total)}</td>
+                        <td style={tdStyle}>{t.registros}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: "2px solid #2E7D32", background: "#F1F8E9" }}>
+                      <td style={{ ...tdStyle, fontWeight: 700 }}>TOTAL GENERAL</td>
+                      <td style={{ ...tdStyle, fontWeight: 700 }}>{fmt(totalAprobadasGeneral.extrasNormales)}</td>
+                      <td style={{ ...tdStyle, fontWeight: 700 }}>{fmt(totalAprobadasGeneral.extrasFestivas)}</td>
+                      <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32" }}>{fmt(totalAprobadasGeneral.total)}</td>
+                      <td style={{ ...tdStyle, fontWeight: 700 }}>{totalAprobadasGeneral.registros}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Novedades RRHH — oculto para Gerente de Ventas y (por ahora) RRHH */}
+        {!esGerenteVentas && !esRRHH && !cargando && !error && (novedadesVencidasGlobal.length > 0 || novedadesPendientesGlobal.length > 0) && (
           <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 22, marginBottom: 22, border: novedadesVencidasGlobal.length > 0 ? "1.5px solid #E53935" : "1px solid #EDEBE4" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -745,8 +847,8 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
           </div>
         )}
 
-        {/* Consolidado por empleado (multi-tienda) — oculto para Gerente de Ventas */}
-        {!esGerenteVentas && !cargando && !error && consolidadoEmpleados.length > 0 && (
+        {/* Consolidado por empleado (multi-tienda) — oculto para Gerente de Ventas y (por ahora) RRHH */}
+        {!esGerenteVentas && !esRRHH && !cargando && !error && consolidadoEmpleados.length > 0 && (
           <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 22, marginBottom: 22, border: empleadosMultiTienda.length > 0 ? "1.5px solid #7C4DFF" : "1px solid #EDEBE4" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -841,7 +943,8 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
           </div>
         )}
 
-        {/* Consolidado */}
+        {/* Consolidado — oculto para RRHH (por ahora, vista simplificada) */}
+        {!esRRHH && (
         <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 24 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: rol.color, marginBottom: 16 }}>
             {esGerenteVentas ? "Acumulado de nómina — Horas extras, dominicales y nocturnas" : `Consolidado por tienda ${jefe ? `— ${jefe.nombre}` : ""}`}
@@ -1056,6 +1159,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
             );
           })()}
         </div>
+        )}
 
         {/* Reporte llegadas tardes — solo jefe_zona */}
         {rolKey === "jefe_zona" && !cargando && !error && llegadasTardes.length > 0 && (
@@ -1128,8 +1232,8 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
           </div>
         )}
 
-        {/* Gráficas */}
-        {!cargando && !error && totalesParaGraficas.length > 0 && (
+        {/* Gráficas — oculto para RRHH (por ahora) */}
+        {!esRRHH && !cargando && !error && totalesParaGraficas.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginTop: 24 }}>
             <GraficaBarras titulo={tiendaSeleccionada ? "Horas extras normales (total de la tienda)" : "Mayor horas extras normales"} datos={datosExtrasNormales} color="#3FBFC4" />
             <GraficaBarras titulo={tiendaSeleccionada ? "Horas festivas / dominicales (total de la tienda)" : "Mayor horas festivas / dominicales"} datos={datosExtrasFestivas} color={rol.color} />
@@ -1138,7 +1242,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
         )}
       </div>
 
-      {tiendaSeleccionada && !esGerenteVentas && (
+      {tiendaSeleccionada && !esGerenteVentas && !esRRHH && (
         <div style={{ borderTop: `4px solid ${rol.color}`, marginTop: 8 }}>
           <HorariosTienda codigoTienda={tiendaSeleccionada} onSalir={() => setTiendaSeleccionada("")} />
         </div>
