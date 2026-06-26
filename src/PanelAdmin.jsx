@@ -268,7 +268,7 @@ function PantallaRoles({ onRolSeleccionado }) {
   return (
     <div style={pantallaStyle}>
       <div style={{ textAlign: "center", marginBottom: 40 }}>
-        <div style={{ fontSize: 28, fontWeight: 700, color: "#E85D1F", marginBottom: 8 }}>Panel Administrativo</div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: "#E85D1F", marginBottom: 8 }}>Panel administrador</div>
         <div style={{ fontSize: 14, color: "#5C5F5A" }}>Selecciona tu rol para ingresar</div>
       </div>
       {!rolPendiente && (
@@ -758,7 +758,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <ShieldCheck size={20} />
             <div>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>Panel Administrativo · {jefe ? jefe.nombre : rol.label}</div>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>Panel administrador · {jefe ? jefe.nombre : rol.label}</div>
               <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>{rol.icon} {jefe ? `Jefe de Zona · ${jefe.tiendas.length} tiendas asignadas` : "Sesión activa"}</div>
             </div>
           </div>
