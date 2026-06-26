@@ -631,6 +631,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
     const mapa = {};
     filasExtras.forEach((f) => {
       if (f.aprobacionEstado !== "aprobado") return;
+      if (tiendaSeleccionada && f.tiendaCodigo !== tiendaSeleccionada) return;
       const cedula = (f.cedula || "").trim();
       if (!cedula) return;
       if (!mapa[cedula]) {
@@ -820,27 +821,72 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
           </div>
         )}
 
-        {/* Consolidado de horas aprobadas por operario — solo RRHH (para pago de nómina) */}
+        {/* Consolidado de novedades por operario — solo RRHH (navegación Jefe → Tienda) */}
         {esRRHH && !cargando && !error && (
           <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 22, marginBottom: 22, border: "1px solid #EDEBE4" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <CheckCircle size={18} color="#2E7D32" />
-                <div style={{ fontSize: 15, fontWeight: 700, color: "#241C14" }}>Consolidado de horas aprobadas por operario</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#241C14" }}>Consolidado de novedades por operario</div>
               </div>
-              {resumenAprobadasPorOperario.length > 0 && (
+              {tiendaSeleccionada && resumenAprobadasPorOperario.length > 0 && (
                 <button onClick={exportarAprobadasExcel} style={btnStyle("#3FBFC4", "#FFFFFF", false)}><FileSpreadsheet size={13} /> Exportar Excel</button>
               )}
             </div>
             <div style={{ fontSize: 12, color: "#5C5F5A", marginTop: 10, marginBottom: 14 }}>
-              Horas que el Jefe de Zona ya <strong>aprobó</strong>, consolidadas por operario para el pago de nómina: extras, dominicales/festivas y nocturnas. Las novedades pendientes o rechazadas no se incluyen.
+              Selecciona un <strong>Jefe de Zona</strong>, luego una <strong>tienda</strong>, para ver su consolidado de novedades aprobadas (extras, dominicales/festivas y nocturnas) desglosado por semana.
             </div>
-            {resumenAprobadasPorOperario.length === 0 ? (
-              <div style={{ fontSize: 13, color: "#5C5F5A", background: "#FAFAF7", padding: "12px 14px", borderRadius: 6 }}>
-                Todavía no hay novedades aprobadas por el Jefe de Zona en el periodo.
+
+            {/* Botones por Jefe de Zona */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {Object.entries(asignacionesJefes).map(([key, jefeInfo]) => {
+                const tiendasDelJefe = listaTiendas.filter((t) => jefeInfo.tiendas.includes(t.codigo));
+                if (tiendasDelJefe.length === 0) return null;
+                const activo = jefeZonaFiltro === key;
+                return (
+                  <button key={key}
+                    onClick={() => { setJefeZonaFiltro(activo ? null : key); setTiendaSeleccionada(""); }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 8, background: activo ? rol.color : "#FFF6EE", color: activo ? "#FFFFFF" : rol.color, border: `2px solid ${rol.color}`, borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+                  >
+                    👤 {jefeInfo.nombre}
+                    <span style={{ background: activo ? "rgba(255,255,255,0.25)" : rol.color, color: "#FFFFFF", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>
+                      {tiendasDelJefe.length}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Tiendas del jefe seleccionado */}
+            {jefeZonaFiltro && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid #EDEBE4" }}>
+                {listaTiendas.filter((t) => asignacionesJefes[jefeZonaFiltro]?.tiendas.includes(t.codigo)).map((t) => {
+                  const activo = tiendaSeleccionada === t.codigo;
+                  return (
+                    <button key={t.codigo} onClick={() => setTiendaSeleccionada(activo ? "" : t.codigo)}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, background: activo ? rol.color : "#FFF6EE", color: activo ? "#FFFFFF" : rol.color, border: `1px solid ${rol.color}`, borderRadius: 7, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                    >
+                      <Store size={14} /> {t.nombre} ({t.codigo})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Consolidado de la tienda seleccionada */}
+            {!tiendaSeleccionada ? (
+              <div style={{ fontSize: 13, color: "#5C5F5A", background: "#FAFAF7", padding: "14px 16px", borderRadius: 6, marginTop: 16 }}>
+                {jefeZonaFiltro ? "Selecciona una tienda para ver su consolidado de novedades." : "Selecciona un Jefe de Zona para empezar."}
+              </div>
+            ) : resumenAprobadasPorOperario.length === 0 ? (
+              <div style={{ fontSize: 13, color: "#5C5F5A", background: "#FAFAF7", padding: "14px 16px", borderRadius: 6, marginTop: 16 }}>
+                {listaTiendas.find((t) => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada}: todavía no tiene novedades aprobadas por el Jefe de Zona en el periodo.
               </div>
             ) : (
-              <div style={{ overflowX: "auto" }}>
+              <div style={{ overflowX: "auto", marginTop: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#241C14", marginBottom: 8 }}>
+                  {listaTiendas.find((t) => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada} <span style={{ color: "#9A958C", fontWeight: 400 }}>({tiendaSeleccionada})</span>
+                </div>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
@@ -878,7 +924,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                   </tbody>
                   <tfoot>
                     <tr style={{ borderTop: "3px double #2E7D32", background: "#E8F5E9" }}>
-                      <td style={{ ...tdStyle, fontWeight: 700, textAlign: "right" }}>TOTAL GENERAL →</td>
+                      <td style={{ ...tdStyle, fontWeight: 700, textAlign: "right" }}>TOTAL TIENDA →</td>
                       <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(totalAprobadasGeneral.extras)}</td>
                       <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(totalAprobadasGeneral.festivas)}</td>
                       <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(totalAprobadasGeneral.nocturnas)}</td>
