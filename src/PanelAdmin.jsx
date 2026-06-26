@@ -74,14 +74,20 @@ function getPeriodoVigente(ref = new Date()) {
   return { inicio, fin };
 }
 
-// ¿La semana (cuyo domingo es semana_fecha "YYYY-MM-DD") cae dentro del periodo?
-// Se incluye si la semana (Domingo→Sábado) se solapa con [inicio, fin].
-function semanaEnPeriodo(semanaFecha, periodo) {
-  if (!semanaFecha || !/^\d{4}-\d{2}-\d{2}$/.test(semanaFecha)) return false;
-  const inicioSemana = new Date(semanaFecha + "T00:00:00");
-  const finSemana = new Date(inicioSemana);
-  finSemana.setDate(finSemana.getDate() + 6);
-  return finSemana >= periodo.inicio && inicioSemana <= periodo.fin;
+// ¿El día (por su fecha real fechaDate "YYYY-MM-DD") cae dentro del periodo?
+// Se filtra por la fecha real de cada día, no por la llave de semana (que tiene
+// formatos inconsistentes: "2026-06-21", "2026-06_semana_5", "semana_1"...).
+function diaEnPeriodo(dia, periodo) {
+  const f = dia && (dia.fechaDate || dia.fecha);
+  if (!f || !/^\d{4}-\d{2}-\d{2}$/.test(f)) return false;
+  const fd = new Date(f + "T00:00:00");
+  return fd >= periodo.inicio && fd <= periodo.fin;
+}
+
+// Devuelve una copia de la planilla dejando solo los días dentro del periodo.
+function filtrarHorarioAlPeriodo(h, periodo) {
+  const days = ((h.datos && h.datos.days) || []).filter((d) => diaEnPeriodo(d, periodo));
+  return { ...h, datos: { ...(h.datos || {}), days } };
 }
 
 function esNovedadRRHH(estado) {
@@ -336,8 +342,12 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       if (errHorarios) throw errHorarios;
 
       // Solo el periodo de nómina vigente (21 de un mes → 20 del siguiente).
+      // Se filtra día por día según su fecha real, y se descartan las planillas
+      // que no dejen ningún día dentro del periodo.
       const periodoVigente = getPeriodoVigente();
-      const horarios = (horariosRaw || []).filter((h) => semanaEnPeriodo(h.semana_fecha, periodoVigente));
+      const horarios = (horariosRaw || [])
+        .map((h) => filtrarHorarioAlPeriodo(h, periodoVigente))
+        .filter((h) => (h.datos.days || []).length > 0);
 
       const horariosPorTienda = {};
       (horarios || []).forEach((h) => {
