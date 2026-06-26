@@ -602,47 +602,52 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
 
   // Resumen para RRHH: horas extra que el Jefe de Zona ya APROBÓ, sumadas por tienda.
   // Solo cuenta filas con aprobacionEstado === "aprobado" (pendientes/rechazadas no suman).
-  const resumenAprobadasPorTienda = (() => {
+  // Consolidado de horas aprobadas POR OPERARIO (para el pago de nómina).
+  // Agrupa por cédula las novedades que el Jefe de Zona aprobó y muestra su(s) tienda(s).
+  const resumenAprobadasPorOperario = (() => {
     const mapa = {};
     filasExtras.forEach((f) => {
       if (f.aprobacionEstado !== "aprobado") return;
-      const codigo = f.tiendaCodigo;
-      if (!mapa[codigo]) {
-        const nombre = listaTiendas.find((t) => t.codigo === codigo)?.nombre || codigo;
-        mapa[codigo] = { tiendaCodigo: codigo, tiendaNombre: nombre, extras: 0, festivas: 0, nocturnas: 0, registros: 0 };
+      const cedula = (f.cedula || "").trim();
+      if (!cedula) return;
+      if (!mapa[cedula]) {
+        mapa[cedula] = { cedula, nombre: f.nombre || "(Sin nombre)", tiendas: {}, extras: 0, festivas: 0, nocturnas: 0, registros: 0 };
       }
-      mapa[codigo].extras += f.extra || 0;
-      mapa[codigo].festivas += f.festivas || 0;
-      mapa[codigo].nocturnas += f.nocturnas || 0;
-      mapa[codigo].registros += 1;
+      const o = mapa[cedula];
+      o.extras += f.extra || 0;
+      o.festivas += f.festivas || 0;
+      o.nocturnas += f.nocturnas || 0;
+      o.registros += 1;
+      o.tiendas[f.tiendaCodigo] = listaTiendas.find((t) => t.codigo === f.tiendaCodigo)?.nombre || f.tiendaCodigo;
     });
     return Object.values(mapa)
-      .sort((a, b) => (b.extras + b.festivas + b.nocturnas) - (a.extras + a.festivas + a.nocturnas));
+      .map((o) => ({ ...o, tiendasLabel: Object.values(o.tiendas).join(", ") }))
+      .sort((a, b) => (b.extras + b.festivas + b.nocturnas) - (a.extras + a.festivas + a.nocturnas) || a.nombre.localeCompare(b.nombre));
   })();
 
-  const totalAprobadasGeneral = resumenAprobadasPorTienda.reduce(
-    (acc, t) => ({
-      extras: acc.extras + t.extras,
-      festivas: acc.festivas + t.festivas,
-      nocturnas: acc.nocturnas + t.nocturnas,
-      registros: acc.registros + t.registros,
+  const totalAprobadasGeneral = resumenAprobadasPorOperario.reduce(
+    (acc, o) => ({
+      extras: acc.extras + o.extras,
+      festivas: acc.festivas + o.festivas,
+      nocturnas: acc.nocturnas + o.nocturnas,
+      registros: acc.registros + o.registros,
     }),
     { extras: 0, festivas: 0, nocturnas: 0, registros: 0 }
   );
 
   const exportarAprobadasExcel = () => {
-    const data = resumenAprobadasPorTienda.map((t) => ({
-      Tienda: t.tiendaNombre, "Código": t.tiendaCodigo,
-      "Horas Extra": Number(fmt(t.extras)),
-      "Horas Festivas/Dominicales": Number(fmt(t.festivas)),
-      "Horas Nocturnas": Number(fmt(t.nocturnas)),
-      "N° Registros": t.registros,
+    const data = resumenAprobadasPorOperario.map((o) => ({
+      Operario: o.nombre, "Cédula": o.cedula, "Tienda(s)": o.tiendasLabel,
+      "Horas Extra": Number(fmt(o.extras)),
+      "Horas Festivas/Dominicales": Number(fmt(o.festivas)),
+      "Horas Nocturnas": Number(fmt(o.nocturnas)),
+      "N° Registros": o.registros,
     }));
     const hoja = XLSX.utils.json_to_sheet(data);
-    hoja["!cols"] = [{ wch: 24 }, { wch: 10 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 14 }];
+    hoja["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 26 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 14 }];
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Horas aprobadas");
-    XLSX.writeFile(libro, "Resumen_Horas_Aprobadas_por_Tienda.xlsx");
+    XLSX.writeFile(libro, "Consolidado_Horas_Aprobadas_por_Operario.xlsx");
   };
 
   const totalesParaGraficas = tiendaSeleccionada ? totalTiendaSeleccionada : totalesPorTienda;
@@ -770,22 +775,22 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
           </div>
         )}
 
-        {/* Resumen de horas aprobadas por tienda — solo RRHH (por ahora, vista simplificada) */}
+        {/* Consolidado de horas aprobadas por operario — solo RRHH (para pago de nómina) */}
         {esRRHH && !cargando && !error && (
           <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 22, marginBottom: 22, border: "1px solid #EDEBE4" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <CheckCircle size={18} color="#2E7D32" />
-                <div style={{ fontSize: 15, fontWeight: 700, color: "#241C14" }}>Resumen de horas aprobadas por tienda</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#241C14" }}>Consolidado de horas aprobadas por operario</div>
               </div>
-              {resumenAprobadasPorTienda.length > 0 && (
+              {resumenAprobadasPorOperario.length > 0 && (
                 <button onClick={exportarAprobadasExcel} style={btnStyle("#3FBFC4", "#FFFFFF", false)}><FileSpreadsheet size={13} /> Exportar Excel</button>
               )}
             </div>
             <div style={{ fontSize: 12, color: "#5C5F5A", marginTop: 10, marginBottom: 14 }}>
-              Horas que el Jefe de Zona ya <strong>aprobó</strong>, sumadas por tienda: extras, dominicales/festivas y nocturnas. Las novedades pendientes o rechazadas no se incluyen.
+              Horas que el Jefe de Zona ya <strong>aprobó</strong>, consolidadas por operario para el pago de nómina: extras, dominicales/festivas y nocturnas. Las novedades pendientes o rechazadas no se incluyen.
             </div>
-            {resumenAprobadasPorTienda.length === 0 ? (
+            {resumenAprobadasPorOperario.length === 0 ? (
               <div style={{ fontSize: 13, color: "#5C5F5A", background: "#FAFAF7", padding: "12px 14px", borderRadius: 6 }}>
                 Todavía no hay novedades aprobadas por el Jefe de Zona en el periodo.
               </div>
@@ -794,24 +799,26 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
-                      <th style={thStyle}>Tienda</th><th style={thStyle}>Horas extra</th>
+                      <th style={thStyle}>Operario</th><th style={thStyle}>Cédula</th><th style={thStyle}>Tienda(s)</th><th style={thStyle}>Horas extra</th>
                       <th style={thStyle}>Festivas/dominicales</th><th style={thStyle}>Nocturnas</th><th style={thStyle}>Registros</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {resumenAprobadasPorTienda.map((t) => (
-                      <tr key={t.tiendaCodigo} style={{ borderTop: "1px solid #EDEBE4" }}>
-                        <td style={{ ...tdStyle, fontWeight: 600 }}>{t.tiendaNombre} <span style={{ color: "#9A958C", fontWeight: 400 }}>({t.tiendaCodigo})</span></td>
-                        <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32" }}>{fmt(t.extras)}</td>
-                        <td style={tdStyle}>{fmt(t.festivas)}</td>
-                        <td style={tdStyle}>{fmt(t.nocturnas)}</td>
-                        <td style={tdStyle}>{t.registros}</td>
+                    {resumenAprobadasPorOperario.map((o) => (
+                      <tr key={o.cedula} style={{ borderTop: "1px solid #EDEBE4" }}>
+                        <td style={{ ...tdStyle, fontWeight: 600 }}>{o.nombre}</td>
+                        <td style={tdStyle}>{o.cedula}</td>
+                        <td style={{ ...tdStyle, color: "#5C5F5A" }}>{o.tiendasLabel}</td>
+                        <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32" }}>{fmt(o.extras)}</td>
+                        <td style={tdStyle}>{fmt(o.festivas)}</td>
+                        <td style={tdStyle}>{fmt(o.nocturnas)}</td>
+                        <td style={tdStyle}>{o.registros}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr style={{ borderTop: "2px solid #2E7D32", background: "#F1F8E9" }}>
-                      <td style={{ ...tdStyle, fontWeight: 700 }}>TOTAL GENERAL</td>
+                      <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={3}>TOTAL GENERAL</td>
                       <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32" }}>{fmt(totalAprobadasGeneral.extras)}</td>
                       <td style={{ ...tdStyle, fontWeight: 700 }}>{fmt(totalAprobadasGeneral.festivas)}</td>
                       <td style={{ ...tdStyle, fontWeight: 700 }}>{fmt(totalAprobadasGeneral.nocturnas)}</td>
