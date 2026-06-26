@@ -59,6 +59,31 @@ function fmt(n) {
   return Number.isInteger(r) ? String(r) : String(r);
 }
 
+// Periodo de nómina vigente: del 21 de un mes al 20 del siguiente.
+// Si hoy es día >= 21, el periodo va de este mes 21 al próximo mes 20.
+function getPeriodoVigente(ref = new Date()) {
+  const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  let inicio, fin;
+  if (d.getDate() >= 21) {
+    inicio = new Date(d.getFullYear(), d.getMonth(), 21);
+    fin = new Date(d.getFullYear(), d.getMonth() + 1, 20);
+  } else {
+    inicio = new Date(d.getFullYear(), d.getMonth() - 1, 21);
+    fin = new Date(d.getFullYear(), d.getMonth(), 20);
+  }
+  return { inicio, fin };
+}
+
+// ¿La semana (cuyo domingo es semana_fecha "YYYY-MM-DD") cae dentro del periodo?
+// Se incluye si la semana (Domingo→Sábado) se solapa con [inicio, fin].
+function semanaEnPeriodo(semanaFecha, periodo) {
+  if (!semanaFecha || !/^\d{4}-\d{2}-\d{2}$/.test(semanaFecha)) return false;
+  const inicioSemana = new Date(semanaFecha + "T00:00:00");
+  const finSemana = new Date(inicioSemana);
+  finSemana.setDate(finSemana.getDate() + 6);
+  return finSemana >= periodo.inicio && inicioSemana <= periodo.fin;
+}
+
 function esNovedadRRHH(estado) {
   return ["incapacitado", "licencia_maternidad", "luto"].includes(estado);
 }
@@ -307,8 +332,12 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
 
       let queryHorarios = supabase.from("horarios_semana").select("tienda_codigo, semana_fecha, datos, updated_at");
       if (tiendasPermitidas) queryHorarios = queryHorarios.in("tienda_codigo", tiendasPermitidas);
-      const { data: horarios, error: errHorarios } = await queryHorarios;
+      const { data: horariosRaw, error: errHorarios } = await queryHorarios;
       if (errHorarios) throw errHorarios;
+
+      // Solo el periodo de nómina vigente (21 de un mes → 20 del siguiente).
+      const periodoVigente = getPeriodoVigente();
+      const horarios = (horariosRaw || []).filter((h) => semanaEnPeriodo(h.semana_fecha, periodoVigente));
 
       const horariosPorTienda = {};
       (horarios || []).forEach((h) => {
