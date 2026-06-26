@@ -90,6 +90,28 @@ function filtrarHorarioAlPeriodo(h, periodo) {
   return { ...h, datos: { ...(h.datos || {}), days } };
 }
 
+function isoLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Domingo (inicio de semana) de una fecha "YYYY-MM-DD".
+function domingoDeSemanaISO(fechaISO) {
+  if (!fechaISO || !/^\d{4}-\d{2}-\d{2}$/.test(fechaISO)) return "";
+  const d = new Date(fechaISO + "T00:00:00");
+  d.setDate(d.getDate() - d.getDay());
+  return isoLocal(d);
+}
+
+// Etiqueta "dd/mm – dd/mm" de la semana cuyo domingo es domISO.
+function etiquetaSemana(domISO) {
+  if (!domISO) return "—";
+  const dom = new Date(domISO + "T00:00:00");
+  const sab = new Date(dom);
+  sab.setDate(sab.getDate() + 6);
+  const f = (x) => `${String(x.getDate()).padStart(2, "0")}/${String(x.getMonth() + 1).padStart(2, "0")}`;
+  return `${f(dom)} – ${f(sab)}`;
+}
+
 function esNovedadRRHH(estado) {
   return ["incapacitado", "licencia_maternidad", "luto"].includes(estado);
 }
@@ -157,7 +179,7 @@ function extraerFilasConExtras(datos, tiendaCodigo, semanaFecha) {
       // Sin novedad por aprobar → no se lista.
       if (extra <= 0 && festivas <= 0 && nocturnasNum <= 0) return;
       resultado.push({
-        entryId: e.id, tiendaCodigo, semanaFecha, dia: d.dia, nombre, cedula,
+        entryId: e.id, tiendaCodigo, semanaFecha, dia: d.dia, fecha: d.fechaDate || "", nombre, cedula,
         llegada: e.llegada || "", salida: e.salida || "",
         horasProgramadas: e.horasProgramadas || "", horasReales: e.horasReales || "",
         saldo: e.saldo || "", esFestivo,
@@ -602,8 +624,9 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
 
   // Resumen para RRHH: horas extra que el Jefe de Zona ya APROBÓ, sumadas por tienda.
   // Solo cuenta filas con aprobacionEstado === "aprobado" (pendientes/rechazadas no suman).
-  // Consolidado de horas aprobadas POR OPERARIO (para el pago de nómina).
-  // Agrupa por cédula las novedades que el Jefe de Zona aprobó y muestra su(s) tienda(s).
+  // Consolidado de horas aprobadas POR OPERARIO, desglosado por semana (para nómina).
+  // Agrupa por cédula las novedades que el Jefe de Zona aprobó, con el detalle por
+  // semana y el total a pagar por operario.
   const resumenAprobadasPorOperario = (() => {
     const mapa = {};
     filasExtras.forEach((f) => {
@@ -611,7 +634,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       const cedula = (f.cedula || "").trim();
       if (!cedula) return;
       if (!mapa[cedula]) {
-        mapa[cedula] = { cedula, nombre: f.nombre || "(Sin nombre)", tiendas: {}, extras: 0, festivas: 0, nocturnas: 0, registros: 0 };
+        mapa[cedula] = { cedula, nombre: f.nombre || "(Sin nombre)", tiendas: {}, semanas: {}, extras: 0, festivas: 0, nocturnas: 0, registros: 0 };
       }
       const o = mapa[cedula];
       o.extras += f.extra || 0;
@@ -619,9 +642,18 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       o.nocturnas += f.nocturnas || 0;
       o.registros += 1;
       o.tiendas[f.tiendaCodigo] = listaTiendas.find((t) => t.codigo === f.tiendaCodigo)?.nombre || f.tiendaCodigo;
+      const dom = domingoDeSemanaISO(f.fecha);
+      if (!o.semanas[dom]) o.semanas[dom] = { dom, extras: 0, festivas: 0, nocturnas: 0 };
+      o.semanas[dom].extras += f.extra || 0;
+      o.semanas[dom].festivas += f.festivas || 0;
+      o.semanas[dom].nocturnas += f.nocturnas || 0;
     });
     return Object.values(mapa)
-      .map((o) => ({ ...o, tiendasLabel: Object.values(o.tiendas).join(", ") }))
+      .map((o) => ({
+        ...o,
+        tiendasLabel: Object.values(o.tiendas).join(", "),
+        desgloseSemanas: Object.values(o.semanas).sort((a, b) => a.dom.localeCompare(b.dom)),
+      }))
       .sort((a, b) => (b.extras + b.festivas + b.nocturnas) - (a.extras + a.festivas + a.nocturnas) || a.nombre.localeCompare(b.nombre));
   })();
 
@@ -636,15 +668,28 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
   );
 
   const exportarAprobadasExcel = () => {
-    const data = resumenAprobadasPorOperario.map((o) => ({
-      Operario: o.nombre, "Cédula": o.cedula, "Tienda(s)": o.tiendasLabel,
-      "Horas Extra": Number(fmt(o.extras)),
-      "Horas Festivas/Dominicales": Number(fmt(o.festivas)),
-      "Horas Nocturnas": Number(fmt(o.nocturnas)),
-      "N° Registros": o.registros,
-    }));
+    const data = [];
+    resumenAprobadasPorOperario.forEach((o) => {
+      o.desgloseSemanas.forEach((s) => {
+        data.push({
+          Operario: o.nombre, "Cédula": o.cedula, "Tienda(s)": o.tiendasLabel,
+          Semana: etiquetaSemana(s.dom),
+          "Horas Extra": Number(fmt(s.extras)),
+          "Horas Festivas/Dominicales": Number(fmt(s.festivas)),
+          "Horas Nocturnas": Number(fmt(s.nocturnas)),
+        });
+      });
+      // Fila de total a pagar por operario
+      data.push({
+        Operario: o.nombre, "Cédula": o.cedula, "Tienda(s)": o.tiendasLabel,
+        Semana: "TOTAL A PAGAR",
+        "Horas Extra": Number(fmt(o.extras)),
+        "Horas Festivas/Dominicales": Number(fmt(o.festivas)),
+        "Horas Nocturnas": Number(fmt(o.nocturnas)),
+      });
+    });
     const hoja = XLSX.utils.json_to_sheet(data);
-    hoja["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 26 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 14 }];
+    hoja["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 26 }, { wch: 16 }, { wch: 14 }, { wch: 24 }, { wch: 16 }];
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Horas aprobadas");
     XLSX.writeFile(libro, "Consolidado_Horas_Aprobadas_por_Operario.xlsx");
@@ -799,30 +844,44 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
-                      <th style={thStyle}>Operario</th><th style={thStyle}>Cédula</th><th style={thStyle}>Tienda(s)</th><th style={thStyle}>Horas extra</th>
-                      <th style={thStyle}>Festivas/dominicales</th><th style={thStyle}>Nocturnas</th><th style={thStyle}>Registros</th>
+                      <th style={thStyle}>Operario / Semana</th><th style={{ ...thStyle, textAlign: "right" }}>Horas extra</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Festivas/dominicales</th><th style={{ ...thStyle, textAlign: "right" }}>Nocturnas</th>
                     </tr>
                   </thead>
                   <tbody>
                     {resumenAprobadasPorOperario.map((o) => (
-                      <tr key={o.cedula} style={{ borderTop: "1px solid #EDEBE4" }}>
-                        <td style={{ ...tdStyle, fontWeight: 600 }}>{o.nombre}</td>
-                        <td style={tdStyle}>{o.cedula}</td>
-                        <td style={{ ...tdStyle, color: "#5C5F5A" }}>{o.tiendasLabel}</td>
-                        <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32" }}>{fmt(o.extras)}</td>
-                        <td style={tdStyle}>{fmt(o.festivas)}</td>
-                        <td style={tdStyle}>{fmt(o.nocturnas)}</td>
-                        <td style={tdStyle}>{o.registros}</td>
-                      </tr>
+                      <React.Fragment key={o.cedula}>
+                        {/* Encabezado del operario */}
+                        <tr style={{ borderTop: "2px solid #EDEBE4", background: "#FBFBF9" }}>
+                          <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={4}>
+                            {o.nombre} <span style={{ color: "#9A958C", fontWeight: 400 }}>· Cédula {o.cedula} · {o.tiendasLabel}</span>
+                          </td>
+                        </tr>
+                        {/* Desglose por semana */}
+                        {o.desgloseSemanas.map((s) => (
+                          <tr key={`${o.cedula}-${s.dom}`} style={{ borderTop: "1px solid #F2EFE9" }}>
+                            <td style={{ ...tdStyle, paddingLeft: 24, color: "#5C5F5A" }}>Semana {etiquetaSemana(s.dom)}</td>
+                            <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(s.extras)}</td>
+                            <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(s.festivas)}</td>
+                            <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(s.nocturnas)}</td>
+                          </tr>
+                        ))}
+                        {/* Total a pagar del operario */}
+                        <tr style={{ background: "#F1F8E9", borderTop: "1px solid #C8E6C9" }}>
+                          <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>Total a pagar →</td>
+                          <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(o.extras)}</td>
+                          <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(o.festivas)}</td>
+                          <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(o.nocturnas)}</td>
+                        </tr>
+                      </React.Fragment>
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr style={{ borderTop: "2px solid #2E7D32", background: "#F1F8E9" }}>
-                      <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={3}>TOTAL GENERAL</td>
-                      <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32" }}>{fmt(totalAprobadasGeneral.extras)}</td>
-                      <td style={{ ...tdStyle, fontWeight: 700 }}>{fmt(totalAprobadasGeneral.festivas)}</td>
-                      <td style={{ ...tdStyle, fontWeight: 700 }}>{fmt(totalAprobadasGeneral.nocturnas)}</td>
-                      <td style={{ ...tdStyle, fontWeight: 700 }}>{totalAprobadasGeneral.registros}</td>
+                    <tr style={{ borderTop: "3px double #2E7D32", background: "#E8F5E9" }}>
+                      <td style={{ ...tdStyle, fontWeight: 700, textAlign: "right" }}>TOTAL GENERAL →</td>
+                      <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(totalAprobadasGeneral.extras)}</td>
+                      <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(totalAprobadasGeneral.festivas)}</td>
+                      <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(totalAprobadasGeneral.nocturnas)}</td>
                     </tr>
                   </tfoot>
                 </table>
