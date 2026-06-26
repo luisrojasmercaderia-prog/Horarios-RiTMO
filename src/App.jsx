@@ -9,7 +9,7 @@ import logoRitmo from "./logo-ritmo.png";
 const SESSION_KEY = "ritmo-sesion-tienda";
 const ADMIN_PASSWORD = "RiTMO1234";
 
-function LoginTienda({ onIngresar }) {
+function LoginTienda({ onIngresar, onAdmin }) {
   const [codigo, setCodigo] = useState("");
   const [nombre, setNombre] = useState("");
   const [clave, setClave] = useState("");
@@ -150,6 +150,26 @@ function LoginTienda({ onIngresar }) {
               <Clock size={15} /> ¿Eres colaborador? Fichar entrada o salida
             </button>
           </div>
+
+          {onAdmin && (
+            <div style={{ textAlign: "center", marginTop: 14 }}>
+              <button
+                type="button"
+                onClick={onAdmin}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#9A958C",
+                  fontSize: 12.5,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  textDecoration: "underline",
+                }}
+              >
+                Acceso administrador
+              </button>
+            </div>
+          )}
         </form>
       </div>
 
@@ -269,7 +289,12 @@ export default function App() {
   }
 
   if (!codigoTienda) {
-    return <LoginTienda onIngresar={handleIngresarTienda} />;
+    return (
+      <LoginTienda
+        onIngresar={handleIngresarTienda}
+        onAdmin={() => { window.history.pushState({}, "", "/admin"); setRuta("admin"); }}
+      />
+    );
   }
 
   return <HorariosTienda codigoTienda={codigoTienda} onSalir={handleSalirTienda} />;
