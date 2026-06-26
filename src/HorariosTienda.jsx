@@ -1227,15 +1227,11 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                               style={(parcialBloqueado(entry) || completado) ? disabledCellStyle : undefined} />
                           </td>
                           <td className="col-hrs-reales" style={{ ...tdStyle, minWidth: 90 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
+                            {/* Día festivo se determina solo por domingo (auto) o turno "Feriado mañana/tarde".
+                                Se quitó la casilla manual para que no se confunda con la validación de horas. */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
                               <input disabled readOnly className="cell-input" value={entry.horasReales} placeholder="0"
                                 style={{ textAlign: "center", minWidth: 40, width: 40, flexShrink: 0, background: entry.esFestivo ? "transparent" : "#F2EFE9", color: entry.esFestivo ? "#04342C" : "#5C5F5A", fontWeight: entry.esFestivo ? 600 : 400, cursor: "default" }} />
-                              <label className="no-print" title="Marcar como festivo"
-                                style={{ display: "flex", alignItems: "center", cursor: (estaBloqueado(entry) || completado) ? "not-allowed" : "pointer", paddingRight: 3 }}>
-                                <input type="checkbox" disabled={estaBloqueado(entry) || completado} checked={entry.esFestivo}
-                                  onChange={(e) => updateEntry(d.dia, entry.id, "esFestivo", e.target.checked)}
-                                  style={{ cursor: (estaBloqueado(entry) || completado) ? "not-allowed" : "pointer" }} />
-                              </label>
                             </div>
                           </td>
                           <td className="col-validado no-print" style={{ ...tdStyle, textAlign: "center" }}>
