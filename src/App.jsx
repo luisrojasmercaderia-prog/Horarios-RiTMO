@@ -205,7 +205,7 @@ function LoginAdmin({ onIngresar }) {
       <form onSubmit={handleSubmit} style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 32, maxWidth: 380, width: "100%", position: "relative", zIndex: 1 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, color: "#E85D1F" }}>
           <ShieldCheck size={20} />
-          <span style={{ fontSize: 18, fontWeight: 700 }}>Panel administrativo</span>
+          <span style={{ fontSize: 18, fontWeight: 700 }}>Panel administrador</span>
         </div>
         <div style={{ fontSize: 13, color: "#5C5F5A", marginBottom: 20 }}>Acceso para Jefe de Zona</div>
 
