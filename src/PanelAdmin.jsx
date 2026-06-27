@@ -350,6 +350,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
   const [alertasAusencias, setAlertasAusencias] = useState([]);
   const [mostrarAusencias, setMostrarAusencias] = useState(false);
   const [descansosNoTomados, setDescansosNoTomados] = useState([]);
+  const [planillasCompletadas, setPlanillasCompletadas] = useState([]);
   const [mostrarCrearTienda, setMostrarCrearTienda] = useState(false);
   const [nuevaTienda, setNuevaTienda] = useState({ codigo: "", nombre: "", clave: "" });
   const [crearTiendaError, setCrearTiendaError] = useState("");
@@ -462,6 +463,24 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
         }
       });
       setDescansosNoTomados(todosDescansos);
+
+      // Planillas marcadas como completadas por el supervisor (alerta para el JDZ).
+      const todasCompletadas = [];
+      (horarios || []).forEach((h) => {
+        if (h.datos && h.datos.completado) {
+          const tiendaInfo = (tiendas || []).find((t) => t.codigo === h.tienda_codigo);
+          const dias = ((h.datos.days) || []).map((d) => d.fechaDate || d.fecha).filter(Boolean).sort();
+          todasCompletadas.push({
+            tiendaCodigo: h.tienda_codigo,
+            tiendaNombre: tiendaInfo?.nombre || h.tienda_codigo,
+            weekDom: dias.length ? domingoDeSemanaISO(dias[0]) : "",
+            supervisor: h.datos.supervisor || "",
+            fechaCompletado: h.datos.fechaCompletado || "",
+          });
+        }
+      });
+      todasCompletadas.sort((a, b) => (b.fechaCompletado || "").localeCompare(a.fechaCompletado || ""));
+      setPlanillasCompletadas(todasCompletadas);
 
       setFilasExtras(todasFilasExtras);
       setAprobaciones(mapaAprobaciones);
@@ -916,6 +935,43 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                 <button type="button" onClick={() => setMostrarCrearTienda(false)} style={{ background: "#FAFAF7", color: "#5C5F5A", border: "1px solid #EDEBE4", borderRadius: 7, padding: "10px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* Planillas completadas por el supervisor — alerta para jefe_zona */}
+        {rolKey === "jefe_zona" && !cargando && !error && planillasCompletadas.length > 0 && (
+          <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 22, marginBottom: 22, border: "1.5px solid #2E7D32" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <CheckCircle size={18} color="#2E7D32" />
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#241C14" }}>Planillas completadas por el supervisor</div>
+              <span style={{ background: "#2E7D32", color: "white", borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 700 }}>
+                {planillasCompletadas.length}
+              </span>
+            </div>
+            <div style={{ fontSize: 12, color: "#5C5F5A", marginBottom: 14 }}>
+              El supervisor marcó estas planillas como completadas — da por aprobados todos los días de sus operarios en esa semana. Listas para tu revisión.
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                  <th style={thStyle}>Tienda</th><th style={thStyle}>Semana</th><th style={thStyle}>Supervisor</th><th style={thStyle}>Fecha completada</th>
+                </tr>
+              </thead>
+              <tbody>
+                {planillasCompletadas.map((p, i) => (
+                  <tr key={`${p.tiendaCodigo}-${p.weekDom}-${i}`} style={{ borderTop: "1px solid #EDEBE4", background: "#F1F8E9" }}>
+                    <td style={tdStyle}>
+                      <button onClick={() => setTiendaSeleccionada(p.tiendaCodigo)} style={{ background: "transparent", border: "none", color: rol.color, fontWeight: 600, cursor: "pointer", padding: 0, fontSize: 12.5, textDecoration: "underline" }}>
+                        {p.tiendaNombre}
+                      </button>
+                    </td>
+                    <td style={tdStyle}>{p.weekDom ? etiquetaSemana(p.weekDom) : "—"}</td>
+                    <td style={{ ...tdStyle, fontWeight: 600 }}>{p.supervisor || "—"}</td>
+                    <td style={tdStyle}>{p.fechaCompletado || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 
