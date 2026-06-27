@@ -1250,6 +1250,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                               <option value="07:30">7:30 AM</option>
                               <option value="12:30">12:30 PM</option>
                               <option value="13:30">1:30 PM</option>
+                              <option value="14:30">2:30 PM</option>
                             </select>
                           </td>
                           <td className="col-salida" style={tdStyle}>
