@@ -158,6 +158,10 @@ export default function Fichaje({ onCerrar }) {
       if (!entry.llegadaReal) {
         // Fichaje de ENTRADA
         entry.llegadaReal = horaActual;
+        // Hora original del fichaje (inmutable): el supervisor puede corregir
+        // llegadaReal, pero esta queda como registro real para el control de
+        // llegadas tardes. Solo se fija en el primer fichaje.
+        if (!entry.llegadaFichada) entry.llegadaFichada = horaActual;
         tipo = "entrada";
       } else {
         // Fichaje de SALIDA

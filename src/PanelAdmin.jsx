@@ -501,15 +501,18 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
             const nombre = (e.nombre || "").trim();
             const cedula = (e.cedula || "").trim();
             if (!nombre || !cedula) return;
-            // llegada = hora programada, llegadaReal = hora que fichó
+            // llegada = hora programada. La alerta se basa en la HORA ORIGINAL
+            // del fichaje (llegadaFichada), que el supervisor NO puede editar.
+            // Si no existe (fichajes viejos), se usa llegadaReal como respaldo.
             const horaProg = (e.llegada || "").trim();
-            const horaReal = (e.llegadaReal || "").trim();
-            if (!horaProg || !horaReal) return;
+            const horaFichada = (e.llegadaFichada || e.llegadaReal || "").trim();
+            const horaCorregida = (e.llegadaReal || "").trim();
+            if (!horaProg || !horaFichada) return;
             const parseMin = (t) => { const [h, m] = t.split(":").map(Number); return isNaN(h) ? null : h * 60 + m; };
             const minProg = parseMin(horaProg);
-            const minReal = parseMin(horaReal);
-            if (minProg === null || minReal === null) return;
-            const diff = minReal - minProg;
+            const minFichada = parseMin(horaFichada);
+            if (minProg === null || minFichada === null) return;
+            const diff = minFichada - minProg;
             if (diff <= 0) return;
             todasLlegadasTardes.push({
               tiendaCodigo: h.tienda_codigo,
@@ -517,7 +520,8 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
               semanaFecha: h.semana_fecha,
               dia: d.dia, nombre, cedula,
               horaProgramada: horaProg,
-              horaLlegada: horaReal,
+              horaLlegada: horaFichada,
+              horaCorregida: (horaCorregida && horaCorregida !== horaFichada) ? horaCorregida : "",
               minutesTarde: diff,
             });
           });
@@ -1582,11 +1586,11 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                   const data = llegadasTardes.map((r) => ({
                     Tienda: r.tiendaNombre, Semana: SEMANA_LABEL[r.semanaFecha] || r.semanaFecha,
                     Día: r.dia, Operario: r.nombre, Cédula: r.cedula,
-                    "Hora programada": r.horaProgramada, "Hora llegada": r.horaLlegada,
-                    "Minutos tarde": r.minutesTarde,
+                    "Hora programada": r.horaProgramada, "Hora fichada (real)": r.horaLlegada,
+                    "Corregida a": r.horaCorregida || "", "Minutos tarde": r.minutesTarde,
                   }));
                   const hoja = XLSX.utils.json_to_sheet(data);
-                  hoja["!cols"] = [{ wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 26 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 14 }];
+                  hoja["!cols"] = [{ wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 26 }, { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 12 }, { wch: 14 }];
                   const libro = XLSX.utils.book_new();
                   XLSX.utils.book_append_sheet(libro, hoja, "Llegadas Tardes");
                   XLSX.writeFile(libro, `Llegadas_Tardes_${jefe ? jefe.nombre.replace(/\s+/g, "_") : "Zona"}.xlsx`);
@@ -1610,7 +1614,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                   <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
                     <th style={thStyle}>Tienda</th><th style={thStyle}>Semana</th><th style={thStyle}>Día</th>
                     <th style={thStyle}>Operario</th><th style={thStyle}>Cédula</th>
-                    <th style={thStyle}>Hora prog.</th><th style={thStyle}>Hora llegada</th><th style={thStyle}>Min. tarde</th>
+                    <th style={thStyle}>Hora prog.</th><th style={thStyle}>Hora fichada</th><th style={thStyle}>Min. tarde</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1627,7 +1631,12 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                           <td style={{ ...tdStyle, fontWeight: 600 }}>{r.nombre}</td>
                           <td style={tdStyle}>{r.cedula}</td>
                           <td style={tdStyle}>{r.horaProgramada}</td>
-                          <td style={{ ...tdStyle, color: "#E85D1F", fontWeight: 700 }}>{r.horaLlegada}</td>
+                          <td style={{ ...tdStyle, color: "#E85D1F", fontWeight: 700 }}>
+                            {r.horaLlegada}
+                            {r.horaCorregida && (
+                              <span style={{ display: "block", fontSize: 10.5, fontWeight: 600, color: "#5C5F5A" }}>corregida a {r.horaCorregida}</span>
+                            )}
+                          </td>
                           <td style={tdStyle}>
                             <span style={{ fontWeight: 700, color: r.minutesTarde >= 30 ? "#E53935" : "#E85D1F", background: r.minutesTarde >= 30 ? "#FCEBEB" : "#FFF0E8", padding: "2px 8px", borderRadius: 4, fontSize: 12 }}>
                               +{r.minutesTarde} min
