@@ -741,30 +741,15 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
   );
 
   const exportarAprobadasExcel = () => {
-    const data = [];
-    resumenAprobadasPorOperario.forEach((o) => {
-      o.desgloseSemanas.forEach((s) => {
-        data.push({
-          Operario: o.nombre, "Cédula": o.cedula, "Tienda(s)": o.tiendasLabel,
-          Semana: etiquetaSemana(s.dom),
-          "Horas Extra": Number(fmt(s.extras)),
-          "Horas Festivas/Dominicales": Number(fmt(s.festivas)),
-          "Horas Nocturnas": Number(fmt(s.nocturnas)),
-          "Descansos a pagar (días)": s.descansos || 0,
-        });
-      });
-      // Fila de total a pagar por operario
-      data.push({
-        Operario: o.nombre, "Cédula": o.cedula, "Tienda(s)": o.tiendasLabel,
-        Semana: "TOTAL A PAGAR",
-        "Horas Extra": Number(fmt(o.extras)),
-        "Horas Festivas/Dominicales": Number(fmt(o.festivas)),
-        "Horas Nocturnas": Number(fmt(o.nocturnas)),
-        "Descansos a pagar (días)": o.descansos || 0,
-      });
-    });
+    const data = resumenAprobadasPorOperario.map((o) => ({
+      Operario: o.nombre, "Cédula": o.cedula, "Tienda(s)": o.tiendasLabel,
+      "Horas Extra": Number(fmt(o.extras)),
+      "Horas Festivas/Dominicales": Number(fmt(o.festivas)),
+      "Horas Nocturnas": Number(fmt(o.nocturnas)),
+      "Descansos a pagar (días)": o.descansos || 0,
+    }));
     const hoja = XLSX.utils.json_to_sheet(data);
-    hoja["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 26 }, { wch: 16 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 20 }];
+    hoja["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 26 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 20 }];
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Horas aprobadas");
     XLSX.writeFile(libro, "Consolidado_Horas_Aprobadas_por_Operario.xlsx");
@@ -964,44 +949,28 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
-                      <th style={thStyle}>Operario / Semana</th><th style={{ ...thStyle, textAlign: "right" }}>Horas extra</th>
+                      <th style={thStyle}>Operario</th><th style={thStyle}>Cédula</th><th style={thStyle}>Tienda(s)</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Horas extra</th>
                       <th style={{ ...thStyle, textAlign: "right" }}>Festivas/dominicales</th><th style={{ ...thStyle, textAlign: "right" }}>Nocturnas</th>
                       <th style={{ ...thStyle, textAlign: "right" }}>Descansos (días)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {resumenAprobadasPorOperario.map((o) => (
-                      <React.Fragment key={o.cedula}>
-                        {/* Encabezado del operario */}
-                        <tr style={{ borderTop: "2px solid #EDEBE4", background: "#FBFBF9" }}>
-                          <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={5}>
-                            {o.nombre} <span style={{ color: "#9A958C", fontWeight: 400 }}>· Cédula {o.cedula} · {o.tiendasLabel}</span>
-                          </td>
-                        </tr>
-                        {/* Desglose por semana */}
-                        {o.desgloseSemanas.map((s) => (
-                          <tr key={`${o.cedula}-${s.dom}`} style={{ borderTop: "1px solid #F2EFE9" }}>
-                            <td style={{ ...tdStyle, paddingLeft: 24, color: "#5C5F5A" }}>Semana {etiquetaSemana(s.dom)}</td>
-                            <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(s.extras)}</td>
-                            <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(s.festivas)}</td>
-                            <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(s.nocturnas)}</td>
-                            <td style={{ ...tdStyle, textAlign: "right", color: s.descansos > 0 ? "#B3261E" : "#5C5F5A", fontWeight: s.descansos > 0 ? 700 : 400 }}>{s.descansos || 0}</td>
-                          </tr>
-                        ))}
-                        {/* Total a pagar del operario */}
-                        <tr style={{ background: "#F1F8E9", borderTop: "1px solid #C8E6C9" }}>
-                          <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>Total a pagar →</td>
-                          <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(o.extras)}</td>
-                          <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(o.festivas)}</td>
-                          <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(o.nocturnas)}</td>
-                          <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{o.descansos || 0}</td>
-                        </tr>
-                      </React.Fragment>
+                      <tr key={o.cedula} style={{ borderTop: "1px solid #EDEBE4" }}>
+                        <td style={{ ...tdStyle, fontWeight: 600 }}>{o.nombre}</td>
+                        <td style={tdStyle}>{o.cedula}</td>
+                        <td style={{ ...tdStyle, color: "#5C5F5A" }}>{o.tiendasLabel}</td>
+                        <td style={{ ...tdStyle, textAlign: "right", fontWeight: 700, color: "#2E7D32" }}>{fmt(o.extras)}</td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(o.festivas)}</td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(o.nocturnas)}</td>
+                        <td style={{ ...tdStyle, textAlign: "right", color: o.descansos > 0 ? "#B3261E" : "#5C5F5A", fontWeight: o.descansos > 0 ? 700 : 400 }}>{o.descansos || 0}</td>
+                      </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr style={{ borderTop: "3px double #2E7D32", background: "#E8F5E9" }}>
-                      <td style={{ ...tdStyle, fontWeight: 700, textAlign: "right" }}>TOTAL TIENDA →</td>
+                      <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={3}>TOTAL TIENDA</td>
                       <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(totalAprobadasGeneral.extras)}</td>
                       <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(totalAprobadasGeneral.festivas)}</td>
                       <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(totalAprobadasGeneral.nocturnas)}</td>
