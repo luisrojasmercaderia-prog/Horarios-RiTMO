@@ -1330,28 +1330,48 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               <div className="firma-line" style={{ marginTop: 28, borderTop: "1px solid #C9C6BC", paddingTop: 6, fontSize: 11.5, color: "#5C5F5A", maxWidth: 280 }}>Aprobado por JDZ</div>
             </div>
             <div className="no-print" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-              <button
-                onClick={() => {
-                  if (completado) {
-                    if (window.confirm("Esta planilla ya está marcada como completada.\n\n¿Quieres desmarcarla?")) {
-                      setCompletado(false);
-                      setFechaCompletado("");
-                    }
-                    return;
-                  }
-                  if (window.confirm("¿Confirmas que ya terminaste de programar los horarios de esta semana?\n\nEsto le indicará al Jefe de Zona que la planilla está lista.")) {
-                    setCompletado(true);
-                    setFechaCompletado(formatFechaISO(new Date()));
-                  }
-                }}
-                style={{ display: "inline-flex", alignItems: "center", gap: 8, background: completado ? "#2E7D32" : "#3FBFC4", color: "#FFFFFF", border: "none", borderRadius: 8, padding: "11px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-              >
-                <CheckCircle2 size={17} />
-                {completado ? "Planilla completada — Marcar de nuevo" : "Marcar planilla como completada"}
-              </button>
-              {completado && fechaCompletado && (
-                <span style={{ fontSize: 12, color: "#5C5F5A" }}>Completada el {formatFechaCorta(new Date(fechaCompletado + "T00:00:00"))}</span>
-              )}
+              {(() => {
+                // Días laborables con operario asignado que aún no tienen "Validado por SPV".
+                const pendientesValidar = days.reduce((acc, d) =>
+                  acc + (d.entries || []).filter((e) => (e.nombre || "").trim() && !esNoLaborable(e.estado) && !e.validado).length, 0);
+                const bloqueado = !completado && pendientesValidar > 0;
+                return (
+                  <>
+                    <button
+                      onClick={() => {
+                        if (completado) {
+                          if (window.confirm("Esta planilla ya está marcada como completada.\n\n¿Quieres desmarcarla?")) {
+                            setCompletado(false);
+                            setFechaCompletado("");
+                          }
+                          return;
+                        }
+                        if (bloqueado) {
+                          alert(`No puedes completar la planilla todavía.\n\nFaltan ${pendientesValidar} día(s) por validar. Activa el Modo Supervisor y marca "Validado por SPV" en todos los días laborables de tus operarios.`);
+                          return;
+                        }
+                        if (window.confirm("¿Confirmas que ya terminaste de programar los horarios de esta semana?\n\nEsto le indicará al Jefe de Zona que la planilla está lista.")) {
+                          setCompletado(true);
+                          setFechaCompletado(formatFechaISO(new Date()));
+                        }
+                      }}
+                      title={bloqueado ? `Faltan ${pendientesValidar} día(s) por validar (Validado por SPV)` : ""}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 8, background: completado ? "#2E7D32" : bloqueado ? "#B8B5AC" : "#3FBFC4", color: "#FFFFFF", border: "none", borderRadius: 8, padding: "11px 20px", fontSize: 14, fontWeight: 700, cursor: bloqueado ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: bloqueado ? 0.85 : 1 }}
+                    >
+                      <CheckCircle2 size={17} />
+                      {completado ? "Planilla completada — Marcar de nuevo" : "Marcar planilla como completada"}
+                    </button>
+                    {bloqueado && (
+                      <span style={{ fontSize: 12, color: "#B3261E", fontWeight: 600, textAlign: "right", maxWidth: 280 }}>
+                        Faltan {pendientesValidar} día(s) por validar (Validado por SPV) antes de completar.
+                      </span>
+                    )}
+                    {completado && fechaCompletado && (
+                      <span style={{ fontSize: 12, color: "#5C5F5A" }}>Completada el {formatFechaCorta(new Date(fechaCompletado + "T00:00:00"))}</span>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
