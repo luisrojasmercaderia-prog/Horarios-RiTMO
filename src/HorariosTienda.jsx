@@ -218,6 +218,7 @@ const TURNOS_FIJOS = {
   jornada_44: { llegada: "07:30", salida: "15:00", horasProgramadas: "6.5", breakEditable: true },
   jornada_44_tarde: { llegada: "14:30", salida: "22:00", horasProgramadas: "6.5", breakEditable: true },
   t_inventario_manana: { llegada: "06:00", salida: "14:30", horasProgramadas: "7.5" },
+  turno_partido_manana: { llegada: "06:00", salida: "", horasProgramadas: "", partidoManana: true },
   domingo_t_manana: { llegada: "07:30", salida: "15:00", horasProgramadas: "6.5", breakEditable: true },
   domingo_t_tarde: { llegada: "12:30", salida: "20:00", horasProgramadas: "6.5", breakEditable: true },
   feriado_manana: { llegada: "07:30", salida: "15:30", horasProgramadas: "6.5", breakEditable: true, esFestivoAuto: true },
@@ -792,7 +793,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               fechaRegistroNovedad: "",
             };
           }
-          if (field === "estado" && esTurnoFijo(value)) {
+          if (field === "estado" && esTurnoFijo(value) && TURNOS_FIJOS[value].partidoManana) {
+            // Turno partido (mañana): entrada 6:00 fija, salida la pone el supervisor, sin break.
+            updated = { ...updated, llegada: "06:00", salida: "", horasProgramadas: "", breakInicio: "", breakFin: "", llegadaReal: "", salidaReal: "", horasReales: "" };
+          } else if (field === "estado" && esTurnoFijo(value)) {
             const turno = TURNOS_FIJOS[value];
             updated = { ...updated, llegada: turno.llegada, salida: turno.salida, horasProgramadas: turno.horasProgramadas, llegadaReal: "", salidaReal: "", horasReales: "", breakInicio: "", breakFin: "" };
             if (turno.esFestivoAuto) updated.esFestivo = true;
@@ -828,6 +832,11 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                 updated.breakFin = sumarUnaHora(breakAuto) || "";
               }
             }
+          }
+          if (field === "salida" && updated.estado === "turno_partido_manana") {
+            // Bloque de la mañana corrido (6:00 → salida), sin break.
+            const dur = calcularDuracionHoras("06:00", value);
+            updated.horasProgramadas = dur && dur > 0 ? String(Math.round(dur * 100) / 100) : "";
           }
           if (field === "breakInicio") {
             const breakFinAuto = sumarUnaHora(value);
@@ -1239,6 +1248,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                               <option value="jornada_44">Sale una hora antes T. Mañana</option>
                               <option value="jornada_44_tarde">Entra una hora después T. Tarde</option>
                               <option value="t_inventario_manana">T.Inventario mañana</option>
+                              <option value="turno_partido_manana">Turno partido mañana</option>
                               <option value="domingo_t_manana">Domingo T. mañana</option>
                               <option value="domingo_t_tarde">Domingo T. tarde</option>
                               <option value="feriado_manana">Feriado mañana</option>
@@ -1263,7 +1273,19 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             </select>
                           </td>
                           <td className="col-salida" style={tdStyle}>
-                            <input disabled readOnly type="time" className="cell-input" value={entry.salida} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
+                            {entry.estado === "turno_partido_manana" ? (
+                              <select disabled={estaBloqueado(entry) || completado} className="cell-input" value={entry.salida} onChange={(ev) => updateEntry(d.dia, entry.id, "salida", ev.target.value)} style={{ cursor: "pointer" }}>
+                                <option value="">--:-- --</option>
+                                <option value="11:00">11:00 AM</option>
+                                <option value="11:30">11:30 AM</option>
+                                <option value="12:00">12:00 PM</option>
+                                <option value="12:30">12:30 PM</option>
+                                <option value="13:00">1:00 PM</option>
+                                <option value="13:30">1:30 PM</option>
+                              </select>
+                            ) : (
+                              <input disabled readOnly type="time" className="cell-input" value={entry.salida} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
+                            )}
                           </td>
                           <td className="col-break-inicio" style={tdStyle}>
                             <input disabled readOnly type="time" className="cell-input" value={entry.breakInicio} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
