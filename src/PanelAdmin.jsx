@@ -350,6 +350,11 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
   const [alertasAusencias, setAlertasAusencias] = useState([]);
   const [mostrarAusencias, setMostrarAusencias] = useState(false);
   const [descansosNoTomados, setDescansosNoTomados] = useState([]);
+  const [mostrarCrearTienda, setMostrarCrearTienda] = useState(false);
+  const [nuevaTienda, setNuevaTienda] = useState({ codigo: "", nombre: "", clave: "" });
+  const [crearTiendaError, setCrearTiendaError] = useState("");
+  const [creandoTienda, setCreandoTienda] = useState(false);
+  const [recargarToken, setRecargarToken] = useState(0);
   const [mostrarConsolidadoEmpleado, setMostrarConsolidadoEmpleado] = useState(false);
   const [soloMultiTienda, setSoloMultiTienda] = useState(false);
   const [empleadoExpandido, setEmpleadoExpandido] = useState(null);
@@ -534,6 +539,39 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
   };
 
   useEffect(() => { cargarDatos(); }, []);
+  // Recarga tras crear una tienda (cuando ya se actualizó la asignación del jefe).
+  useEffect(() => { if (recargarToken > 0) cargarDatos(); /* eslint-disable-line */ }, [recargarToken]);
+
+  const handleCrearTienda = async (e) => {
+    if (e) e.preventDefault();
+    setCrearTiendaError("");
+    const codigo = nuevaTienda.codigo.trim().toUpperCase();
+    const nombre = nuevaTienda.nombre.trim();
+    const clave = nuevaTienda.clave.trim();
+    if (!codigo || !nombre || !clave) { setCrearTiendaError("Completa el código, el nombre y la contraseña."); return; }
+    setCreandoTienda(true);
+    try {
+      const { data: existente } = await supabase.from("tiendas").select("codigo").eq("codigo", codigo).maybeSingle();
+      if (existente) { setCrearTiendaError("Ya existe una tienda con ese código."); setCreandoTienda(false); return; }
+      const { error: insErr } = await supabase.from("tiendas").insert({ codigo, nombre, clave });
+      if (insErr) throw insErr;
+      // Asignar la nueva tienda al Jefe de Zona actual (en sesión) para que la vea.
+      if (jefeKey) {
+        setAsignacionesJefes((prev) => {
+          const copia = Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, { ...v, tiendas: [...v.tiendas] }]));
+          if (copia[jefeKey] && !copia[jefeKey].tiendas.includes(codigo)) copia[jefeKey].tiendas.push(codigo);
+          return copia;
+        });
+      }
+      setNuevaTienda({ codigo: "", nombre: "", clave: "" });
+      setMostrarCrearTienda(false);
+      setCreandoTienda(false);
+      setRecargarToken((t) => t + 1);
+    } catch (err) {
+      setCrearTiendaError("No se pudo crear la tienda. Intenta de nuevo.");
+      setCreandoTienda(false);
+    }
+  };
 
   const handleAprobacion = async (fila, nuevoEstado) => {
     const key = `${fila.tiendaCodigo}__${fila.semanaFecha}__${fila.entryId}`;
@@ -834,6 +872,52 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       </div>
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 28px 60px" }}>
+
+        {/* Crear tienda — solo Jefe de Zona */}
+        {rolKey === "jefe_zona" && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+            <button onClick={() => { setMostrarCrearTienda(true); setCrearTiendaError(""); }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: rol.color, color: "#FFFFFF", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              <Store size={15} /> + Crear tienda
+            </button>
+          </div>
+        )}
+
+        {/* Modal crear tienda */}
+        {mostrarCrearTienda && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}
+            onClick={() => !creandoTienda && setMostrarCrearTienda(false)}>
+            <form onClick={(e) => e.stopPropagation()} onSubmit={handleCrearTienda}
+              style={{ background: "white", borderRadius: 12, padding: 26, maxWidth: 380, width: "100%", boxShadow: "0 8px 30px rgba(0,0,0,0.2)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: rol.color, display: "flex", alignItems: "center", gap: 8 }}><Store size={18} /> Crear nueva tienda</div>
+                <button type="button" onClick={() => setMostrarCrearTienda(false)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#5C5F5A" }}><X size={18} /></button>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, color: "#5C5F5A", textTransform: "uppercase", letterSpacing: "0.04em", display: "block", marginBottom: 4 }}>Código de tienda</label>
+                <input value={nuevaTienda.codigo} onChange={(e) => setNuevaTienda((p) => ({ ...p, codigo: e.target.value }))} placeholder="Ej. T0031" autoFocus
+                  style={{ width: "100%", border: "1px solid #DEDBD2", borderRadius: 6, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, color: "#5C5F5A", textTransform: "uppercase", letterSpacing: "0.04em", display: "block", marginBottom: 4 }}>Nombre de la tienda</label>
+                <input value={nuevaTienda.nombre} onChange={(e) => setNuevaTienda((p) => ({ ...p, nombre: e.target.value }))} placeholder="Ej. Santiago Centro"
+                  style={{ width: "100%", border: "1px solid #DEDBD2", borderRadius: 6, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 11, color: "#5C5F5A", textTransform: "uppercase", letterSpacing: "0.04em", display: "block", marginBottom: 4 }}>Contraseña de acceso</label>
+                <input type="password" value={nuevaTienda.clave} onChange={(e) => setNuevaTienda((p) => ({ ...p, clave: e.target.value }))} placeholder="••••••"
+                  style={{ width: "100%", border: "1px solid #DEDBD2", borderRadius: 6, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+              {crearTiendaError && <div style={{ background: "#FCEBEB", color: "#791F1F", fontSize: 12.5, padding: "8px 10px", borderRadius: 6, marginBottom: 12 }}>{crearTiendaError}</div>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="submit" disabled={creandoTienda} style={{ flex: 1, background: rol.color, color: "white", border: "none", borderRadius: 7, padding: "10px 14px", fontSize: 14, fontWeight: 700, cursor: creandoTienda ? "default" : "pointer", opacity: creandoTienda ? 0.7 : 1 }}>
+                  {creandoTienda ? "Creando..." : "Crear tienda"}
+                </button>
+                <button type="button" onClick={() => setMostrarCrearTienda(false)} style={{ background: "#FAFAF7", color: "#5C5F5A", border: "1px solid #EDEBE4", borderRadius: 7, padding: "10px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Alerta ausencias +2 días sin fichar — solo jefe_zona */}
         {rolKey === "jefe_zona" && !cargando && !error && alertasAusencias.length > 0 && (

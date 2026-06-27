@@ -118,14 +118,6 @@ function LoginTienda({ onIngresar, onAdmin }) {
             {cargando ? "Verificando..." : modo === "ingresar" ? "Ingresar" : "Crear tienda"}
           </button>
 
-          <button
-            type="button"
-            onClick={() => { setModo(modo === "ingresar" ? "crear" : "ingresar"); setError(""); }}
-            style={{ width: "100%", background: "transparent", border: "none", color: "#1B8388", fontSize: 12.5, marginTop: 14, cursor: "pointer" }}
-          >
-            {modo === "ingresar" ? "¿Primera vez? Crear nueva tienda" : "Ya tengo una tienda, ingresar"}
-          </button>
-
           <div style={{ borderTop: "1px solid #EDEBE4", marginTop: 18, paddingTop: 14 }}>
             <button
               type="button"
