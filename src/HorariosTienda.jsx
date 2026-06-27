@@ -1274,15 +1274,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           </td>
                           <td className="col-salida" style={tdStyle}>
                             {entry.estado === "turno_partido_manana" ? (
-                              <select disabled={completado || entry.validado} className="cell-input" value={entry.salida} onChange={(ev) => updateEntry(d.dia, entry.id, "salida", ev.target.value)} style={{ cursor: "pointer" }}>
-                                <option value="">--:-- --</option>
-                                <option value="11:00">11:00 AM</option>
-                                <option value="11:30">11:30 AM</option>
-                                <option value="12:00">12:00 PM</option>
-                                <option value="12:30">12:30 PM</option>
-                                <option value="13:00">1:00 PM</option>
-                                <option value="13:30">1:30 PM</option>
-                              </select>
+                              <input disabled={completado || entry.validado} type="time" className="cell-input" value={entry.salida} onChange={(ev) => updateEntry(d.dia, entry.id, "salida", ev.target.value)} style={{ cursor: "text" }} />
                             ) : (
                               <input disabled readOnly type="time" className="cell-input" value={entry.salida} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                             )}
