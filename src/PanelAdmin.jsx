@@ -378,7 +378,10 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       // Se filtra día por día según su fecha real, y se descartan las planillas
       // que no dejen ningún día dentro del periodo.
       const periodoVigente = getPeriodoVigente();
+      // El Jefe de Zona solo ve planillas que el supervisor ya marcó como completadas.
+      const soloCompletadasJDZ = rolKey === "jefe_zona";
       const horarios = (horariosRaw || [])
+        .filter((h) => !soloCompletadasJDZ || (h.datos && h.datos.completado === true))
         .map((h) => filtrarHorarioAlPeriodo(h, periodoVigente))
         .filter((h) => (h.datos.days || []).length > 0);
 
