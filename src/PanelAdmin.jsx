@@ -1317,18 +1317,21 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
         </div>
         )}
 
-        {/* Reporte llegadas tardes — solo jefe_zona */}
-        {rolKey === "jefe_zona" && !cargando && !error && llegadasTardes.length > 0 && (
+        {/* Reporte llegadas tardes — solo jefe_zona (siempre visible) */}
+        {rolKey === "jefe_zona" && !cargando && !error && (
           <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 22, marginTop: 24, border: "1px solid #EDEBE4" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <AlertTriangle size={18} color="#E85D1F" />
                 <div style={{ fontSize: 15, fontWeight: 700 }}>Reporte de llegadas tardes</div>
-                <span style={{ background: "#E85D1F", color: "white", borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 700 }}>
-                  {llegadasTardes.length} registro{llegadasTardes.length !== 1 ? "s" : ""}
-                </span>
+                {llegadasTardes.length > 0 && (
+                  <span style={{ background: "#E85D1F", color: "white", borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 700 }}>
+                    {llegadasTardes.length} registro{llegadasTardes.length !== 1 ? "s" : ""}
+                  </span>
+                )}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
+               {llegadasTardes.length > 0 && (<>
                 <button onClick={() => {
                   const SEMANA_LABEL = { semana_1: "Semana 1", semana_2: "Semana 2", semana_3: "Semana 3", semana_4: "Semana 4" };
                   const data = llegadasTardes.map((r) => ({
@@ -1348,9 +1351,15 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                 <button onClick={() => setMostrarReporteTardes(!mostrarReporteTardes)} style={{ ...btnStyle("#FFF6EE", rol.color, false), border: `1px solid ${rol.color}` }}>
                   {mostrarReporteTardes ? "Ocultar" : "Ver detalle"}
                 </button>
+               </>)}
               </div>
             </div>
-            {mostrarReporteTardes && (
+            {llegadasTardes.length === 0 && (
+              <div style={{ fontSize: 13, color: "#5C5F5A", background: "#F1F8E9", padding: "12px 14px", borderRadius: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                <CheckCircle size={15} color="#2E7D32" /> No hay llegadas tardes en el periodo vigente. ¡Todos llegaron a tiempo!
+              </div>
+            )}
+            {llegadasTardes.length > 0 && mostrarReporteTardes && (
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
