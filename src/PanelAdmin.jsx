@@ -378,12 +378,15 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       // Se filtra día por día según su fecha real, y se descartan las planillas
       // que no dejen ningún día dentro del periodo.
       const periodoVigente = getPeriodoVigente();
-      // El Jefe de Zona solo ve planillas que el supervisor ya marcó como completadas.
-      const soloCompletadasJDZ = rolKey === "jefe_zona";
-      const horarios = (horariosRaw || [])
-        .filter((h) => !soloCompletadasJDZ || (h.datos && h.datos.completado === true))
+      // Todas las planillas del periodo (sin filtrar por "completada"). Las alertas en
+      // tiempo real (llegadas tardes y ausencias) se calculan sobre estas.
+      const horariosPeriodo = (horariosRaw || [])
         .map((h) => filtrarHorarioAlPeriodo(h, periodoVigente))
         .filter((h) => (h.datos.days || []).length > 0);
+      // El Jefe de Zona solo ve, en consolidado/aprobación/descansos, las planillas que
+      // el supervisor ya marcó como completadas.
+      const soloCompletadasJDZ = rolKey === "jefe_zona";
+      const horarios = horariosPeriodo.filter((h) => !soloCompletadasJDZ || (h.datos && h.datos.completado === true));
 
       const horariosPorTienda = {};
       (horarios || []).forEach((h) => {
@@ -490,7 +493,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       setNovedadesRRHH(todasNovedades);
 
       const todasLlegadasTardes = [];
-      (horarios || []).forEach((h) => {
+      (horariosPeriodo || []).forEach((h) => {
         const tiendaInfo = (tiendas || []).find((t) => t.codigo === h.tienda_codigo);
         const days = (h.datos && h.datos.days) || [];
         days.forEach((d) => {
@@ -529,7 +532,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       hoy.setHours(0, 0, 0, 0);
 
       const mapaAusentes = {}; // key: tienda+cedula → { nombre, cedula, tienda, dias[] }
-      (horarios || []).forEach((h) => {
+      (horariosPeriodo || []).forEach((h) => {
         if (!h.semana_fecha || !h.semana_fecha.match(/^\d{4}-\d{2}-\d{2}$/)) return;
         const tiendaInfo = (tiendas || []).find((t) => t.codigo === h.tienda_codigo);
         const inicioSemana = new Date(h.semana_fecha + "T00:00:00");
