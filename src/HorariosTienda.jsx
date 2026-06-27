@@ -91,6 +91,8 @@ function emptyEntry(id) {
     cedula: "",
     llegada: "",
     salida: "",
+    llegada2: "",
+    salida2: "",
     breakInicio: "",
     breakFin: "",
     horasProgramadas: "",
@@ -218,6 +220,7 @@ const TURNOS_FIJOS = {
   jornada_44: { llegada: "07:30", salida: "15:00", horasProgramadas: "6.5", breakEditable: true },
   jornada_44_tarde: { llegada: "14:30", salida: "22:00", horasProgramadas: "6.5", breakEditable: true },
   t_inventario_manana: { llegada: "06:00", salida: "14:30", horasProgramadas: "7.5" },
+  t_inventario_tarde: { llegada: "06:00", salida: "", llegada2: "13:30", salida2: "22:00", horasProgramadas: "7.5", inventarioPartido: true, breakInicio: "17:00", breakFin: "18:00" },
   domingo_t_manana: { llegada: "07:30", salida: "15:00", horasProgramadas: "6.5", breakEditable: true },
   domingo_t_tarde: { llegada: "12:30", salida: "20:00", horasProgramadas: "6.5", breakEditable: true },
   feriado_manana: { llegada: "07:30", salida: "15:30", horasProgramadas: "6.5", breakEditable: true, esFestivoAuto: true },
@@ -774,7 +777,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             if (match) updated.nombre = match.nombre;
           }
           if (field === "estado" && esNoLaborable(value)) {
-            updated = { ...updated, horasProgramadas: "", llegadaReal: "", salidaReal: "", horasReales: "", llegada: "", salida: "", breakInicio: "", breakFin: "", horasNocturnas: "" };
+            updated = { ...updated, horasProgramadas: "", llegadaReal: "", salidaReal: "", horasReales: "", llegada: "", salida: "", llegada2: "", salida2: "", breakInicio: "", breakFin: "", horasNocturnas: "" };
           }
           if (field === "estado") {
             if (esNovedadRRHH(value) && !esNovedadRRHH(e.estado)) {
@@ -784,6 +787,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               updated.fechaRegistroNovedad = "";
               updated.enviadoRRHH = false;
             }
+            // Limpiar el 2º bloque si el estado nuevo no es el inventario partido.
+            if (value !== "t_inventario_tarde") { updated.llegada2 = ""; updated.salida2 = ""; }
           }
           if (field === "enviadoRRHH" && value === true) {
             updated = {
@@ -792,9 +797,20 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
               fechaRegistroNovedad: "",
             };
           }
-          if (field === "estado" && esTurnoFijo(value)) {
+          if (field === "estado" && esTurnoFijo(value) && TURNOS_FIJOS[value].inventarioPartido) {
+            // Turno partido de inventario: bloque 1 (mañana, salida editable) + bloque 2 (tarde fijo con break).
             const turno = TURNOS_FIJOS[value];
-            updated = { ...updated, llegada: turno.llegada, salida: turno.salida, horasProgramadas: turno.horasProgramadas, llegadaReal: "", salidaReal: "", horasReales: "", breakInicio: "", breakFin: "" };
+            updated = {
+              ...updated,
+              llegada: turno.llegada, salida: turno.salida,
+              llegada2: turno.llegada2, salida2: turno.salida2,
+              breakInicio: turno.breakInicio, breakFin: turno.breakFin,
+              horasProgramadas: turno.horasProgramadas,
+              llegadaReal: "", salidaReal: "", horasReales: "",
+            };
+          } else if (field === "estado" && esTurnoFijo(value)) {
+            const turno = TURNOS_FIJOS[value];
+            updated = { ...updated, llegada: turno.llegada, salida: turno.salida, llegada2: "", salida2: "", horasProgramadas: turno.horasProgramadas, llegadaReal: "", salidaReal: "", horasReales: "", breakInicio: "", breakFin: "" };
             if (turno.esFestivoAuto) updated.esFestivo = true;
             if (!turnoMuyCortoParaBreak(updated)) {
               const diaActualBreak = prev.find((dd) => dd.dia === dia);
@@ -811,6 +827,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           if (field === "llegada") {
             const salidaAuto = HORARIOS_PREDETERMINADOS[value];
             updated.salida = salidaAuto || "";
+            updated.llegada2 = "";
+            updated.salida2 = "";
             updated.horasProgramadas = salidaAuto ? "7.5" : "";
             updated.breakInicio = "";
             updated.breakFin = "";
@@ -828,6 +846,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                 updated.breakFin = sumarUnaHora(breakAuto) || "";
               }
             }
+          }
+          if (field === "salida" && updated.estado === "t_inventario_tarde") {
+            // Bloque 1 (06:00 → salida, sin break) + Bloque 2 (1:30pm → 10pm = 7.5h).
+            const b1 = calcularDuracionHoras("06:00", value) || 0;
+            const total = Math.round((b1 + 7.5) * 100) / 100;
+            updated.horasProgramadas = total > 0 ? String(total) : "7.5";
           }
           if (field === "breakInicio") {
             const breakFinAuto = sumarUnaHora(value);
@@ -1022,8 +1046,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           tr { page-break-inside: avoid !important; break-inside: avoid !important; }
           .day-block { page-break-inside: avoid !important; break-inside: avoid !important; }
           input, select { border: none !important; background: transparent !important; font-size: 8px !important; -webkit-appearance: none !important; appearance: none !important; }
-          .col-llegada, .col-salida, .col-break-inicio, .col-break-fin, .col-hrs-prog, .col-llegada-real, .col-salida-real, .col-hrs-reales, .col-nocturnas, .col-saldo, .col-saldo-festiva, .col-validado, .col-rrhh, .col-obs, .col-acciones { display: none !important; }
-          .print-mode-planilla .col-llegada, .print-mode-planilla .col-salida, .print-mode-planilla .col-break-inicio, .print-mode-planilla .col-break-fin, .print-mode-planilla .col-hrs-prog { display: table-cell !important; }
+          .col-llegada, .col-salida, .col-llegada2, .col-salida2, .col-break-inicio, .col-break-fin, .col-hrs-prog, .col-llegada-real, .col-salida-real, .col-hrs-reales, .col-nocturnas, .col-saldo, .col-saldo-festiva, .col-validado, .col-rrhh, .col-obs, .col-acciones { display: none !important; }
+          .print-mode-planilla .col-llegada, .print-mode-planilla .col-salida, .print-mode-planilla .col-llegada2, .print-mode-planilla .col-salida2, .print-mode-planilla .col-break-inicio, .print-mode-planilla .col-break-fin, .print-mode-planilla .col-hrs-prog { display: table-cell !important; }
           .print-mode-resumen .col-llegada-real, .print-mode-resumen .col-salida-real, .print-mode-resumen .col-hrs-reales, .print-mode-resumen .col-nocturnas, .print-mode-resumen .col-saldo, .print-mode-resumen .col-saldo-festiva { display: table-cell !important; }
           .print-nota { font-size: 7px !important; padding-bottom: 3px !important; margin-bottom: 4px !important; line-height: 1.3 !important; }
           .store-info-grid { margin-bottom: 5px !important; gap: 6px !important; }
@@ -1179,6 +1203,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                         <th style={{ ...thStyle, minWidth: 170 }}>Estado</th>
                         <th className="col-llegada" style={thStyle}>Hora Llegada</th>
                         <th className="col-salida" style={thStyle}>Hora Salida</th>
+                        <th className="col-llegada2" style={thStyle}>Llegada 2</th>
+                        <th className="col-salida2" style={thStyle}>Salida 2</th>
                         <th className="col-break-inicio" style={thStyle}>Break Inicio</th>
                         <th className="col-break-fin" style={thStyle}>Break Fin</th>
                         <th className="col-hrs-prog" style={thStyle}>Hrs Prog.</th>
@@ -1230,6 +1256,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                               <option value="jornada_44">Sale una hora antes T. Mañana</option>
                               <option value="jornada_44_tarde">Entra una hora después T. Tarde</option>
                               <option value="t_inventario_manana">T.Inventario mañana</option>
+                              <option value="t_inventario_tarde">T. Inventario tarde (partido)</option>
                               <option value="domingo_t_manana">Domingo T. mañana</option>
                               <option value="domingo_t_tarde">Domingo T. tarde</option>
                               <option value="feriado_manana">Feriado mañana</option>
@@ -1254,7 +1281,24 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             </select>
                           </td>
                           <td className="col-salida" style={tdStyle}>
-                            <input disabled readOnly type="time" className="cell-input" value={entry.salida} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
+                            {entry.estado === "t_inventario_tarde" ? (
+                              <select disabled={estaBloqueado(entry) || completado} className="cell-input" value={entry.salida} onChange={(ev) => updateEntry(d.dia, entry.id, "salida", ev.target.value)} style={{ cursor: "pointer" }}>
+                                <option value="">--:-- --</option>
+                                <option value="11:00">11:00 AM</option>
+                                <option value="11:30">11:30 AM</option>
+                                <option value="12:00">12:00 PM</option>
+                                <option value="12:30">12:30 PM</option>
+                                <option value="13:00">1:00 PM</option>
+                              </select>
+                            ) : (
+                              <input disabled readOnly type="time" className="cell-input" value={entry.salida} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
+                            )}
+                          </td>
+                          <td className="col-llegada2" style={tdStyle}>
+                            <input disabled readOnly type="time" className="cell-input" value={entry.llegada2 || ""} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
+                          </td>
+                          <td className="col-salida2" style={tdStyle}>
+                            <input disabled readOnly type="time" className="cell-input" value={entry.salida2 || ""} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                           </td>
                           <td className="col-break-inicio" style={tdStyle}>
                             <input disabled readOnly type="time" className="cell-input" value={entry.breakInicio} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
