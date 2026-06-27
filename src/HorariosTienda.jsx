@@ -1256,9 +1256,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             <input disabled readOnly type="time" className="cell-input" value={entry.salida} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                           </td>
                           <td className="col-break-inicio" style={tdStyle}>
-                            <input disabled={parcialBloqueado(entry) || completado} type="time" className="cell-input" value={entry.breakInicio}
-                              onChange={(e) => updateEntry(d.dia, entry.id, "breakInicio", e.target.value)}
-                              style={(parcialBloqueado(entry) || completado) ? disabledCellStyle : undefined} />
+                            <input disabled readOnly type="time" className="cell-input" value={entry.breakInicio} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                           </td>
                           <td className="col-break-fin" style={tdStyle}>
                             <input disabled readOnly type="time" className="cell-input" value={entry.breakFin} style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
