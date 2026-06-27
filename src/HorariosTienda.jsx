@@ -874,6 +874,15 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     setNextId((n) => n + 1);
   };
 
+  // Agrega una segunda fila el mismo día con el mismo operario (turno partido).
+  const addSegundoTurno = (dia, entry) => {
+    const nuevo = { ...emptyEntry(nextId), nombre: entry.nombre, cedula: entry.cedula, fecha: entry.fecha };
+    setDays((prev) =>
+      prev.map((d) => (d.dia === dia ? { ...d, entries: [...d.entries, nuevo] } : d))
+    );
+    setNextId((n) => n + 1);
+  };
+
   const removeEntry = (dia, entryId) => {
     setDays((prev) =>
       prev.map((d) =>
@@ -1346,11 +1355,18 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                               placeholder="—" style={(entry.cedula.trim() === "" || completado) ? disabledCellStyle : undefined} />
                           </td>
                           <td className="col-acciones no-print" style={tdStyle}>
-                            {d.entries.length > 1 && !completado && !entry.validado && modoSupervisor && (
-                              <button onClick={() => removeEntry(d.dia, entry.id)} style={iconBtnStyle}>
-                                <Trash2 size={14} color="#B3261E" />
-                              </button>
-                            )}
+                            <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                              {modoSupervisor && !completado && entry.nombre.trim() !== "" && (
+                                <button onClick={() => addSegundoTurno(d.dia, entry)} title="Agregar 2º turno (mismo operario, turno partido)" style={iconBtnStyle}>
+                                  <Plus size={14} color="#1B8388" />
+                                </button>
+                              )}
+                              {d.entries.length > 1 && !completado && !entry.validado && modoSupervisor && (
+                                <button onClick={() => removeEntry(d.dia, entry.id)} style={iconBtnStyle}>
+                                  <Trash2 size={14} color="#B3261E" />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
