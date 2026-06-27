@@ -270,7 +270,7 @@ function estaBloqueado(entry) {
 
 function parcialBloqueado(entry) {
   if (turnoMuyCortoParaBreak(entry)) return true;
-  if (esTurnoFijo(entry.estado) && TURNOS_FIJOS[entry.estado].breakEditable) {
+  if (esTurnoFijo(entry.estado) && (TURNOS_FIJOS[entry.estado].breakEditable || entry.estado === "turno_partido_manana")) {
     return esNoLaborable(entry.estado) || entry.cedula.trim() === "";
   }
   return estaBloqueado(entry);
