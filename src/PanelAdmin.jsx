@@ -287,6 +287,10 @@ function PantallaRoles({ onRolSeleccionado }) {
               {key !== "jefe_zona" && <Lock size={16} style={{ marginLeft: "auto", opacity: 0.4 }} />}
             </button>
           ))}
+          <button onClick={() => { window.location.href = "/"; }}
+            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, background: "transparent", border: "none", color: "#5C5F5A", fontSize: 13, cursor: "pointer", fontFamily: "inherit", marginTop: 4, textDecoration: "underline" }}>
+            <ChevronLeft size={15} /> Volver al inicio
+          </button>
         </div>
       )}
       {rolPendiente && (
