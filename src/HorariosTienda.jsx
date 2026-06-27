@@ -1227,8 +1227,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                               style={{ cursor: completado ? "not-allowed" : "pointer", width: "100%", minWidth: 160, whiteSpace: "nowrap", fontWeight: estaBloqueado(entry) ? 700 : 400, color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14" }}>
                               <option value="">Seleccionar...</option>
                               <option value="trabaja">Trabaja</option>
-                              <option value="jornada_44">Jornada 44 mañana (sale 1h antes)</option>
-                              <option value="jornada_44_tarde">Jornada 44 tarde (entra 1h tarde)</option>
+                              <option value="jornada_44">Sale una hora antes T. Mañana</option>
+                              <option value="jornada_44_tarde">Entra una hora después T. Tarde</option>
                               <option value="t_inventario_manana">T.Inventario mañana</option>
                               <option value="domingo_t_manana">Domingo T. mañana</option>
                               <option value="domingo_t_tarde">Domingo T. tarde</option>
