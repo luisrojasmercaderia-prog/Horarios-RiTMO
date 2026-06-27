@@ -215,6 +215,7 @@ function diasVencidosRRHH(entry) {
 }
 
 const TURNOS_FIJOS = {
+  jornada_44: { llegada: "07:30", salida: "15:00", horasProgramadas: "6.5", breakEditable: true },
   t_inventario_manana: { llegada: "06:00", salida: "14:30", horasProgramadas: "7.5" },
   domingo_t_manana: { llegada: "07:30", salida: "15:00", horasProgramadas: "6.5", breakEditable: true },
   domingo_t_tarde: { llegada: "12:30", salida: "20:00", horasProgramadas: "6.5", breakEditable: true },
@@ -1110,6 +1111,52 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
             </Field>
           </div>
 
+          {/* Horas por operario en la semana (máx. 44h) — aviso en vivo */}
+          {(() => {
+            const totales = {};
+            days.forEach((d) => {
+              (d.entries || []).forEach((e) => {
+                const nombre = (e.nombre || "").trim();
+                if (!nombre) return;
+                const key = (e.cedula || "").trim() || nombre;
+                if (!totales[key]) totales[key] = { nombre, horas: 0 };
+                totales[key].horas += parseFloat(e.horasProgramadas) || 0;
+              });
+            });
+            const lista = Object.values(totales)
+              .map((o) => ({ ...o, horas: Math.round(o.horas * 100) / 100 }))
+              .filter((o) => o.horas > 0)
+              .sort((a, b) => b.horas - a.horas);
+            if (lista.length === 0) return null;
+            const fmtH = (n) => (n % 1 === 0 ? String(n) : n.toFixed(1));
+            const algunoExcede = lista.some((o) => o.horas > 44);
+            return (
+              <div className="no-print" style={{ marginBottom: 22, border: `1.5px solid ${algunoExcede ? "#E53935" : "#E5E3DC"}`, borderRadius: 8, padding: "14px 16px", background: algunoExcede ? "#FFF6F5" : "#FAFAF7" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#241C14" }}>Horas por operario — esta semana</span>
+                  <span style={{ fontSize: 12, color: "#5C5F5A" }}>(máximo 44h)</span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {lista.map((o) => {
+                    const excede = o.horas > 44;
+                    return (
+                      <div key={o.nombre} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: excede ? "#FCEBEB" : "#FFFFFF", border: `1px solid ${excede ? "#E53935" : "#E5E3DC"}`, borderRadius: 7, padding: "6px 12px", fontSize: 12.5 }}>
+                        <span style={{ fontWeight: 600, color: "#241C14" }}>{o.nombre}</span>
+                        <span style={{ fontWeight: 700, color: excede ? "#E53935" : "#1B8388" }}>{fmtH(o.horas)}h</span>
+                        {excede && <span style={{ fontSize: 11, color: "#E53935", fontWeight: 700 }}>baja {fmtH(o.horas - 44)}h</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                {algunoExcede && (
+                  <div style={{ fontSize: 12, color: "#E53935", fontWeight: 600, marginTop: 10 }}>
+                    ⚠ Hay operarios que superan las 44h. Asigna el estado &quot;Jornada 44 (−1h)&quot; en un día (o reduce 1 hora) para que cierren en 44h.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {days.map((d) => {
             if (d.fechaDate === null && semanaFechas.length) return null;
             const fechaLabel = d.fechaDate ? formatFechaCorta(new Date(d.fechaDate + "T00:00:00")) : "";
@@ -1179,6 +1226,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                               style={{ cursor: completado ? "not-allowed" : "pointer", width: "100%", minWidth: 160, whiteSpace: "nowrap", fontWeight: estaBloqueado(entry) ? 700 : 400, color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14" }}>
                               <option value="">Seleccionar...</option>
                               <option value="trabaja">Trabaja</option>
+                              <option value="jornada_44">Jornada 44 (−1h)</option>
                               <option value="t_inventario_manana">T.Inventario mañana</option>
                               <option value="domingo_t_manana">Domingo T. mañana</option>
                               <option value="domingo_t_tarde">Domingo T. tarde</option>
