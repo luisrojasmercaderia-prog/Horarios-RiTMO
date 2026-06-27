@@ -345,6 +345,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
   const [mostrarReporteTardes, setMostrarReporteTardes] = useState(false);
   const [alertasAusencias, setAlertasAusencias] = useState([]);
   const [mostrarAusencias, setMostrarAusencias] = useState(false);
+  const [descansosNoTomados, setDescansosNoTomados] = useState([]);
   const [mostrarConsolidadoEmpleado, setMostrarConsolidadoEmpleado] = useState(false);
   const [soloMultiTienda, setSoloMultiTienda] = useState(false);
   const [empleadoExpandido, setEmpleadoExpandido] = useState(null);
@@ -413,6 +414,45 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       const mapaAprobaciones = {};
       (aprobacionesData || []).forEach((a) => { mapaAprobaciones[`${a.tienda_codigo}__${a.semana_fecha}__${a.entry_id}`] = a.estado; });
       todasFilasExtras.forEach((f) => { f.aprobacionEstado = mapaAprobaciones[`${f.tiendaCodigo}__${f.semanaFecha}__${f.entryId}`] || null; });
+
+      // Descansos no tomados: por (cédula, semana), si trabajó los 7 días sin
+      // ningún día en estado "descanso", se le debe pagar ese descanso (1 día).
+      const aggSemana = {};
+      (horarios || []).forEach((h) => {
+        ((h.datos && h.datos.days) || []).forEach((d) => {
+          const fecha = d.fechaDate || d.fecha;
+          if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
+          const weekDom = domingoDeSemanaISO(fecha);
+          (d.entries || []).forEach((e) => {
+            const nombre = (e.nombre || "").trim();
+            const cedula = (e.cedula || "").trim();
+            if (!nombre || !cedula) return;
+            const key = `${cedula}__${weekDom}`;
+            if (!aggSemana[key]) aggSemana[key] = { cedula, nombre, weekDom, trabajados: new Set(), descansos: new Set(), tiendas: {} };
+            const reg = aggSemana[key];
+            if (e.estado === "descanso") { reg.descansos.add(fecha); return; }
+            const noLab = ["incapacitado", "licencia_maternidad", "luto", "vacaciones"].includes(e.estado);
+            if (!noLab && (e.estado || "").trim()) {
+              reg.trabajados.add(fecha);
+              reg.tiendas[h.tienda_codigo] = (reg.tiendas[h.tienda_codigo] || 0) + 1;
+            }
+          });
+        });
+      });
+      const todosDescansos = [];
+      Object.values(aggSemana).forEach((reg) => {
+        if (reg.descansos.size === 0 && reg.trabajados.size >= 7) {
+          const tiendaCodigo = Object.entries(reg.tiendas).sort((a, b) => b[1] - a[1])[0]?.[0];
+          if (!tiendaCodigo) return;
+          const semFecha = `descanso:${reg.weekDom}:${reg.cedula}`;
+          todosDescansos.push({
+            cedula: reg.cedula, nombre: reg.nombre, weekDom: reg.weekDom,
+            tiendaCodigo, semanaFecha: semFecha, entryId: 0,
+            aprobacionEstado: mapaAprobaciones[`${tiendaCodigo}__${semFecha}__0`] || null,
+          });
+        }
+      });
+      setDescansosNoTomados(todosDescansos);
 
       setFilasExtras(todasFilasExtras);
       setAprobaciones(mapaAprobaciones);
@@ -503,6 +543,22 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       setFilasExtras((prev) => prev.map((f) =>
         f.tiendaCodigo === fila.tiendaCodigo && f.semanaFecha === fila.semanaFecha && f.entryId === fila.entryId
           ? { ...f, aprobacionEstado: nuevoEstado } : f
+      ));
+    } catch (e) { alert("Error al guardar la aprobación. Intenta de nuevo."); }
+  };
+
+  const handleAprobacionDescanso = async (d, nuevoEstado) => {
+    const key = `${d.tiendaCodigo}__${d.semanaFecha}__0`;
+    try {
+      const { error } = await supabase.from("aprobaciones").upsert(
+        { tienda_codigo: d.tiendaCodigo, semana_fecha: d.semanaFecha, entry_id: 0, estado: nuevoEstado },
+        { onConflict: "tienda_codigo,semana_fecha,entry_id" }
+      );
+      if (error) throw error;
+      setAprobaciones((prev) => ({ ...prev, [key]: nuevoEstado }));
+      setDescansosNoTomados((prev) => prev.map((x) =>
+        x.cedula === d.cedula && x.weekDom === d.weekDom && x.tiendaCodigo === d.tiendaCodigo
+          ? { ...x, aprobacionEstado: nuevoEstado } : x
       ));
     } catch (e) { alert("Error al guardar la aprobación. Intenta de nuevo."); }
   };
@@ -635,7 +691,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       const cedula = (f.cedula || "").trim();
       if (!cedula) return;
       if (!mapa[cedula]) {
-        mapa[cedula] = { cedula, nombre: f.nombre || "(Sin nombre)", tiendas: {}, semanas: {}, extras: 0, festivas: 0, nocturnas: 0, registros: 0 };
+        mapa[cedula] = { cedula, nombre: f.nombre || "(Sin nombre)", tiendas: {}, semanas: {}, extras: 0, festivas: 0, nocturnas: 0, descansos: 0, registros: 0 };
       }
       const o = mapa[cedula];
       o.extras += f.extra || 0;
@@ -644,10 +700,25 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       o.registros += 1;
       o.tiendas[f.tiendaCodigo] = listaTiendas.find((t) => t.codigo === f.tiendaCodigo)?.nombre || f.tiendaCodigo;
       const dom = domingoDeSemanaISO(f.fecha);
-      if (!o.semanas[dom]) o.semanas[dom] = { dom, extras: 0, festivas: 0, nocturnas: 0 };
+      if (!o.semanas[dom]) o.semanas[dom] = { dom, extras: 0, festivas: 0, nocturnas: 0, descansos: 0 };
       o.semanas[dom].extras += f.extra || 0;
       o.semanas[dom].festivas += f.festivas || 0;
       o.semanas[dom].nocturnas += f.nocturnas || 0;
+    });
+    // Descansos no tomados aprobados por el Jefe de Zona (se pagan como 1 día).
+    descansosNoTomados.forEach((d) => {
+      if (d.aprobacionEstado !== "aprobado") return;
+      if (tiendaSeleccionada && d.tiendaCodigo !== tiendaSeleccionada) return;
+      const cedula = (d.cedula || "").trim();
+      if (!cedula) return;
+      if (!mapa[cedula]) {
+        mapa[cedula] = { cedula, nombre: d.nombre || "(Sin nombre)", tiendas: {}, semanas: {}, extras: 0, festivas: 0, nocturnas: 0, descansos: 0, registros: 0 };
+      }
+      const o = mapa[cedula];
+      o.descansos += 1;
+      o.tiendas[d.tiendaCodigo] = listaTiendas.find((t) => t.codigo === d.tiendaCodigo)?.nombre || d.tiendaCodigo;
+      if (!o.semanas[d.weekDom]) o.semanas[d.weekDom] = { dom: d.weekDom, extras: 0, festivas: 0, nocturnas: 0, descansos: 0 };
+      o.semanas[d.weekDom].descansos += 1;
     });
     return Object.values(mapa)
       .map((o) => ({
@@ -655,7 +726,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
         tiendasLabel: Object.values(o.tiendas).join(", "),
         desgloseSemanas: Object.values(o.semanas).sort((a, b) => a.dom.localeCompare(b.dom)),
       }))
-      .sort((a, b) => (b.extras + b.festivas + b.nocturnas) - (a.extras + a.festivas + a.nocturnas) || a.nombre.localeCompare(b.nombre));
+      .sort((a, b) => (b.extras + b.festivas + b.nocturnas + b.descansos) - (a.extras + a.festivas + a.nocturnas + a.descansos) || a.nombre.localeCompare(b.nombre));
   })();
 
   const totalAprobadasGeneral = resumenAprobadasPorOperario.reduce(
@@ -663,9 +734,10 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       extras: acc.extras + o.extras,
       festivas: acc.festivas + o.festivas,
       nocturnas: acc.nocturnas + o.nocturnas,
+      descansos: acc.descansos + o.descansos,
       registros: acc.registros + o.registros,
     }),
-    { extras: 0, festivas: 0, nocturnas: 0, registros: 0 }
+    { extras: 0, festivas: 0, nocturnas: 0, descansos: 0, registros: 0 }
   );
 
   const exportarAprobadasExcel = () => {
@@ -678,6 +750,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
           "Horas Extra": Number(fmt(s.extras)),
           "Horas Festivas/Dominicales": Number(fmt(s.festivas)),
           "Horas Nocturnas": Number(fmt(s.nocturnas)),
+          "Descansos a pagar (días)": s.descansos || 0,
         });
       });
       // Fila de total a pagar por operario
@@ -687,10 +760,11 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
         "Horas Extra": Number(fmt(o.extras)),
         "Horas Festivas/Dominicales": Number(fmt(o.festivas)),
         "Horas Nocturnas": Number(fmt(o.nocturnas)),
+        "Descansos a pagar (días)": o.descansos || 0,
       });
     });
     const hoja = XLSX.utils.json_to_sheet(data);
-    hoja["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 26 }, { wch: 16 }, { wch: 14 }, { wch: 24 }, { wch: 16 }];
+    hoja["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 26 }, { wch: 16 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 20 }];
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, "Horas aprobadas");
     XLSX.writeFile(libro, "Consolidado_Horas_Aprobadas_por_Operario.xlsx");
@@ -892,6 +966,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                     <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
                       <th style={thStyle}>Operario / Semana</th><th style={{ ...thStyle, textAlign: "right" }}>Horas extra</th>
                       <th style={{ ...thStyle, textAlign: "right" }}>Festivas/dominicales</th><th style={{ ...thStyle, textAlign: "right" }}>Nocturnas</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Descansos (días)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -899,7 +974,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                       <React.Fragment key={o.cedula}>
                         {/* Encabezado del operario */}
                         <tr style={{ borderTop: "2px solid #EDEBE4", background: "#FBFBF9" }}>
-                          <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={4}>
+                          <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={5}>
                             {o.nombre} <span style={{ color: "#9A958C", fontWeight: 400 }}>· Cédula {o.cedula} · {o.tiendasLabel}</span>
                           </td>
                         </tr>
@@ -910,6 +985,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                             <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(s.extras)}</td>
                             <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(s.festivas)}</td>
                             <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(s.nocturnas)}</td>
+                            <td style={{ ...tdStyle, textAlign: "right", color: s.descansos > 0 ? "#B3261E" : "#5C5F5A", fontWeight: s.descansos > 0 ? 700 : 400 }}>{s.descansos || 0}</td>
                           </tr>
                         ))}
                         {/* Total a pagar del operario */}
@@ -918,6 +994,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                           <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(o.extras)}</td>
                           <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(o.festivas)}</td>
                           <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(o.nocturnas)}</td>
+                          <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{o.descansos || 0}</td>
                         </tr>
                       </React.Fragment>
                     ))}
@@ -928,6 +1005,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                       <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(totalAprobadasGeneral.extras)}</td>
                       <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(totalAprobadasGeneral.festivas)}</td>
                       <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{fmt(totalAprobadasGeneral.nocturnas)}</td>
+                      <td style={{ ...tdStyle, fontWeight: 700, color: "#2E7D32", textAlign: "right" }}>{totalAprobadasGeneral.descansos || 0}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1228,6 +1306,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
             const filasTienda = filas.filter((f) => f.tiendaCodigo === tiendaSeleccionada);
             const nombreTienda = listaTiendas.find((t) => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada;
             const filasExtrasTienda = filasExtras.filter((f) => f.tiendaCodigo === tiendaSeleccionada);
+            const descansosTienda = descansosNoTomados.filter((d) => d.tiendaCodigo === tiendaSeleccionada);
             return (
               <div style={{ marginTop: 18, borderTop: "1px solid #EDEBE4", paddingTop: 18 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>{nombreTienda}</div>
@@ -1307,6 +1386,53 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                             </tr>
                           );
                         })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Aprobación de descansos no tomados — oculto para Gerente de Ventas */}
+                {!esGerenteVentas && descansosTienda.length > 0 && (
+                  <div style={{ marginTop: 20 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: rol.color, marginBottom: 4 }}>Descansos no tomados (a pagar)</div>
+                    <div style={{ fontSize: 12, color: "#5C5F5A", marginBottom: 10 }}>Operarios que trabajaron los 7 días de la semana sin tomar descanso. Aprueba para que se les pague el día de descanso.</div>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                          <th style={thStyle}>Operario</th><th style={thStyle}>Cédula</th><th style={thStyle}>Semana</th>
+                          <th style={thStyle}>A pagar</th><th style={thStyle}>Estado</th><th style={thStyle}>Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {descansosTienda
+                          .sort((a, b) => a.weekDom.localeCompare(b.weekDom) || a.nombre.localeCompare(b.nombre))
+                          .map((d, i) => {
+                            const aprobado = d.aprobacionEstado === "aprobado";
+                            const rechazado = d.aprobacionEstado === "rechazado";
+                            return (
+                              <tr key={`${d.cedula}-${d.weekDom}-${i}`} style={{ borderTop: "1px solid #EDEBE4", background: aprobado ? "#E8F5E9" : rechazado ? "#FDECEA" : "white" }}>
+                                <td style={{ ...tdStyle, fontWeight: 600 }}>{d.nombre}</td>
+                                <td style={tdStyle}>{d.cedula}</td>
+                                <td style={tdStyle}>{etiquetaSemana(d.weekDom)}</td>
+                                <td style={{ ...tdStyle, color: "#B3261E", fontWeight: 700 }}>1 día</td>
+                                <td style={tdStyle}>
+                                  {aprobado && <span style={{ color: "#2E7D32", fontWeight: 600 }}>✓ Aprobado</span>}
+                                  {rechazado && <span style={{ color: "#C62828", fontWeight: 600 }}>✗ Rechazado</span>}
+                                  {!d.aprobacionEstado && <span style={{ color: "#5C5F5A" }}>Pendiente</span>}
+                                </td>
+                                <td style={tdStyle}>
+                                  <div style={{ display: "flex", gap: 6 }}>
+                                    <button onClick={() => handleAprobacionDescanso(d, "aprobado")} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: aprobado ? "#2E7D32" : "#E8F5E9", color: aprobado ? "white" : "#2E7D32", border: "1px solid #2E7D32", borderRadius: 5, padding: "4px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                                      <CheckCircle size={12} /> Aprobar
+                                    </button>
+                                    <button onClick={() => handleAprobacionDescanso(d, "rechazado")} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: rechazado ? "#C62828" : "#FDECEA", color: rechazado ? "white" : "#C62828", border: "1px solid #C62828", borderRadius: 5, padding: "4px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                                      <XCircle size={12} /> Rechazar
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                       </tbody>
                     </table>
                   </div>
