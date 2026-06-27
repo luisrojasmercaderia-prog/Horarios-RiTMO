@@ -1347,7 +1347,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           return;
                         }
                         if (bloqueado) {
-                          alert(`No puedes completar la planilla todavía.\n\nFaltan ${pendientesValidar} día(s) por validar. Activa el Modo Supervisor y marca "Validado por SPV" en todos los días laborables de tus operarios.`);
+                          alert(`No puedes completar la planilla todavía.\n\nFaltan ${pendientesValidar} validación(es) por hacer (un operario por día). Activa el Modo Supervisor y marca "Validado por SPV" en todos los días laborables de tus operarios.`);
                           return;
                         }
                         if (window.confirm("¿Confirmas que ya terminaste de programar los horarios de esta semana?\n\nEsto le indicará al Jefe de Zona que la planilla está lista.")) {
@@ -1355,7 +1355,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           setFechaCompletado(formatFechaISO(new Date()));
                         }
                       }}
-                      title={bloqueado ? `Faltan ${pendientesValidar} día(s) por validar (Validado por SPV)` : ""}
+                      title={bloqueado ? `Faltan ${pendientesValidar} validación(es) por hacer (Validado por SPV)` : ""}
                       style={{ display: "inline-flex", alignItems: "center", gap: 8, background: completado ? "#2E7D32" : bloqueado ? "#B8B5AC" : "#3FBFC4", color: "#FFFFFF", border: "none", borderRadius: 8, padding: "11px 20px", fontSize: 14, fontWeight: 700, cursor: bloqueado ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: bloqueado ? 0.85 : 1 }}
                     >
                       <CheckCircle2 size={17} />
@@ -1363,7 +1363,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                     </button>
                     {bloqueado && (
                       <span style={{ fontSize: 12, color: "#B3261E", fontWeight: 600, textAlign: "right", maxWidth: 280 }}>
-                        Faltan {pendientesValidar} día(s) por validar (Validado por SPV) antes de completar.
+                        Faltan {pendientesValidar} validación(es) por hacer (Validado por SPV) antes de completar.
                       </span>
                     )}
                     {completado && fechaCompletado && (
