@@ -216,6 +216,7 @@ function diasVencidosRRHH(entry) {
 
 const TURNOS_FIJOS = {
   jornada_44: { llegada: "07:30", salida: "15:00", horasProgramadas: "6.5", breakEditable: true },
+  jornada_44_tarde: { llegada: "14:30", salida: "22:00", horasProgramadas: "6.5", breakEditable: true },
   t_inventario_manana: { llegada: "06:00", salida: "14:30", horasProgramadas: "7.5" },
   domingo_t_manana: { llegada: "07:30", salida: "15:00", horasProgramadas: "6.5", breakEditable: true },
   domingo_t_tarde: { llegada: "12:30", salida: "20:00", horasProgramadas: "6.5", breakEditable: true },
@@ -1150,7 +1151,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                 </div>
                 {algunoExcede && (
                   <div style={{ fontSize: 12, color: "#E53935", fontWeight: 600, marginTop: 10 }}>
-                    ⚠ Hay operarios que superan las 44h. Asigna el estado &quot;Jornada 44 (−1h)&quot; en un día (o reduce 1 hora) para que cierren en 44h.
+                    ⚠ Hay operarios que superan las 44h. Asigna una &quot;Jornada 44&quot; (mañana o tarde) en un día para que cierren en 44h.
                   </div>
                 )}
               </div>
@@ -1226,7 +1227,8 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                               style={{ cursor: completado ? "not-allowed" : "pointer", width: "100%", minWidth: 160, whiteSpace: "nowrap", fontWeight: estaBloqueado(entry) ? 700 : 400, color: esNoLaborable(entry.estado) ? "#946800" : esTurnoFijo(entry.estado) ? "#1B8388" : "#241C14" }}>
                               <option value="">Seleccionar...</option>
                               <option value="trabaja">Trabaja</option>
-                              <option value="jornada_44">Jornada 44 (−1h)</option>
+                              <option value="jornada_44">Jornada 44 mañana (sale 1h antes)</option>
+                              <option value="jornada_44_tarde">Jornada 44 tarde (entra 1h tarde)</option>
                               <option value="t_inventario_manana">T.Inventario mañana</option>
                               <option value="domingo_t_manana">Domingo T. mañana</option>
                               <option value="domingo_t_tarde">Domingo T. tarde</option>
