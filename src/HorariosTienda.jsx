@@ -1324,14 +1324,16 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             <input disabled readOnly className="cell-input" value={entry.horasProgramadas} placeholder="0" style={{ textAlign: "center", background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                           </td>
                           <td className="col-llegada-real" style={tdStyle}>
-                            <input disabled={parcialBloqueado(entry) || completado} type="time" className="cell-input" value={entry.llegadaReal}
+                            <input disabled={parcialBloqueado(entry) || completado || !modoSupervisor} type="time" className="cell-input" value={entry.llegadaReal}
                               onChange={(e) => updateEntry(d.dia, entry.id, "llegadaReal", e.target.value)}
-                              style={(parcialBloqueado(entry) || completado) ? disabledCellStyle : undefined} />
+                              title={!modoSupervisor ? "Activa el Modo Supervisor para editar la hora real" : ""}
+                              style={(parcialBloqueado(entry) || completado || !modoSupervisor) ? disabledCellStyle : undefined} />
                           </td>
                           <td className="col-salida-real" style={tdStyle}>
-                            <input disabled={parcialBloqueado(entry) || completado} type="time" className="cell-input" value={entry.salidaReal}
+                            <input disabled={parcialBloqueado(entry) || completado || !modoSupervisor} type="time" className="cell-input" value={entry.salidaReal}
                               onChange={(e) => updateEntry(d.dia, entry.id, "salidaReal", e.target.value)}
-                              style={(parcialBloqueado(entry) || completado) ? disabledCellStyle : undefined} />
+                              title={!modoSupervisor ? "Activa el Modo Supervisor para editar la hora real" : ""}
+                              style={(parcialBloqueado(entry) || completado || !modoSupervisor) ? disabledCellStyle : undefined} />
                           </td>
                           <td className="col-hrs-reales" style={{ ...tdStyle, minWidth: 90 }}>
                             {/* Día festivo se determina solo por domingo (auto) o turno "Feriado mañana/tarde".
