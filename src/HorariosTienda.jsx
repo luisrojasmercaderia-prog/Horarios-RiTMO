@@ -812,6 +812,11 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
           if (field === "estado" && esNoLaborable(value)) {
             updated = { ...updated, horasProgramadas: "", llegadaReal: "", salidaReal: "", horasReales: "", llegada: "", salida: "", breakInicio: "", breakFin: "", horasNocturnas: "" };
           }
+          // Al pasar a "Trabaja", limpiar el horario del turno anterior para que el
+          // supervisor lo programe desde cero (la salida no debe quedarse pegada).
+          if (field === "estado" && value === "trabaja" && e.estado !== "trabaja") {
+            updated = { ...updated, llegada: "", salida: "", horasProgramadas: "", breakInicio: "", breakFin: "", llegadaReal: "", salidaReal: "", horasReales: "", horasNocturnas: "" };
+          }
           if (field === "estado") {
             if (esNovedadRRHH(value) && !esNovedadRRHH(e.estado)) {
               updated.fechaRegistroNovedad = formatFechaISO(new Date());
