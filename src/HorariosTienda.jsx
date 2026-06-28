@@ -1251,18 +1251,26 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                               const otra = cedula && (entry.nombre || "").trim() && !esNoLaborable(entry.estado) && (entry.estado || "").trim()
                                 ? ocupacionOtrasTiendas[`${cedula}__${d.fechaDate}`] : null;
                               return (
-                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                  <select disabled={completado} className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} style={{ fontWeight: 600, minWidth: 140, cursor: completado ? "not-allowed" : "pointer", border: otra ? "1.5px solid #E53935" : undefined }}>
-                                    <option value="">Seleccionar...</option>
-                                    {empleados.map((emp) => (<option key={emp.id} value={emp.nombre}>{emp.nombre}</option>))}
-                                    {entry.nombre.trim() !== "" && !empleados.some((emp) => emp.nombre === entry.nombre) && (
-                                      <option value={entry.nombre}>{entry.nombre} (ya no está en el directorio)</option>
+                                <div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                    <select disabled={completado} className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} style={{ fontWeight: 600, minWidth: 140, cursor: completado ? "not-allowed" : "pointer", border: otra ? "1.5px solid #E53935" : undefined }}>
+                                      <option value="">Seleccionar...</option>
+                                      {empleados.map((emp) => (<option key={emp.id} value={emp.nombre}>{emp.nombre}</option>))}
+                                      {entry.nombre.trim() !== "" && !empleados.some((emp) => emp.nombre === entry.nombre) && (
+                                        <option value={entry.nombre}>{entry.nombre} (ya no está en el directorio)</option>
+                                      )}
+                                    </select>
+                                    {otra && (
+                                      <span title={`Ya está fichado en ${otra} este día — no lo programes aquí (se contaría doble).`} style={{ flexShrink: 0, cursor: "help", display: "inline-flex" }}>
+                                        <AlertTriangle size={15} color="#E53935" />
+                                      </span>
                                     )}
-                                  </select>
+                                  </div>
                                   {otra && (
-                                    <span title={`Ya está fichado en ${otra} este día — no lo programes aquí (se contaría doble).`} style={{ flexShrink: 0, cursor: "help", display: "inline-flex" }}>
-                                      <AlertTriangle size={15} color="#E53935" />
-                                    </span>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3, fontSize: 11, fontWeight: 600, color: "#E53935", maxWidth: 220, lineHeight: 1.3 }}>
+                                      <AlertTriangle size={12} color="#E53935" style={{ flexShrink: 0 }} />
+                                      <span>Ya está en {otra} este día — no lo pongas aquí (doble conteo)</span>
+                                    </div>
                                   )}
                                 </div>
                               );
