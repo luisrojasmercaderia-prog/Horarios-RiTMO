@@ -140,7 +140,12 @@ export default function Fichaje({ onCerrar }) {
         return;
       }
 
-      const entry = diaHoy.entries.find((e) => e.cedula && e.cedula.trim() === cedulaLimpia);
+      // Comparación tolerante: ignora espacios y ceros a la izquierda, para que
+      // un cero de más en la cédula (ej. "002200333546" vs "02200333546") no
+      // impida fichar a una persona que sí está programada.
+      const normCedula = (c) => (c || "").trim().replace(/^0+/, "");
+      const cedulaNorm = normCedula(cedulaLimpia);
+      const entry = diaHoy.entries.find((e) => e.cedula && normCedula(e.cedula) === cedulaNorm);
 
       if (!entry) {
         setEstado("error");
