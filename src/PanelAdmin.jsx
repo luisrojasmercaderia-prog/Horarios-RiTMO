@@ -351,6 +351,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
   const [mostrarAusencias, setMostrarAusencias] = useState(false);
   const [descansosNoTomados, setDescansosNoTomados] = useState([]);
   const [planillasCompletadas, setPlanillasCompletadas] = useState([]);
+  const [diasDuplicados, setDiasDuplicados] = useState([]);
   const [mostrarCrearTienda, setMostrarCrearTienda] = useState(false);
   const [nuevaTienda, setNuevaTienda] = useState({ codigo: "", nombre: "", clave: "" });
   const [crearTiendaError, setCrearTiendaError] = useState("");
@@ -487,6 +488,38 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
       });
       todasCompletadas.sort((a, b) => (b.fechaCompletado || "").localeCompare(a.fechaCompletado || ""));
       setPlanillasCompletadas(todasCompletadas);
+
+      // Días duplicados: mismo operario (cédula) con un día laborable en 2+ tiendas
+      // a la vez (se contaría doble en el consolidado de novedades).
+      const NO_LAB = ["descanso", "incapacitado", "licencia_maternidad", "luto", "vacaciones"];
+      const ocupacion = {};
+      (horariosPeriodo || []).forEach((h) => {
+        const tiendaInfo = (tiendas || []).find((t) => t.codigo === h.tienda_codigo);
+        ((h.datos && h.datos.days) || []).forEach((d) => {
+          const fecha = d.fechaDate || d.fecha;
+          if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
+          (d.entries || []).forEach((e) => {
+            const cedula = (e.cedula || "").trim();
+            const nombre = (e.nombre || "").trim();
+            if (!cedula || !nombre) return;
+            if (NO_LAB.includes(e.estado) || !(e.estado || "").trim()) return;
+            const key = `${cedula}__${fecha}`;
+            if (!ocupacion[key]) ocupacion[key] = { cedula, nombre, fecha, tiendas: {} };
+            ocupacion[key].tiendas[h.tienda_codigo] = tiendaInfo?.nombre || h.tienda_codigo;
+          });
+        });
+      });
+      const dupPorCedula = {};
+      Object.values(ocupacion).forEach((o) => {
+        const nombresTiendas = Object.values(o.tiendas);
+        if (nombresTiendas.length < 2) return;
+        if (!dupPorCedula[o.cedula]) dupPorCedula[o.cedula] = { cedula: o.cedula, nombre: o.nombre, dias: [] };
+        dupPorCedula[o.cedula].dias.push({ fecha: o.fecha, tiendas: nombresTiendas.join(", ") });
+      });
+      const listaDup = Object.values(dupPorCedula)
+        .map((o) => ({ ...o, dias: o.dias.sort((a, b) => a.fecha.localeCompare(b.fecha)) }))
+        .sort((a, b) => b.dias.length - a.dias.length);
+      setDiasDuplicados(listaDup);
 
       setFilasExtras(todasFilasExtras);
       setAprobaciones(mapaAprobaciones);
@@ -945,6 +978,44 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                 <button type="button" onClick={() => setMostrarCrearTienda(false)} style={{ background: "#FAFAF7", color: "#5C5F5A", border: "1px solid #EDEBE4", borderRadius: 7, padding: "10px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* Días duplicados en 2 tiendas — alerta para Jefe de Zona y RRHH */}
+        {(rolKey === "jefe_zona" || esRRHH) && !cargando && !error && diasDuplicados.length > 0 && (
+          <div style={{ background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", padding: 22, marginBottom: 22, border: "1.5px solid #E53935" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <AlertTriangle size={18} color="#E53935" />
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#E53935" }}>Operarios con días duplicados en 2 tiendas</div>
+              <span style={{ background: "#E53935", color: "white", borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 700 }}>
+                {diasDuplicados.length}
+              </span>
+            </div>
+            <div style={{ fontSize: 12, color: "#5C5F5A", marginBottom: 14 }}>
+              Estos operarios están programados el <strong>mismo día en dos tiendas</strong>, lo que generaría un <strong>doble conteo</strong> en el consolidado de novedades. Corrige el origen: quita esos días de la tienda equivocada (el operario debe quedar solo en la tienda donde realmente trabajó ese día).
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
+                  <th style={thStyle}>Operario</th><th style={thStyle}>Cédula</th><th style={thStyle}>Días duplicados (fecha → tiendas)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {diasDuplicados.map((o, i) => (
+                  <tr key={`${o.cedula}-${i}`} style={{ borderTop: "1px solid #EDEBE4", background: "#FDECEA" }}>
+                    <td style={{ ...tdStyle, fontWeight: 600 }}>{o.nombre}</td>
+                    <td style={tdStyle}>{o.cedula}</td>
+                    <td style={{ ...tdStyle, fontSize: 12 }}>
+                      {o.dias.map((dd, j) => (
+                        <div key={j} style={{ marginBottom: 2 }}>
+                          <strong>{(() => { const x = new Date(dd.fecha + "T00:00:00"); return `${String(x.getDate()).padStart(2,"0")}/${String(x.getMonth()+1).padStart(2,"0")}`; })()}</strong> → {dd.tiendas}
+                        </div>
+                      ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 

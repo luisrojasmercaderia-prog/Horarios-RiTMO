@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Printer, Clock, AlertCircle, CheckCircle2, Loader2, FileSpreadsheet, LogOut, Users, X, Lock, Unlock, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Printer, Clock, AlertCircle, AlertTriangle, CheckCircle2, Loader2, FileSpreadsheet, LogOut, Users, X, Lock, Unlock, ChevronLeft, ChevronRight } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase } from "./supabaseClient";
 import logoRitmo from "./logo-ritmo.png";
@@ -495,6 +495,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
 
   const [empleados, setEmpleados] = useState([]);
   const [aprobaciones, setAprobaciones] = useState({});
+  const [ocupacionOtrasTiendas, setOcupacionOtrasTiendas] = useState({});
   const [showEmpleados, setShowEmpleados] = useState(false);
   const [modoSupervisor, setModoSupervisor] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
@@ -591,6 +592,41 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
     })();
     return () => { activo = false; };
   }, [codigoTienda, semanaKey, cargarAprobaciones, fechaInicioSemana]);
+
+  // Mapa de días que cada operario ya tiene trabajados en OTRAS tiendas
+  // (clave: cedula__fechaDate → nombre de la tienda). Sirve para detectar que
+  // un operario quede programado el mismo día en dos tiendas (doble conteo).
+  useEffect(() => {
+    let activo = true;
+    (async () => {
+      try {
+        const [{ data: horarios }, { data: tiendas }] = await Promise.all([
+          supabase.from("horarios_semana").select("tienda_codigo, datos"),
+          supabase.from("tiendas").select("codigo, nombre"),
+        ]);
+        if (!activo) return;
+        const nombreTienda = {};
+        (tiendas || []).forEach((t) => { nombreTienda[t.codigo] = t.nombre; });
+        const noLab = ["descanso", "incapacitado", "licencia_maternidad", "luto", "vacaciones"];
+        const mapa = {};
+        (horarios || []).forEach((h) => {
+          if (h.tienda_codigo === codigoTienda) return; // excluir la tienda actual
+          ((h.datos && h.datos.days) || []).forEach((d) => {
+            const fecha = d.fechaDate || d.fecha;
+            if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
+            (d.entries || []).forEach((e) => {
+              const cedula = (e.cedula || "").trim();
+              if (!cedula || !(e.nombre || "").trim()) return;
+              if (noLab.includes(e.estado) || !(e.estado || "").trim()) return; // solo días laborables
+              mapa[`${cedula}__${fecha}`] = nombreTienda[h.tienda_codigo] || h.tienda_codigo;
+            });
+          });
+        });
+        if (activo) setOcupacionOtrasTiendas(mapa);
+      } catch (e) { /* silencioso */ }
+    })();
+    return () => { activo = false; };
+  }, [codigoTienda, semanaKey]);
 
   const persist = useCallback(async (state, semanaKey) => {
     setSaveState("saving");
@@ -1210,13 +1246,27 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             <input className="cell-input" value={entry.fecha} readOnly placeholder="06/16" style={{ background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                           </td>
                           <td style={tdStyle}>
-                            <select disabled={completado} className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} style={{ fontWeight: 600, minWidth: 140, cursor: completado ? "not-allowed" : "pointer" }}>
-                              <option value="">Seleccionar...</option>
-                              {empleados.map((emp) => (<option key={emp.id} value={emp.nombre}>{emp.nombre}</option>))}
-                              {entry.nombre.trim() !== "" && !empleados.some((emp) => emp.nombre === entry.nombre) && (
-                                <option value={entry.nombre}>{entry.nombre} (ya no está en el directorio)</option>
-                              )}
-                            </select>
+                            {(() => {
+                              const cedula = (entry.cedula || "").trim();
+                              const otra = cedula && (entry.nombre || "").trim() && !esNoLaborable(entry.estado) && (entry.estado || "").trim()
+                                ? ocupacionOtrasTiendas[`${cedula}__${d.fechaDate}`] : null;
+                              return (
+                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                  <select disabled={completado} className="cell-input" value={entry.nombre} onChange={(e) => updateEntry(d.dia, entry.id, "nombre", e.target.value)} style={{ fontWeight: 600, minWidth: 140, cursor: completado ? "not-allowed" : "pointer", border: otra ? "1.5px solid #E53935" : undefined }}>
+                                    <option value="">Seleccionar...</option>
+                                    {empleados.map((emp) => (<option key={emp.id} value={emp.nombre}>{emp.nombre}</option>))}
+                                    {entry.nombre.trim() !== "" && !empleados.some((emp) => emp.nombre === entry.nombre) && (
+                                      <option value={entry.nombre}>{entry.nombre} (ya no está en el directorio)</option>
+                                    )}
+                                  </select>
+                                  {otra && (
+                                    <span title={`Ya está fichado en ${otra} este día — no lo programes aquí (se contaría doble).`} style={{ flexShrink: 0, cursor: "help", display: "inline-flex" }}>
+                                      <AlertTriangle size={15} color="#E53935" />
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td style={tdStyle}>
                             <input className="cell-input" value={entry.cedula} readOnly placeholder="Selecciona un nombre"
@@ -1383,7 +1433,18 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                 // Días laborables con operario asignado que aún no tienen "Validado por SPV".
                 const pendientesValidar = days.reduce((acc, d) =>
                   acc + (d.entries || []).filter((e) => (e.nombre || "").trim() && !esNoLaborable(e.estado) && !e.validado).length, 0);
-                const bloqueado = !completado && pendientesValidar > 0;
+                // Operarios programados el mismo día en otra tienda (doble conteo).
+                const conflictos = [];
+                days.forEach((d) => {
+                  (d.entries || []).forEach((e) => {
+                    const cedula = (e.cedula || "").trim();
+                    if (!cedula || !(e.nombre || "").trim() || esNoLaborable(e.estado) || !(e.estado || "").trim()) return;
+                    const otra = ocupacionOtrasTiendas[`${cedula}__${d.fechaDate}`];
+                    if (otra) conflictos.push({ nombre: e.nombre.trim(), dia: d.dia, otra });
+                  });
+                });
+                const hayConflicto = conflictos.length > 0;
+                const bloqueado = !completado && (pendientesValidar > 0 || hayConflicto);
                 return (
                   <>
                     <button
@@ -1395,6 +1456,11 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           }
                           return;
                         }
+                        if (hayConflicto) {
+                          const lista = conflictos.slice(0, 6).map((c) => `• ${c.nombre} (${c.dia}) ya está en ${c.otra}`).join("\n");
+                          alert(`No puedes completar la planilla.\n\nHay operarios programados el mismo día en otra tienda (se contarían dos veces):\n\n${lista}${conflictos.length > 6 ? "\n…" : ""}\n\nQuita esos días de esta tienda — el operario ya los tiene fichados en la otra.`);
+                          return;
+                        }
                         if (bloqueado) {
                           alert(`No puedes completar la planilla todavía.\n\nFaltan ${pendientesValidar} validación(es) por hacer (un operario por día). Activa el Modo Supervisor y marca "Validado por SPV" en todos los días laborables de tus operarios.`);
                           return;
@@ -1404,13 +1470,18 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                           setFechaCompletado(formatFechaISO(new Date()));
                         }
                       }}
-                      title={bloqueado ? `Faltan ${pendientesValidar} validación(es) por hacer (Validado por SPV)` : ""}
+                      title={hayConflicto ? "Hay operarios programados el mismo día en otra tienda" : bloqueado ? `Faltan ${pendientesValidar} validación(es) por hacer (Validado por SPV)` : ""}
                       style={{ display: "inline-flex", alignItems: "center", gap: 8, background: completado ? "#2E7D32" : bloqueado ? "#B8B5AC" : "#3FBFC4", color: "#FFFFFF", border: "none", borderRadius: 8, padding: "11px 20px", fontSize: 14, fontWeight: 700, cursor: bloqueado ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: bloqueado ? 0.85 : 1 }}
                     >
                       <CheckCircle2 size={17} />
                       {completado ? "Planilla completada — Marcar de nuevo" : "Marcar planilla como completada"}
                     </button>
-                    {bloqueado && (
+                    {hayConflicto && (
+                      <span style={{ fontSize: 12, color: "#B3261E", fontWeight: 600, textAlign: "right", maxWidth: 300 }}>
+                        ⚠ {conflictos.length} operario(s) programado(s) el mismo día en otra tienda. Quita esos días antes de completar.
+                      </span>
+                    )}
+                    {!hayConflicto && bloqueado && (
                       <span style={{ fontSize: 12, color: "#B3261E", fontWeight: 600, textAlign: "right", maxWidth: 280 }}>
                         Faltan {pendientesValidar} validación(es) por hacer (Validado por SPV) antes de completar.
                       </span>
