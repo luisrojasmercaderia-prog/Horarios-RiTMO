@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Lock, ShieldCheck, Clock, CalendarDays, Calculator, LogOut } from "lucide-react";
+import { Lock, ShieldCheck, Clock, CalendarDays, Calculator, LogOut, ArrowLeft } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import HorariosTienda from "./HorariosTienda";
 import PanelAdmin from "./PanelAdmin";
@@ -108,8 +108,8 @@ function LoginTienda({ onIngresar, onAdmin, modulo = "horarios", onVolver, ocult
 
         <form onSubmit={handleIngresar} style={{ flex: "1 1 280px", padding: "2.25rem 1.75rem" }}>
           {onVolver && (
-            <button type="button" onClick={onVolver} style={{ background: "transparent", border: "none", color: "#9A958C", fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 12, display: "inline-flex", alignItems: "center", gap: 5 }}>
-              ← Volver al menú
+            <button type="button" onClick={onVolver} style={{ background: "#F0F4F4", border: "1px solid #CFE0E0", color: "#2E9CA1", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: "8px 14px", borderRadius: 8, marginBottom: 16, display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <ArrowLeft size={15} /> Volver al menú
             </button>
           )}
           <div style={{ fontSize: 16, fontWeight: 700, color: "#241C14", marginBottom: 2 }}>
