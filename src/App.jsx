@@ -9,8 +9,11 @@ import logoRitmo from "./logo-ritmo.png";
 
 const SESSION_KEY = "ritmo-sesion-tienda";
 const ADMIN_PASSWORD = "RiTMO1234";
+// Contraseña única para Cuadre de Caja (separada de la de Horarios de cada tienda).
+// Para cambiarla, edita solo este valor.
+const CUADRE_PASSWORD = "caja2026";
 
-function LoginTienda({ onIngresar, onAdmin }) {
+function LoginTienda({ onIngresar, onAdmin, modulo = "horarios", onVolver, ocultarExtras }) {
   const [codigo, setCodigo] = useState("");
   const [nombre, setNombre] = useState("");
   const [clave, setClave] = useState("");
@@ -32,6 +35,21 @@ function LoginTienda({ onIngresar, onAdmin }) {
         .maybeSingle();
 
       if (err) throw err;
+
+      if (modulo === "cuadre") {
+        if (!data) {
+          setError("No existe una tienda con ese código.");
+          setCargando(false);
+          return;
+        }
+        if (clave.trim() !== CUADRE_PASSWORD) {
+          setError("Contraseña de Cuadre de Caja incorrecta.");
+          setCargando(false);
+          return;
+        }
+        onIngresar(codigoNorm);
+        return;
+      }
 
       if (modo === "crear") {
         if (data) {
@@ -84,12 +102,19 @@ function LoginTienda({ onIngresar, onAdmin }) {
         <div style={{ background: "#E85D1F", flex: "1 1 260px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2.5rem 1.75rem", textAlign: "center" }}>
           <img src={logoRitmo} alt="Tiendas RITMO" style={{ width: "100%", maxWidth: 220, marginBottom: 16, objectFit: "contain" }} />
           <p style={{ fontSize: 16, color: "rgba(255,255,255,0.9)", margin: 0, lineHeight: 1.5 }}>
-            Planilla de Horarios Semanal
+            {modulo === "cuadre" ? "Cuadre Diario de Caja" : "Planilla de Horarios Semanal"}
           </p>
         </div>
 
         <form onSubmit={handleIngresar} style={{ flex: "1 1 280px", padding: "2.25rem 1.75rem" }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#241C14", marginBottom: 2 }}>Bienvenido</div>
+          {onVolver && (
+            <button type="button" onClick={onVolver} style={{ background: "transparent", border: "none", color: "#9A958C", fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 12, display: "inline-flex", alignItems: "center", gap: 5 }}>
+              ← Volver al menú
+            </button>
+          )}
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#241C14", marginBottom: 2 }}>
+            {modulo === "cuadre" ? "Cuadre de Caja" : "Bienvenido"}
+          </div>
           <div style={{ fontSize: 13, color: "#5C5F5A", marginBottom: 20 }}>
             {modo === "ingresar" ? "Ingresa el código de tu tienda para continuar" : "Crea el acceso para una nueva tienda"}
           </div>
@@ -119,6 +144,7 @@ function LoginTienda({ onIngresar, onAdmin }) {
             {cargando ? "Verificando..." : modo === "ingresar" ? "Ingresar" : "Crear tienda"}
           </button>
 
+          {!ocultarExtras && (
           <div style={{ borderTop: "1px solid #EDEBE4", marginTop: 18, paddingTop: 14 }}>
             <button
               type="button"
@@ -143,8 +169,9 @@ function LoginTienda({ onIngresar, onAdmin }) {
               <Clock size={15} /> ¿Eres colaborador? Fichar entrada o salida
             </button>
           </div>
+          )}
 
-          {onAdmin && (
+          {!ocultarExtras && onAdmin && (
             <div style={{ textAlign: "center", marginTop: 14 }}>
               <button
                 type="button"
@@ -240,16 +267,18 @@ function LoginAdmin({ onIngresar }) {
 }
 
 export default function App() {
-  const [ruta, setRuta] = useState(() => (window.location.pathname.startsWith("/admin") ? "admin" : "tienda"));
-  const [codigoTienda, setCodigoTienda] = useState(() => {
+  const [sesionInicial] = useState(() => {
     try {
-      return sessionStorage.getItem(SESSION_KEY) || "";
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
     } catch (e) {
-      return "";
+      return null;
     }
   });
+  const [ruta, setRuta] = useState(() => (window.location.pathname.startsWith("/admin") ? "admin" : "tienda"));
+  const [modulo, setModulo] = useState(sesionInicial?.modulo || null); // null | "horarios" | "cuadre"
+  const [codigoTienda, setCodigoTienda] = useState(sesionInicial?.codigo || "");
   const [adminAutenticado, setAdminAutenticado] = useState(false);
-  const [modulo, setModulo] = useState(null); // null | "horarios" | "cuadre"
   const [nombreTienda, setNombreTienda] = useState("");
 
   useEffect(() => {
@@ -268,23 +297,19 @@ export default function App() {
     return () => { activo = false; };
   }, [codigoTienda]);
 
-  const handleIngresarTienda = (codigo) => {
-    setCodigoTienda(codigo);
-    try {
-      sessionStorage.setItem(SESSION_KEY, codigo);
-    } catch (e) {
-      // no-op
-    }
+  const persistir = (m, c) => {
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ modulo: m, codigo: c })); } catch (e) {}
   };
 
-  const handleSalirTienda = () => {
-    setCodigoTienda("");
+  // Elegir módulo en el portal → todavía sin tienda → pedirá la clave
+  const elegirModulo = (m) => { setModulo(m); persistir(m, ""); };
+  // Login correcto de un módulo
+  const loginExitoso = (codigo) => { setCodigoTienda(codigo); persistir(modulo, codigo); };
+  // Volver al portal (vuelve a pedir clave la próxima vez)
+  const volverMenu = () => {
     setModulo(null);
-    try {
-      sessionStorage.removeItem(SESSION_KEY);
-    } catch (e) {
-      // no-op
-    }
+    setCodigoTienda("");
+    try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
   };
 
   if (ruta === "admin") {
@@ -294,34 +319,41 @@ export default function App() {
     return <PanelAdmin />;
   }
 
-  if (!codigoTienda) {
+  // Pantalla de inicio: el portal con los dos módulos
+  if (!modulo) {
     return (
-      <LoginTienda
-        onIngresar={handleIngresarTienda}
+      <PortalInicio
+        onElegir={elegirModulo}
         onAdmin={() => { window.history.pushState({}, "", "/admin"); setRuta("admin"); }}
       />
     );
   }
 
+  // Módulo elegido pero sin tienda autenticada → login con clave
+  if (!codigoTienda) {
+    return (
+      <LoginTienda
+        modulo={modulo}
+        ocultarExtras
+        onVolver={volverMenu}
+        onIngresar={loginExitoso}
+      />
+    );
+  }
+
   if (modulo === "horarios") {
-    return <HorariosTienda codigoTienda={codigoTienda} onSalir={() => setModulo(null)} />;
+    return <HorariosTienda codigoTienda={codigoTienda} onSalir={volverMenu} />;
   }
 
   if (modulo === "cuadre") {
-    return <CuadreCaja codigoTienda={codigoTienda} nombreTienda={nombreTienda} onSalir={() => setModulo(null)} />;
+    return <CuadreCaja codigoTienda={codigoTienda} nombreTienda={nombreTienda} onSalir={volverMenu} />;
   }
 
-  return (
-    <MenuModulos
-      codigoTienda={codigoTienda}
-      nombreTienda={nombreTienda}
-      onElegir={setModulo}
-      onSalir={handleSalirTienda}
-    />
-  );
+  return null;
 }
 
-function MenuModulos({ codigoTienda, nombreTienda, onElegir, onSalir }) {
+function PortalInicio({ onElegir, onAdmin }) {
+  const [showFichaje, setShowFichaje] = useState(false);
   return (
     <div style={{ minHeight: "100vh", background: "#3FBFC4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Century Gothic', 'CenturyGothic', 'AppleGothic', Futura, sans-serif", padding: 20 }}>
       <div style={{ background: "white", borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", maxWidth: 560, width: "100%", overflow: "hidden" }}>
@@ -329,10 +361,6 @@ function MenuModulos({ codigoTienda, nombreTienda, onElegir, onSalir }) {
           <img src={logoRitmo} alt="Tiendas RITMO" style={{ maxWidth: 180, width: "100%", objectFit: "contain" }} />
         </div>
         <div style={{ padding: "1.75rem" }}>
-          <div style={{ fontSize: 13, color: "#5C5F5A", marginBottom: 2 }}>Tienda</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#241C14", marginBottom: 20 }}>
-            {codigoTienda}{nombreTienda ? ` — ${nombreTienda}` : ""}
-          </div>
           <div style={{ fontSize: 14, color: "#5C5F5A", marginBottom: 14 }}>¿Qué deseas hacer?</div>
 
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
@@ -349,17 +377,40 @@ function MenuModulos({ codigoTienda, nombreTienda, onElegir, onSalir }) {
             </button>
           </div>
 
-          <div style={{ textAlign: "center", marginTop: 20 }}>
+          <div style={{ borderTop: "1px solid #EDEBE4", marginTop: 18, paddingTop: 14 }}>
             <button
               type="button"
-              onClick={onSalir}
-              style={{ background: "transparent", border: "none", color: "#9A958C", fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 5 }}
+              onClick={() => setShowFichaje(true)}
+              style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, background: "#3FBFC4", color: "white", border: "none", borderRadius: 7, padding: "10px 14px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
             >
-              <LogOut size={13} /> Salir / cambiar tienda
+              <Clock size={15} /> ¿Eres colaborador? Fichar entrada o salida
             </button>
           </div>
+
+          {onAdmin && (
+            <div style={{ textAlign: "center", marginTop: 14 }}>
+              <button
+                type="button"
+                onClick={onAdmin}
+                style={{ background: "transparent", border: "none", color: "#9A958C", fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" }}
+              >
+                Acceso administrador
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {showFichaje && (
+        <div
+          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(36,28,20,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}
+          onClick={() => setShowFichaje(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()}>
+            <Fichaje onCerrar={() => setShowFichaje(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
