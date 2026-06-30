@@ -71,6 +71,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
   const [guardando, setGuardando] = useState(false);
   const [estado, setEstado] = useState(""); // "guardado" | "error" | ""
   const [observaciones, setObservaciones] = useState("");
+  const [dirty, setDirty] = useState(false); // hay cambios sin guardar
 
   // Cargar empleados de la tienda (compartido con app de horarios)
   useEffect(() => {
@@ -123,6 +124,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
       setObservaciones("");
     } finally {
       setCargando(false);
+      setDirty(false);
     }
   }, [codigoTienda, fecha]);
 
@@ -130,6 +132,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
 
   const setCelda = (uid, key, value) => {
     setEstado("");
+    setDirty(true);
     setFilas((prev) =>
       prev.map((f) => {
         if (f.uid !== uid) return f;
@@ -144,9 +147,11 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
     );
   };
 
-  const agregarFila = () => setFilas((p) => [...p, nuevaFila()]);
-  const eliminarFila = (uid) =>
+  const agregarFila = () => { setDirty(true); setFilas((p) => [...p, nuevaFila()]); };
+  const eliminarFila = (uid) => {
+    setDirty(true);
     setFilas((p) => (p.length === 1 ? [nuevaFila()] : p.filter((f) => f.uid !== uid)));
+  };
 
   const totales = useMemo(() => {
     const t = {};
@@ -197,11 +202,33 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
         if (insErr) throw insErr;
       }
       setEstado("guardado");
+      setDirty(false);
+      return true;
     } catch (e) {
       setEstado("error");
+      return false;
     } finally {
       setGuardando(false);
     }
+  };
+
+  // Cambiar de fecha sin perder lo no guardado: guarda la fecha actual primero
+  const cambiarFecha = async (nuevaFecha) => {
+    if (!nuevaFecha || nuevaFecha === fecha) return;
+    if (dirty) {
+      const ok = await guardar();
+      if (!ok) return; // si el guardado falla, no cambiamos (no se pierde nada)
+    }
+    setFecha(nuevaFecha);
+  };
+
+  // Salir al menú guardando antes si hay cambios pendientes
+  const salirSeguro = async () => {
+    if (dirty) {
+      const ok = await guardar();
+      if (!ok) return;
+    }
+    onSalir();
   };
 
   const exportarExcel = () => {
@@ -226,7 +253,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)" }}>{codigoTienda} — {nombreTienda}</div>
           </div>
         </div>
-        <button onClick={onSalir} style={btnGhost}>
+        <button onClick={salirSeguro} style={btnGhost}>
           <LogOut size={15} /> Menú
         </button>
       </div>
@@ -236,7 +263,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
         <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
           <div>
             <label style={labelStyle}>Fecha del cuadre</label>
-            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={{ ...inputStyle, width: 180 }} />
+            <input type="date" value={fecha} onChange={(e) => cambiarFecha(e.target.value)} style={{ ...inputStyle, width: 180 }} />
           </div>
           <div style={{ fontSize: 13, color: "#5C5F5A", paddingBottom: 9, textTransform: "capitalize" }}>{fechaLarga}</div>
 
@@ -246,7 +273,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
             <FileSpreadsheet size={15} /> Exportar a Excel
           </button>
           <button onClick={guardar} disabled={guardando} style={{ ...btnPrimary, opacity: guardando ? 0.7 : 1 }}>
-            <Save size={15} /> {guardando ? "Guardando..." : "Guardar"}
+            <Save size={15} /> {guardando ? "Guardando..." : dirty ? "Guardar cambios" : "Guardado"}
           </button>
         </div>
 
@@ -359,7 +386,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
             <label style={labelStyle}>Observaciones</label>
             <textarea
               value={observaciones}
-              onChange={(e) => { setEstado(""); setObservaciones(e.target.value); }}
+              onChange={(e) => { setEstado(""); setDirty(true); setObservaciones(e.target.value); }}
               placeholder="Notas del día, descuadres a justificar, novedades…"
               rows={3}
               style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.5 }}
