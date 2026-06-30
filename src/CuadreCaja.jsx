@@ -17,17 +17,18 @@ const MONEY_COLS = [
   { key: "otros", label: "8. Otros" },
 ];
 
-// Descuadre = (todo lo justificado) - Ventas Odoo
+// Descuadre = (Efectivo + TCD + Bonos + Gastos + Picos por Consignar + Otros)
+//             − Ventas Odoo − Picos Consignados
+// Picos Consignados se RESTA: son depósitos de ventas de días anteriores, no de hoy.
 function calcDescuadre(row) {
   const justificado =
     n(row.efectivo_boveda) +
     n(row.ventas_tcd) +
     n(row.bonos_adess) +
     n(row.gastos) +
-    n(row.picos_consignados) +
     n(row.picos_por_consignar) +
     n(row.otros);
-  return justificado - n(row.ventas_odoo);
+  return justificado - n(row.picos_consignados) - n(row.ventas_odoo);
 }
 
 function n(v) {
@@ -367,7 +368,8 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
         </div>
 
         <div style={{ marginTop: 16, fontSize: 12, color: "#5C5F5A", lineHeight: 1.6 }}>
-          <strong>Descuadre</strong> = (Efectivo Bóveda + Ventas TCD + Bonos ADESS + Gastos + Picos Consignados + Picos por Consignar + Otros) − Ventas Odoo.
+          <strong>Descuadre</strong> = (Efectivo Bóveda + Ventas TCD + Bonos ADESS + Gastos + Picos por Consignar + Otros) − Ventas Odoo − <strong>Picos Consignados</strong>.
+          <br /><strong>Picos Consignados</strong> se resta: son depósitos de ventas de días anteriores, así no generan descuadre.
           <br />En verde si cuadra ($0); en rojo si hay faltante o sobrante.
         </div>
       </div>
