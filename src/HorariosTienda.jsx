@@ -1448,6 +1448,9 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                 // Días laborables con operario asignado que aún no tienen "Validado por SPV".
                 const pendientesValidar = days.reduce((acc, d) =>
                   acc + (d.entries || []).filter((e) => (e.nombre || "").trim() && !esNoLaborable(e.estado) && !e.validado).length, 0);
+                // Días laborables sin la hora real de entrada o salida llena.
+                const pendientesReales = days.reduce((acc, d) =>
+                  acc + (d.entries || []).filter((e) => (e.nombre || "").trim() && !esNoLaborable(e.estado) && (e.estado || "").trim() && (!(e.llegadaReal || "").trim() || !(e.salidaReal || "").trim())).length, 0);
                 // Operarios programados el mismo día en otra tienda (doble conteo).
                 const conflictos = [];
                 days.forEach((d) => {
@@ -1459,7 +1462,7 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                   });
                 });
                 const hayConflicto = conflictos.length > 0;
-                const bloqueado = !completado && (pendientesValidar > 0 || hayConflicto);
+                const bloqueado = !completado && (pendientesValidar > 0 || hayConflicto || pendientesReales > 0);
                 return (
                   <>
                     <button
@@ -1474,6 +1477,10 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                         if (hayConflicto) {
                           const lista = conflictos.slice(0, 6).map((c) => `• ${c.nombre} (${c.dia}) ya está en ${c.otra}`).join("\n");
                           alert(`No puedes completar la planilla.\n\nHay operarios programados el mismo día en otra tienda (se contarían dos veces):\n\n${lista}${conflictos.length > 6 ? "\n…" : ""}\n\nQuita esos días de esta tienda — el operario ya los tiene fichados en la otra.`);
+                          return;
+                        }
+                        if (pendientesReales > 0) {
+                          alert(`No puedes completar la planilla todavía.\n\nFaltan ${pendientesReales} día(s) sin la hora real de entrada o salida. Llena la Llegada Real y la Salida Real de todos los días laborables (en Modo Supervisor) antes de completar.`);
                           return;
                         }
                         if (bloqueado) {
@@ -1496,7 +1503,12 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                         ⚠ {conflictos.length} operario(s) programado(s) el mismo día en otra tienda. Quita esos días antes de completar.
                       </span>
                     )}
-                    {!hayConflicto && bloqueado && (
+                    {!hayConflicto && pendientesReales > 0 && (
+                      <span style={{ fontSize: 12, color: "#B3261E", fontWeight: 600, textAlign: "right", maxWidth: 300 }}>
+                        Faltan {pendientesReales} día(s) sin hora real de entrada/salida. Llénalas antes de completar.
+                      </span>
+                    )}
+                    {!hayConflicto && pendientesReales === 0 && pendientesValidar > 0 && (
                       <span style={{ fontSize: 12, color: "#B3261E", fontWeight: 600, textAlign: "right", maxWidth: 280 }}>
                         Faltan {pendientesValidar} validación(es) por hacer (Validado por SPV) antes de completar.
                       </span>
