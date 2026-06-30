@@ -275,6 +275,13 @@ function parcialBloqueado(entry) {
   return estaBloqueado(entry);
 }
 
+// Las horas reales (Llegada/Salida real) se pueden editar en CUALQUIER estado
+// laborable, incluyendo turnos fijos como "una hora menos". No se acoplan a la
+// lógica del break: solo se bloquean si el día no es laborable o falta la cédula.
+function realBloqueado(entry) {
+  return entry.estado.trim() === "" || esNoLaborable(entry.estado) || entry.cedula.trim() === "";
+}
+
 const HORARIOS_PREDETERMINADOS = {
   "06:00": "14:30",
   "07:00": "15:30",
@@ -1329,16 +1336,16 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             <input disabled readOnly className="cell-input" value={entry.horasProgramadas} placeholder="0" style={{ textAlign: "center", background: "#F2EFE9", color: "#5C5F5A", cursor: "default" }} />
                           </td>
                           <td className="col-llegada-real" style={tdStyle}>
-                            <input disabled={parcialBloqueado(entry) || completado || !modoSupervisor} type="time" className="cell-input" value={entry.llegadaReal}
+                            <input disabled={realBloqueado(entry) || completado || !modoSupervisor} type="time" className="cell-input" value={entry.llegadaReal}
                               onChange={(e) => updateEntry(d.dia, entry.id, "llegadaReal", e.target.value)}
                               title={!modoSupervisor ? "Activa el Modo Supervisor para editar la hora real" : ""}
-                              style={(parcialBloqueado(entry) || completado || !modoSupervisor) ? disabledCellStyle : undefined} />
+                              style={(realBloqueado(entry) || completado || !modoSupervisor) ? disabledCellStyle : undefined} />
                           </td>
                           <td className="col-salida-real" style={tdStyle}>
-                            <input disabled={parcialBloqueado(entry) || completado || !modoSupervisor} type="time" className="cell-input" value={entry.salidaReal}
+                            <input disabled={realBloqueado(entry) || completado || !modoSupervisor} type="time" className="cell-input" value={entry.salidaReal}
                               onChange={(e) => updateEntry(d.dia, entry.id, "salidaReal", e.target.value)}
                               title={!modoSupervisor ? "Activa el Modo Supervisor para editar la hora real" : ""}
-                              style={(parcialBloqueado(entry) || completado || !modoSupervisor) ? disabledCellStyle : undefined} />
+                              style={(realBloqueado(entry) || completado || !modoSupervisor) ? disabledCellStyle : undefined} />
                           </td>
                           <td className="col-hrs-reales" style={{ ...tdStyle, minWidth: 90 }}>
                             {/* Día festivo se determina solo por domingo (auto) o turno "Feriado mañana/tarde".
