@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { LogOut, Plus, Trash2, Save, FileSpreadsheet, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { LogOut, Plus, Trash2, Save, FileSpreadsheet, AlertTriangle, CheckCircle2, Printer } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import { supabase } from "./supabaseClient";
 import logoRitmo from "./logo-ritmo.png";
@@ -235,6 +235,8 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
     exportarCuadreExcel({ codigoTienda, nombreTienda, fecha, filas, totales, observaciones });
   };
 
+  const imprimir = () => window.print();
+
   const fechaLarga = new Date(fecha + "T00:00:00").toLocaleDateString("es-DO", {
     weekday: "long",
     day: "numeric",
@@ -244,8 +246,23 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "#F4F6F6", fontFamily: "'Century Gothic', 'CenturyGothic', 'AppleGothic', Futura, sans-serif", color: "#241C14" }}>
+      <style>{`
+        .print-only { display: none; }
+        @media print {
+          @page { size: letter landscape; margin: 0.4in; }
+          html, body { background: #fff !important; }
+          .no-print { display: none !important; }
+          .print-only { display: block !important; }
+          .cuadre-wrap { padding: 0 !important; max-width: none !important; }
+          .cuadre-tabla-wrap { overflow: visible !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; }
+          .cuadre-tabla { min-width: 0 !important; width: 100% !important; font-size: 8.5px !important; table-layout: fixed; }
+          .cuadre-tabla th, .cuadre-tabla td { padding: 3px 4px !important; }
+          .cuadre-tabla input { font-size: 8.5px !important; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+      `}</style>
       {/* Barra superior */}
-      <div style={{ background: "#3FBFC4", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+      <div className="no-print" style={{ background: "#3FBFC4", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <img src={logoRitmo} alt="RITMO" style={{ height: 30, objectFit: "contain" }} />
           <div>
@@ -258,9 +275,21 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
         </button>
       </div>
 
-      <div style={{ padding: 20, maxWidth: 1300, margin: "0 auto" }}>
+      <div className="cuadre-wrap" style={{ padding: 20, maxWidth: 1300, margin: "0 auto" }}>
+        {/* Encabezado solo para impresión */}
+        <div className="print-only" style={{ marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "2px solid #2E9CA1", paddingBottom: 6, marginBottom: 6 }}>
+            <img src={logoRitmo} alt="RITMO" style={{ height: 34, objectFit: "contain" }} />
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#241C14" }}>CUADRE DIARIO DE CAJA</div>
+            <div style={{ textAlign: "right", fontSize: 11, color: "#241C14" }}>
+              <div style={{ fontWeight: 700 }}>{codigoTienda} — {nombreTienda}</div>
+              <div style={{ textTransform: "capitalize" }}>{fechaLarga}</div>
+            </div>
+          </div>
+        </div>
+
         {/* Controles */}
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
+        <div className="no-print" style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
           <div>
             <label style={labelStyle}>Fecha del cuadre</label>
             <input type="date" value={fecha} onChange={(e) => cambiarFecha(e.target.value)} style={{ ...inputStyle, width: 180 }} />
@@ -269,6 +298,9 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
 
           <div style={{ flex: 1 }} />
 
+          <button onClick={imprimir} style={btnSecondary}>
+            <Printer size={15} /> Imprimir
+          </button>
           <button onClick={exportarExcel} style={btnSecondary}>
             <FileSpreadsheet size={15} /> Exportar a Excel
           </button>
@@ -278,19 +310,19 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
         </div>
 
         {estado === "guardado" && (
-          <div style={{ ...avisoBase, background: "#E6F6EC", color: "#1B5E33" }}>
+          <div className="no-print" style={{ ...avisoBase, background: "#E6F6EC", color: "#1B5E33" }}>
             <CheckCircle2 size={15} /> Cuadre guardado correctamente.
           </div>
         )}
         {estado === "error" && (
-          <div style={{ ...avisoBase, background: "#FCEBEB", color: "#791F1F" }}>
+          <div className="no-print" style={{ ...avisoBase, background: "#FCEBEB", color: "#791F1F" }}>
             <AlertTriangle size={15} /> No se pudo guardar. ¿Existe la tabla <code>cuadres_caja</code> en Supabase?
           </div>
         )}
 
         {/* Tabla */}
-        <div style={{ overflowX: "auto", background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #E4E7E7" }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 1180, fontSize: 12.5 }}>
+        <div className="cuadre-tabla-wrap" style={{ overflowX: "auto", background: "white", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #E4E7E7" }}>
+          <table className="cuadre-tabla" style={{ borderCollapse: "collapse", width: "100%", minWidth: 1300, fontSize: 12.5 }}>
             <thead>
               <tr>
                 <th style={thStyle}>Cédula</th>
@@ -300,12 +332,13 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
                   <th key={c.key} style={{ ...thStyle, minWidth: 96 }}>{c.label}</th>
                 ))}
                 <th style={{ ...thStyle, minWidth: 96, background: "#E85D1F" }}>Descuadre</th>
-                <th style={{ ...thStyle, width: 40, background: "#3FBFC4" }}></th>
+                <th style={{ ...thStyle, minWidth: 150 }}>Firma</th>
+                <th className="no-print" style={{ ...thStyle, width: 40, background: "#3FBFC4" }}></th>
               </tr>
             </thead>
             <tbody>
               {cargando ? (
-                <tr><td colSpan={MONEY_COLS.length + 5} style={{ padding: 24, textAlign: "center", color: "#5C5F5A" }}>Cargando…</td></tr>
+                <tr><td colSpan={MONEY_COLS.length + 6} style={{ padding: 24, textAlign: "center", color: "#5C5F5A" }}>Cargando…</td></tr>
               ) : (
                 filas.map((f) => {
                   const d = calcDescuadre(f);
@@ -340,7 +373,8 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
                       <td style={{ ...tdStyle, textAlign: "right", fontWeight: 700, color: desc === 0 ? "#1B5E33" : "#B42318", background: desc === 0 ? "#F3FBF5" : "#FEF3F2" }}>
                         {desc === 0 ? "$0" : `$${fmt(desc)}`}
                       </td>
-                      <td style={{ ...tdStyle, textAlign: "center" }}>
+                      <td style={tdStyle}></td>
+                      <td className="no-print" style={{ ...tdStyle, textAlign: "center" }}>
                         <button onClick={() => eliminarFila(f.uid)} title="Eliminar fila" style={btnIcon}>
                           <Trash2 size={14} />
                         </button>
@@ -360,6 +394,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
                   {totales.descuadre === 0 ? "$0" : `$${fmt(totales.descuadre)}`}
                 </td>
                 <td style={tdTotal}></td>
+                <td className="no-print" style={tdTotal}></td>
               </tr>
             </tfoot>
           </table>
@@ -371,7 +406,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
           ))}
         </datalist>
 
-        <button onClick={agregarFila} style={{ ...btnSecondary, marginTop: 14 }}>
+        <button onClick={agregarFila} className="no-print" style={{ ...btnSecondary, marginTop: 14 }}>
           <Plus size={15} /> Agregar cajero
         </button>
 
@@ -394,7 +429,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
           </div>
         </div>
 
-        <div style={{ marginTop: 16, fontSize: 12, color: "#5C5F5A", lineHeight: 1.6 }}>
+        <div className="no-print" style={{ marginTop: 16, fontSize: 12, color: "#5C5F5A", lineHeight: 1.6 }}>
           <strong>Descuadre</strong> = (Efectivo Bóveda + Ventas TCD + Bonos ADESS + Gastos + Picos por Consignar + Otros) − Ventas Odoo − <strong>Picos Consignados</strong>.
           <br /><strong>Picos Consignados</strong> se resta: son depósitos de ventas de días anteriores, así no generan descuadre.
           <br />En verde si cuadra ($0); en rojo si hay faltante o sobrante.
