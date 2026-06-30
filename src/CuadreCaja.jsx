@@ -237,6 +237,64 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
 
   const imprimir = () => window.print();
 
+  // Hoja de autorización de descuento por nómina (para operarios con faltante)
+  const imprimirAutorizacion = (f) => {
+    const d = Math.round(calcDescuadre(f) * 100) / 100;
+    const monto = Math.abs(d).toLocaleString("es-DO", { maximumFractionDigits: 2 });
+    const logoUrl = new URL(logoRitmo, window.location.href).href;
+    const tienda = `${codigoTienda}${nombreTienda ? " — " + nombreTienda : ""}`;
+    const nombre = f.nombre ? f.nombre.trim() : "________________________";
+    const cedula = f.cedula ? f.cedula.trim() : "________________";
+    const w = window.open("", "_blank", "width=820,height=1040");
+    if (!w) {
+      alert("Permite las ventanas emergentes para poder imprimir la autorización.");
+      return;
+    }
+    w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8">
+      <title>Autorización de descuento - ${nombre}</title>
+      <style>
+        body{font-family:Arial,Helvetica,sans-serif;color:#241C14;margin:0;padding:55px 70px;font-size:14px;line-height:1.8;}
+        .head{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #2E9CA1;padding-bottom:14px;margin-bottom:34px;}
+        .head img{height:52px;}
+        .head .meta{text-align:right;font-size:12px;line-height:1.5;}
+        h1{font-size:19px;text-align:center;margin:0 0 34px;letter-spacing:.5px;}
+        .cuerpo{text-align:justify;margin-bottom:30px;}
+        .monto{font-weight:bold;}
+        .firma{margin-top:90px;}
+        .linea{border-top:1px solid #241C14;width:320px;padding-top:6px;font-size:13px;}
+        .datos{margin-top:12px;font-size:13px;line-height:1.9;}
+        @page{size:letter portrait;margin:0.6in;}
+      </style></head><body>
+      <div class="head">
+        <img src="${logoUrl}" alt="RITMO">
+        <div class="meta"><div><strong>${tienda}</strong></div><div>Fecha: ${fechaLarga}</div></div>
+      </div>
+      <h1>AUTORIZACIÓN DE DESCUENTO POR NÓMINA</h1>
+      <div class="cuerpo">
+        Yo, <strong>${nombre}</strong>, portador(a) de la cédula de identidad No.
+        <strong>${cedula}</strong>, quien labora como cajero(a) en la tienda
+        <strong>${tienda}</strong>, autorizo de manera libre y voluntaria a Tiendas RITMO
+        a descontar de mi nómina el monto de <span class="monto">RD$ ${monto}</span>,
+        correspondiente al descuadre (faltante) de caja registrado el día
+        <strong>${fechaLarga}</strong>.
+        <br><br>
+        Declaro que estoy de acuerdo con este descuento y firmo en señal de conformidad.
+      </div>
+      <div class="firma">
+        <div class="linea">Firma del operario</div>
+        <div class="datos">
+          Nombre: ${nombre}<br>
+          Cédula: ${cedula}<br>
+          Fecha: ________________________
+        </div>
+      </div>
+      <scr${""}ipt>window.onload=function(){window.focus();window.print();};<\/scr${""}ipt>
+      </body></html>`);
+    w.document.close();
+  };
+
+  const filasConFaltante = filas.filter((f) => f.nombre.trim() !== "" && calcDescuadre(f) < 0);
+
   const fechaLarga = new Date(fecha + "T00:00:00").toLocaleDateString("es-DO", {
     weekday: "long",
     day: "numeric",
@@ -409,6 +467,30 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
         <button onClick={agregarFila} className="no-print" style={{ ...btnSecondary, marginTop: 14 }}>
           <Plus size={15} /> Agregar cajero
         </button>
+
+        {filasConFaltante.length > 0 && (
+          <div className="no-print" style={{ marginTop: 20, background: "#FEF3F2", border: "1px solid #F5C4B3", borderRadius: 10, padding: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#B42318", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+              <AlertTriangle size={16} /> Autorizaciones de descuento por nómina
+            </div>
+            <div style={{ fontSize: 12.5, color: "#5C5F5A", marginBottom: 8 }}>
+              Operarios con faltante. Imprime la autorización para que cada uno firme el descuento por nómina.
+            </div>
+            {filasConFaltante.map((f) => {
+              const monto = Math.abs(Math.round(calcDescuadre(f) * 100) / 100);
+              return (
+                <div key={f.uid} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "9px 0", borderTop: "1px solid #F5D5CB", flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 13 }}>
+                    <strong>{f.nombre}</strong>{f.cedula ? ` · Céd. ${f.cedula}` : ""} — faltante <strong style={{ color: "#B42318" }}>RD$ {monto.toLocaleString("es-DO")}</strong>
+                  </div>
+                  <button onClick={() => imprimirAutorizacion(f)} style={btnSecondary}>
+                    <Printer size={15} /> Imprimir autorización
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Firma del supervisor + Observaciones */}
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap", marginTop: 28, alignItems: "flex-end" }}>
