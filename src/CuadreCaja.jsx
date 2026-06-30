@@ -253,9 +253,11 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
     w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8">
       <title>Autorización de descuento - ${nombre}</title>
       <style>
+        *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
         body{font-family:Arial,Helvetica,sans-serif;color:#241C14;margin:0;padding:55px 70px;font-size:14px;line-height:1.8;}
         .head{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #2E9CA1;padding-bottom:14px;margin-bottom:34px;}
-        .head img{height:52px;}
+        .logobox{background:#E85D1F;padding:8px 14px;border-radius:7px;display:inline-flex;}
+        .head img{height:44px;}
         .head .meta{text-align:right;font-size:12px;line-height:1.5;}
         h1{font-size:19px;text-align:center;margin:0 0 34px;letter-spacing:.5px;}
         .cuerpo{text-align:justify;margin-bottom:30px;}
@@ -266,7 +268,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
         @page{size:letter portrait;margin:0.6in;}
       </style></head><body>
       <div class="head">
-        <img src="${logoUrl}" alt="RITMO">
+        <span class="logobox"><img src="${logoUrl}" alt="RITMO"></span>
         <div class="meta"><div><strong>${tienda}</strong></div><div>Fecha: ${fechaLarga}</div></div>
       </div>
       <h1>AUTORIZACIÓN DE DESCUENTO POR NÓMINA</h1>
@@ -337,7 +339,9 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
         {/* Encabezado solo para impresión */}
         <div className="print-only" style={{ marginBottom: 10 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "2px solid #2E9CA1", paddingBottom: 6, marginBottom: 6 }}>
-            <img src={logoRitmo} alt="RITMO" style={{ height: 34, objectFit: "contain" }} />
+            <span style={{ background: "#E85D1F", padding: "6px 12px", borderRadius: 6, display: "inline-flex" }}>
+              <img src={logoRitmo} alt="RITMO" style={{ height: 30, objectFit: "contain" }} />
+            </span>
             <div style={{ fontSize: 18, fontWeight: 700, color: "#241C14" }}>CUADRE DIARIO DE CAJA</div>
             <div style={{ textAlign: "right", fontSize: 11, color: "#241C14" }}>
               <div style={{ fontWeight: 700 }}>{codigoTienda} — {nombreTienda}</div>
