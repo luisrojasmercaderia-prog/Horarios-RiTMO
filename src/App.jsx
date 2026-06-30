@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Lock, ShieldCheck, Clock } from "lucide-react";
+import { Lock, ShieldCheck, Clock, CalendarDays, Calculator, LogOut } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import HorariosTienda from "./HorariosTienda";
 import PanelAdmin from "./PanelAdmin";
 import Fichaje from "./Fichaje";
+import CuadreCaja from "./CuadreCaja";
 import logoRitmo from "./logo-ritmo.png";
 
 const SESSION_KEY = "ritmo-sesion-tienda";
@@ -248,12 +249,24 @@ export default function App() {
     }
   });
   const [adminAutenticado, setAdminAutenticado] = useState(false);
+  const [modulo, setModulo] = useState(null); // null | "horarios" | "cuadre"
+  const [nombreTienda, setNombreTienda] = useState("");
 
   useEffect(() => {
     const onPopState = () => setRuta(window.location.pathname.startsWith("/admin") ? "admin" : "tienda");
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
+  useEffect(() => {
+    if (!codigoTienda) { setNombreTienda(""); return; }
+    let activo = true;
+    (async () => {
+      const { data } = await supabase.from("tiendas").select("nombre").eq("codigo", codigoTienda).maybeSingle();
+      if (activo && data) setNombreTienda(data.nombre || "");
+    })();
+    return () => { activo = false; };
+  }, [codigoTienda]);
 
   const handleIngresarTienda = (codigo) => {
     setCodigoTienda(codigo);
@@ -266,6 +279,7 @@ export default function App() {
 
   const handleSalirTienda = () => {
     setCodigoTienda("");
+    setModulo(null);
     try {
       sessionStorage.removeItem(SESSION_KEY);
     } catch (e) {
@@ -289,8 +303,81 @@ export default function App() {
     );
   }
 
-  return <HorariosTienda codigoTienda={codigoTienda} onSalir={handleSalirTienda} />;
+  if (modulo === "horarios") {
+    return <HorariosTienda codigoTienda={codigoTienda} onSalir={() => setModulo(null)} />;
+  }
+
+  if (modulo === "cuadre") {
+    return <CuadreCaja codigoTienda={codigoTienda} nombreTienda={nombreTienda} onSalir={() => setModulo(null)} />;
+  }
+
+  return (
+    <MenuModulos
+      codigoTienda={codigoTienda}
+      nombreTienda={nombreTienda}
+      onElegir={setModulo}
+      onSalir={handleSalirTienda}
+    />
+  );
 }
+
+function MenuModulos({ codigoTienda, nombreTienda, onElegir, onSalir }) {
+  return (
+    <div style={{ minHeight: "100vh", background: "#3FBFC4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Century Gothic', 'CenturyGothic', 'AppleGothic', Futura, sans-serif", padding: 20 }}>
+      <div style={{ background: "white", borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", maxWidth: 560, width: "100%", overflow: "hidden" }}>
+        <div style={{ background: "#E85D1F", padding: "1.75rem", textAlign: "center" }}>
+          <img src={logoRitmo} alt="Tiendas RITMO" style={{ maxWidth: 180, width: "100%", objectFit: "contain" }} />
+        </div>
+        <div style={{ padding: "1.75rem" }}>
+          <div style={{ fontSize: 13, color: "#5C5F5A", marginBottom: 2 }}>Tienda</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#241C14", marginBottom: 20 }}>
+            {codigoTienda}{nombreTienda ? ` — ${nombreTienda}` : ""}
+          </div>
+          <div style={{ fontSize: 14, color: "#5C5F5A", marginBottom: 14 }}>¿Qué deseas hacer?</div>
+
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+            <button onClick={() => onElegir("horarios")} style={tarjetaModulo}>
+              <CalendarDays size={34} color="#E85D1F" />
+              <span style={{ fontSize: 16, fontWeight: 700, color: "#241C14" }}>Horarios</span>
+              <span style={{ fontSize: 12.5, color: "#5C5F5A" }}>Planilla semanal de horarios</span>
+            </button>
+
+            <button onClick={() => onElegir("cuadre")} style={tarjetaModulo}>
+              <Calculator size={34} color="#2E9CA1" />
+              <span style={{ fontSize: 16, fontWeight: 700, color: "#241C14" }}>Cuadre de Caja</span>
+              <span style={{ fontSize: 12.5, color: "#5C5F5A" }}>Cuadre diario por cajero</span>
+            </button>
+          </div>
+
+          <div style={{ textAlign: "center", marginTop: 20 }}>
+            <button
+              type="button"
+              onClick={onSalir}
+              style={{ background: "transparent", border: "none", color: "#9A958C", fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 5 }}
+            >
+              <LogOut size={13} /> Salir / cambiar tienda
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const tarjetaModulo = {
+  flex: "1 1 200px",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 8,
+  background: "#FAFAF8",
+  border: "1px solid #E4E7E7",
+  borderRadius: 12,
+  padding: "1.75rem 1rem",
+  cursor: "pointer",
+  fontFamily: "inherit",
+  textAlign: "center",
+};
 
 const inputStyle = {
   width: "100%",
