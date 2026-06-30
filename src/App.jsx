@@ -364,16 +364,20 @@ function PortalInicio({ onElegir, onAdmin }) {
           <div style={{ fontSize: 20, fontWeight: 700, color: "#241C14", textAlign: "center", marginBottom: 18 }}>¿Qué deseas hacer?</div>
 
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-            <button onClick={() => onElegir("horarios")} style={{ ...tarjetaModulo, background: "#E85D1F" }}>
-              <CalendarDays size={38} color="#fff" />
-              <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>Horarios</span>
-              <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.88)" }}>Planilla semanal de horarios</span>
+            <button onClick={() => onElegir("horarios")} style={{ ...tarjetaModulo, borderTop: "3px solid #E85D1F" }}>
+              <div style={{ width: 58, height: 58, borderRadius: "50%", background: "#FBE7DC", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <CalendarDays size={28} color="#E85D1F" />
+              </div>
+              <span style={{ fontSize: 16, fontWeight: 700, color: "#241C14" }}>Horarios</span>
+              <span style={{ fontSize: 12.5, color: "#5C5F5A" }}>Planilla semanal de horarios</span>
             </button>
 
-            <button onClick={() => onElegir("cuadre")} style={{ ...tarjetaModulo, background: "#2E9CA1" }}>
-              <Calculator size={38} color="#fff" />
-              <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>Cuadre de Caja</span>
-              <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.88)" }}>Cuadre diario por cajero</span>
+            <button onClick={() => onElegir("cuadre")} style={{ ...tarjetaModulo, borderTop: "3px solid #2E9CA1" }}>
+              <div style={{ width: 58, height: 58, borderRadius: "50%", background: "#DCF1F1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Calculator size={28} color="#2E9CA1" />
+              </div>
+              <span style={{ fontSize: 16, fontWeight: 700, color: "#241C14" }}>Cuadre de Caja</span>
+              <span style={{ fontSize: 12.5, color: "#5C5F5A" }}>Cuadre diario por cajero</span>
             </button>
           </div>
 
@@ -421,9 +425,10 @@ const tarjetaModulo = {
   flexDirection: "column",
   alignItems: "center",
   gap: 8,
-  border: "none",
+  background: "#fff",
+  border: "1px solid #EDE9E2",
   borderRadius: 12,
-  padding: "1.75rem 1rem",
+  padding: "1.5rem 1rem",
   cursor: "pointer",
   fontFamily: "inherit",
   textAlign: "center",
