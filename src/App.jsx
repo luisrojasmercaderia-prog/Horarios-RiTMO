@@ -357,23 +357,23 @@ function PortalInicio({ onElegir, onAdmin }) {
   return (
     <div style={{ minHeight: "100vh", background: "#3FBFC4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Century Gothic', 'CenturyGothic', 'AppleGothic', Futura, sans-serif", padding: 20 }}>
       <div style={{ background: "white", borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", maxWidth: 560, width: "100%", overflow: "hidden" }}>
-        <div style={{ background: "#E85D1F", padding: "1.75rem", textAlign: "center" }}>
-          <img src={logoRitmo} alt="Tiendas RITMO" style={{ maxWidth: 180, width: "100%", objectFit: "contain" }} />
+        <div style={{ background: "#E85D1F", padding: "2rem 1.75rem", textAlign: "center" }}>
+          <img src={logoRitmo} alt="Tiendas RITMO" style={{ maxWidth: 230, width: "100%", objectFit: "contain" }} />
         </div>
         <div style={{ padding: "1.75rem" }}>
-          <div style={{ fontSize: 14, color: "#5C5F5A", marginBottom: 14 }}>¿Qué deseas hacer?</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#241C14", textAlign: "center", marginBottom: 18 }}>¿Qué deseas hacer?</div>
 
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-            <button onClick={() => onElegir("horarios")} style={tarjetaModulo}>
-              <CalendarDays size={34} color="#E85D1F" />
-              <span style={{ fontSize: 16, fontWeight: 700, color: "#241C14" }}>Horarios</span>
-              <span style={{ fontSize: 12.5, color: "#5C5F5A" }}>Planilla semanal de horarios</span>
+            <button onClick={() => onElegir("horarios")} style={{ ...tarjetaModulo, background: "#E85D1F" }}>
+              <CalendarDays size={38} color="#fff" />
+              <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>Horarios</span>
+              <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.88)" }}>Planilla semanal de horarios</span>
             </button>
 
-            <button onClick={() => onElegir("cuadre")} style={tarjetaModulo}>
-              <Calculator size={34} color="#2E9CA1" />
-              <span style={{ fontSize: 16, fontWeight: 700, color: "#241C14" }}>Cuadre de Caja</span>
-              <span style={{ fontSize: 12.5, color: "#5C5F5A" }}>Cuadre diario por cajero</span>
+            <button onClick={() => onElegir("cuadre")} style={{ ...tarjetaModulo, background: "#2E9CA1" }}>
+              <Calculator size={38} color="#fff" />
+              <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>Cuadre de Caja</span>
+              <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.88)" }}>Cuadre diario por cajero</span>
             </button>
           </div>
 
@@ -421,8 +421,7 @@ const tarjetaModulo = {
   flexDirection: "column",
   alignItems: "center",
   gap: 8,
-  background: "#FAFAF8",
-  border: "1px solid #E4E7E7",
+  border: "none",
   borderRadius: 12,
   padding: "1.75rem 1rem",
   cursor: "pointer",
