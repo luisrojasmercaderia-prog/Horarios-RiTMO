@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, RefreshCw, FileSpreadsheet, Loader2, Store, BarChart3, CheckCircle, XCircle, AlertTriangle, Send, Lock, X, UserCheck, ChevronLeft, Users, ChevronDown, ChevronRight } from "lucide-react";
+import { ShieldCheck, RefreshCw, FileSpreadsheet, Loader2, Store, BarChart3, CheckCircle, XCircle, AlertTriangle, Send, Lock, X, UserCheck, ChevronLeft, Users, ChevronDown, ChevronRight, Printer } from "lucide-react";
 import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "./supabaseClient";
 import HorariosTienda from "./HorariosTienda";
+import logoRitmo from "./logo-ritmo.png";
 
 const JEFES_ZONA = {
   camilo: {
@@ -862,12 +863,87 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
     XLSX.writeFile(libro, "Consolidado_Horas_Aprobadas_por_Operario.xlsx");
   };
 
+  // PDF del consolidado de novedades aprobadas, con logo y firma del Jefe de Zona (valida el pago).
+  const exportarAprobadasPDF = () => {
+    if (resumenAprobadasPorOperario.length === 0) {
+      alert("No hay novedades aprobadas para exportar en esta tienda.");
+      return;
+    }
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const nombreTienda = listaTiendas.find((t) => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada;
+    const nombreJefe = (jefeZonaFiltro && asignacionesJefes[jefeZonaFiltro]?.nombre) || "________________________";
+    const logoUrl = new URL(logoRitmo, window.location.href).href;
+    const hoy = new Date().toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" });
+    const tot = resumenAprobadasPorOperario.reduce(
+      (a, o) => ({ extras: a.extras + (o.extras || 0), festivas: a.festivas + (o.festivas || 0), nocturnas: a.nocturnas + (o.nocturnas || 0), descansos: a.descansos + (o.descansos || 0) }),
+      { extras: 0, festivas: 0, nocturnas: 0, descansos: 0 }
+    );
+    const filasHTML = resumenAprobadasPorOperario.map((o) => `
+      <tr>
+        <td>${esc(o.nombre)}</td>
+        <td>${esc(o.cedula || "")}</td>
+        <td class="num">${esc(fmt(o.extras))}</td>
+        <td class="num">${esc(fmt(o.festivas))}</td>
+        <td class="num">${esc(fmt(o.nocturnas))}</td>
+        <td class="num">${o.descansos || 0}</td>
+      </tr>`).join("");
+    const w = window.open("", "_blank", "width=900,height=1100");
+    if (!w) { alert("Permite las ventanas emergentes para generar el PDF."); return; }
+    w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Consolidado ${esc(nombreTienda)}</title>
+      <style>
+        *{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box;}
+        body{font-family:Arial,Helvetica,sans-serif;color:#241C14;margin:0;padding:40px 44px;font-size:12px;}
+        .head{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #2E9CA1;padding-bottom:12px;margin-bottom:18px;}
+        .logobox{background:#E85D1F;padding:8px 14px;border-radius:7px;display:inline-flex;}
+        .logobox img{height:40px;}
+        .head .meta{text-align:right;font-size:11px;line-height:1.5;}
+        h1{font-size:16px;text-align:center;margin:0 0 4px;}
+        .sub{text-align:center;font-size:12px;color:#5C5F5A;margin-bottom:16px;}
+        table{width:100%;border-collapse:collapse;font-size:11px;}
+        th{background:#2E9CA1;color:#fff;text-align:left;padding:7px 8px;}
+        td{padding:6px 8px;border-bottom:1px solid #E4E7E7;}
+        td.num,th.num{text-align:right;}
+        tfoot td{font-weight:bold;background:#F1EFE8;border-top:2px solid #2E9CA1;}
+        .firma{margin-top:70px;}
+        .firmaBox{width:340px;}
+        .linea{border-top:1px solid #241C14;padding-top:6px;font-size:12px;}
+        .nota{margin-top:8px;font-size:11px;color:#5C5F5A;line-height:1.6;}
+        @page{size:letter portrait;margin:0.5in;}
+      </style></head><body>
+      <div class="head">
+        <span class="logobox"><img src="${logoUrl}" alt="RITMO"></span>
+        <div class="meta"><div><strong>${esc(nombreTienda)} (${esc(tiendaSeleccionada)})</strong></div><div>Fecha: ${esc(hoy)}</div></div>
+      </div>
+      <h1>CONSOLIDADO DE NOVEDADES DE NÓMINA</h1>
+      <div class="sub">Novedades aprobadas por el Jefe de Zona: <strong>${esc(nombreJefe)}</strong></div>
+      <table>
+        <thead>
+          <tr><th>Operario</th><th>Cédula</th><th class="num">Horas extra</th><th class="num">Festivas/Dom.</th><th class="num">Nocturnas</th><th class="num">Descansos (días)</th></tr>
+        </thead>
+        <tbody>${filasHTML}</tbody>
+        <tfoot>
+          <tr><td colspan="2">TOTAL</td><td class="num">${esc(fmt(tot.extras))}</td><td class="num">${esc(fmt(tot.festivas))}</td><td class="num">${esc(fmt(tot.nocturnas))}</td><td class="num">${tot.descansos}</td></tr>
+        </tfoot>
+      </table>
+      <div class="firma">
+        <div class="firmaBox">
+          <div class="linea">Firma del Jefe de Zona</div>
+          <div class="nota"><strong>${esc(nombreJefe)}</strong><br>Valido el pago de estas novedades de nómina.<br>Fecha: ________________</div>
+        </div>
+      </div>
+      <scr${""}ipt>window.onload=function(){window.focus();window.print();};<\/scr${""}ipt>
+      </body></html>`);
+    w.document.close();
+  };
+
   const totalesParaGraficas = tiendaSeleccionada ? totalTiendaSeleccionada : totalesPorTienda;
   const datosExtrasNormales = [...totalesParaGraficas].sort((a, b) => b.extrasNormales - a.extrasNormales).map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.extrasNormales)) }));
   const datosExtrasFestivas = [...totalesParaGraficas].sort((a, b) => b.extrasFestivas - a.extrasFestivas).map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.extrasFestivas)) }));
   const datosNocturnas = [...totalesParaGraficas].sort((a, b) => b.nocturnas - a.nocturnas).map((t) => ({ tienda: t.tienda, valor: Number(fmt(t.nocturnas)) }));
 
   const exportarExcel = () => {
+    // RRHH exporta el consolidado de novedades aprobadas en PDF (con firma del Jefe de Zona).
+    if (esRRHH && tiendaSeleccionada) { exportarAprobadasPDF(); return; }
     if (tiendaSeleccionada) {
       const nombreTienda = listaTiendas.find((t) => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada;
       const data = filas.filter((f) => f.tiendaCodigo === tiendaSeleccionada).map((f) => ({
@@ -930,7 +1006,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button onClick={cargarDatos} style={btnStyle("transparent", "#FFFFFF", true)}><RefreshCw size={14} /> Actualizar</button>
-            <button onClick={exportarExcel} style={btnStyle("#FFFFFF", rol.color, false)}><FileSpreadsheet size={14} /> {tiendaSeleccionada ? "Exportar tienda" : "Exportar a Excel"}</button>
+            <button onClick={exportarExcel} style={btnStyle("#FFFFFF", rol.color, false)}>{esRRHH && tiendaSeleccionada ? <Printer size={14} /> : <FileSpreadsheet size={14} />} {esRRHH && tiendaSeleccionada ? "Exportar PDF" : tiendaSeleccionada ? "Exportar tienda" : "Exportar a Excel"}</button>
             <button onClick={onCerrarSesion} style={btnStyle("rgba(255,255,255,0.15)", "#FFFFFF", true)}>🔄 Cambiar rol</button>
           </div>
         </div>
@@ -1117,7 +1193,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                 <div style={{ fontSize: 15, fontWeight: 700, color: "#241C14" }}>Consolidado de novedades por operario</div>
               </div>
               {tiendaSeleccionada && resumenAprobadasPorOperario.length > 0 && (
-                <button onClick={exportarAprobadasExcel} style={btnStyle("#3FBFC4", "#FFFFFF", false)}><FileSpreadsheet size={13} /> Exportar Excel</button>
+                <button onClick={exportarAprobadasPDF} style={btnStyle("#3FBFC4", "#FFFFFF", false)}><Printer size={13} /> Exportar PDF</button>
               )}
             </div>
             <div style={{ fontSize: 12, color: "#5C5F5A", marginTop: 10, marginBottom: 14 }}>
