@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { LogOut, Plus, Trash2, Save, FileSpreadsheet, AlertTriangle, CheckCircle2, Printer } from "lucide-react";
+import { LogOut, Plus, Trash2, Save, FileSpreadsheet, AlertTriangle, CheckCircle2, Printer, Paperclip, X, Camera } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import { supabase } from "./supabaseClient";
 import logoRitmo from "./logo-ritmo.png";
+
+const SOPORTES_BUCKET = "cuadres-soportes";
 
 // Columnas de dinero. La primera (Ventas Odoo) es lo que el sistema dice que se vendió.
 // El resto (2..8) es lo que el cajero entregó/justificó.
@@ -72,6 +74,9 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
   const [estado, setEstado] = useState(""); // "guardado" | "error" | ""
   const [observaciones, setObservaciones] = useState("");
   const [dirty, setDirty] = useState(false); // hay cambios sin guardar
+  const [soportes, setSoportes] = useState([]); // [{path, url}] fotos de soporte de gastos
+  const [showSoportes, setShowSoportes] = useState(false);
+  const [subiendoSoporte, setSubiendoSoporte] = useState(false);
 
   // Cargar empleados de la tienda (compartido con app de horarios)
   useEffect(() => {
@@ -129,6 +134,69 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
   }, [codigoTienda, fecha]);
 
   useEffect(() => { cargarCuadre(); }, [cargarCuadre]);
+
+  // ---- Soportes de gastos (fotos en Supabase Storage, por tienda + fecha) ----
+  useEffect(() => {
+    let activo = true;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("cuadres_soportes")
+          .select("archivos")
+          .eq("tienda_codigo", codigoTienda)
+          .eq("fecha", fecha)
+          .maybeSingle();
+        if (!activo) return;
+        const paths = data && Array.isArray(data.archivos) ? data.archivos : [];
+        setSoportes(paths.map((p) => ({ path: p, url: supabase.storage.from(SOPORTES_BUCKET).getPublicUrl(p).data.publicUrl })));
+      } catch (e) {
+        if (activo) setSoportes([]);
+      }
+    })();
+    return () => { activo = false; };
+  }, [codigoTienda, fecha]);
+
+  const guardarSoportesDB = async (paths) => {
+    await supabase.from("cuadres_soportes").upsert(
+      { tienda_codigo: codigoTienda, fecha, archivos: paths, updated_at: new Date().toISOString() },
+      { onConflict: "tienda_codigo,fecha" }
+    );
+  };
+
+  const agregarSoportes = async (fileList) => {
+    const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/"));
+    if (files.length === 0) return;
+    setSubiendoSoporte(true);
+    try {
+      const nuevos = [];
+      for (const file of files) {
+        const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `${codigoTienda}/${fecha}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${safe}`;
+        const { error } = await supabase.storage.from(SOPORTES_BUCKET).upload(path, file, { upsert: false });
+        if (error) throw error;
+        nuevos.push(path);
+      }
+      const lista = [...soportes.map((s) => s.path), ...nuevos];
+      await guardarSoportesDB(lista);
+      setSoportes(lista.map((p) => ({ path: p, url: supabase.storage.from(SOPORTES_BUCKET).getPublicUrl(p).data.publicUrl })));
+    } catch (e) {
+      alert("No se pudo subir la foto.\n\nRevisa que en Supabase ya exista el bucket 'cuadres-soportes' y la tabla 'cuadres_soportes' (te pasé el SQL para crearlos).");
+    } finally {
+      setSubiendoSoporte(false);
+    }
+  };
+
+  const quitarSoporte = async (path) => {
+    if (!window.confirm("¿Quitar este soporte de gasto?")) return;
+    try {
+      await supabase.storage.from(SOPORTES_BUCKET).remove([path]);
+      const lista = soportes.map((s) => s.path).filter((p) => p !== path);
+      await guardarSoportesDB(lista);
+      setSoportes(lista.map((p) => ({ path: p, url: supabase.storage.from(SOPORTES_BUCKET).getPublicUrl(p).data.publicUrl })));
+    } catch (e) {
+      alert("No se pudo quitar el soporte.");
+    }
+  };
 
   const setCelda = (uid, key, value) => {
     setEstado("");
@@ -360,6 +428,9 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
 
           <div style={{ flex: 1 }} />
 
+          <button onClick={() => setShowSoportes(true)} style={{ ...btnSecondary, ...(soportes.length > 0 ? { borderColor: "#2E9CA1", color: "#2E9CA1", background: "#EAF6F6" } : {}) }}>
+            <Paperclip size={15} /> Soportes de gastos{soportes.length > 0 ? ` (${soportes.length})` : ""}
+          </button>
           <button onClick={imprimir} style={btnSecondary}>
             <Printer size={15} /> Imprimir
           </button>
@@ -521,6 +592,48 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
           <br />En verde si cuadra ($0); en rojo si hay faltante o sobrante.
         </div>
       </div>
+
+      {showSoportes && (
+        <div className="no-print" onClick={() => setShowSoportes(false)}
+          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(36,28,20,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 20 }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ background: "white", borderRadius: 12, width: "100%", maxWidth: 560, maxHeight: "85vh", overflow: "auto", boxShadow: "0 10px 40px rgba(0,0,0,0.25)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px", borderBottom: "1px solid #EDEBE4" }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#241C14" }}>Soportes de gastos e imprevistos</div>
+                <div style={{ fontSize: 12, color: "#5C5F5A", textTransform: "capitalize" }}>{codigoTienda} — {fechaLarga}</div>
+              </div>
+              <button onClick={() => setShowSoportes(false)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#5C5F5A", padding: 4 }}><X size={20} /></button>
+            </div>
+            <div style={{ padding: 18 }}>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#E85D1F", color: "white", borderRadius: 8, padding: "10px 16px", fontSize: 14, fontWeight: 600, cursor: subiendoSoporte ? "default" : "pointer", opacity: subiendoSoporte ? 0.7 : 1 }}>
+                <Camera size={16} /> {subiendoSoporte ? "Subiendo…" : "Agregar foto / archivo"}
+                <input type="file" accept="image/*" multiple disabled={subiendoSoporte} onChange={(e) => { agregarSoportes(e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+              </label>
+              <div style={{ fontSize: 12, color: "#5C5F5A", marginTop: 8 }}>Toma la foto del recibo con la cámara (celular) o sube el archivo (PC). Puedes agregar varias.</div>
+
+              {soportes.length === 0 ? (
+                <div style={{ marginTop: 18, padding: "24px 12px", textAlign: "center", color: "#9A958C", fontSize: 13, background: "#FAFAF8", borderRadius: 8, border: "1px dashed #DEDBD2" }}>
+                  Aún no hay soportes para este cuadre.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10, marginTop: 16 }}>
+                  {soportes.map((s) => (
+                    <div key={s.path} style={{ position: "relative", border: "1px solid #E4E7E7", borderRadius: 8, overflow: "hidden", background: "#FAFAF8" }}>
+                      <a href={s.url} target="_blank" rel="noreferrer">
+                        <img src={s.url} alt="soporte" style={{ width: "100%", height: 100, objectFit: "cover", display: "block" }} />
+                      </a>
+                      <button onClick={() => quitarSoporte(s.path)} title="Quitar" style={{ position: "absolute", top: 4, right: 4, background: "rgba(180,35,24,0.92)", color: "white", border: "none", borderRadius: "50%", width: 24, height: 24, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
