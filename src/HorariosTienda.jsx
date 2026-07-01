@@ -1351,8 +1351,15 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             {/* Día festivo se determina solo por domingo (auto) o turno "Feriado mañana/tarde".
                                 Se quitó la casilla manual para que no se confunda con la validación de horas. */}
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: entry.esFestivo ? "#3FBFC4" : "transparent", borderRadius: 4 }}>
-                              <input disabled readOnly className="cell-input" value={entry.horasReales} placeholder="0"
-                                style={{ textAlign: "center", minWidth: 40, width: 40, flexShrink: 0, background: entry.esFestivo ? "transparent" : "#F2EFE9", color: entry.esFestivo ? "#04342C" : "#5C5F5A", fontWeight: entry.esFestivo ? 600 : 400, cursor: "default" }} />
+                              <input
+                                disabled={realBloqueado(entry) || completado || !modoSupervisor}
+                                className="cell-input"
+                                value={entry.horasReales}
+                                onChange={(e) => updateEntry(d.dia, entry.id, "horasReales", e.target.value.replace(/[^0-9.]/g, ""))}
+                                placeholder="0"
+                                inputMode="decimal"
+                                title={(realBloqueado(entry) || completado || !modoSupervisor) ? "" : "Puedes escribir las Hrs Reales a mano (por ej. 0). Se recalcula si cambias Llegada/Salida Real."}
+                                style={{ textAlign: "center", minWidth: 40, width: 40, flexShrink: 0, background: entry.esFestivo ? "transparent" : ((realBloqueado(entry) || completado || !modoSupervisor) ? "#F2EFE9" : "white"), color: entry.esFestivo ? "#04342C" : ((realBloqueado(entry) || completado || !modoSupervisor) ? "#5C5F5A" : "#241C14"), fontWeight: entry.esFestivo ? 600 : 400, cursor: (realBloqueado(entry) || completado || !modoSupervisor) ? "default" : "text" }} />
                             </div>
                           </td>
                           <td className="col-validado no-print" style={{ ...tdStyle, textAlign: "center" }}>
