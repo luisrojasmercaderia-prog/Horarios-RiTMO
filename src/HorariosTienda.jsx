@@ -1475,9 +1475,20 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                     <button
                       onClick={() => {
                         if (completado) {
-                          if (window.confirm("Esta planilla ya está marcada como completada.\n\n¿Quieres desmarcarla?")) {
-                            setCompletado(false);
-                            setFechaCompletado("");
+                          if (window.confirm("Esta planilla está completada.\n\nSi la desmarcas para corregir, se BORRARÁN las aprobaciones del Jefe de Zona de esta semana. Tendrá que aprobar de nuevo después de tus cambios.\n\n¿Desmarcar?")) {
+                            (async () => {
+                              try {
+                                // Opción A: al desmarcar se invalidan las aprobaciones de la semana
+                                // (normales por fila y las de descanso no tomado) para forzar nueva revisión.
+                                await supabase.from("aprobaciones").delete()
+                                  .eq("tienda_codigo", codigoTienda).eq("semana_fecha", semanaKey);
+                                await supabase.from("aprobaciones").delete()
+                                  .eq("tienda_codigo", codigoTienda).like("semana_fecha", `descanso:${semanaKey}:%`);
+                              } catch (e) {}
+                              setAprobaciones({});
+                              setCompletado(false);
+                              setFechaCompletado("");
+                            })();
                           }
                           return;
                         }
