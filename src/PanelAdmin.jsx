@@ -147,9 +147,13 @@ function calcularConsolidadoTienda(datos) {
       const nocturnas = parseFloat(e.horasNocturnas) || 0;
       const saldo = parseFloat(e.saldo) || 0;
       const esDiaFestivo = d.dia === "Domingo" || e.esFestivo;
+      // Dominicales/festivas: usa horas reales si están puestas; si no, cae a las
+      // programadas (igual que las nocturnas). Un 0 explícito cuenta como 0 (ausencia).
+      const tieneReales = e.horasReales !== "" && e.horasReales != null && !isNaN(parseFloat(e.horasReales));
+      const horasFestiva = tieneReales ? parseFloat(e.horasReales) : (parseFloat(e.horasProgramadas) || 0);
       mapa[cedula].reales += reales;
       mapa[cedula].nocturnas += nocturnas;
-      if (esDiaFestivo) mapa[cedula].festivas += reales;
+      if (esDiaFestivo) mapa[cedula].festivas += horasFestiva;
       if (saldo > 0) {
         if (esDiaFestivo) mapa[cedula].extrasFestivas += saldo;
         else mapa[cedula].extrasNormales += saldo;
@@ -171,11 +175,14 @@ function extraerFilasConExtras(datos, tiendaCodigo, semanaFecha) {
       const cedula = (e.cedula || "").trim();
       if (!nombre || !cedula) return;
       const esFestivo = d.dia === "Domingo" || e.esFestivo;
+      // Dominicales: usa horas reales si están; si no, cae a las programadas (como nocturnas).
+      const tieneReales = e.horasReales !== "" && e.horasReales != null && !isNaN(parseFloat(e.horasReales));
       const realesNum = parseFloat(e.horasReales) || 0;
+      const horasFestiva = tieneReales ? realesNum : (parseFloat(e.horasProgramadas) || 0);
       const saldo = parseFloat(e.saldo) || 0;
       const nocturnasNum = parseFloat(e.horasNocturnas) || 0;
       const extra = saldo > 0 ? saldo : 0;
-      const festivas = esFestivo ? realesNum : 0;
+      const festivas = esFestivo ? horasFestiva : 0;
       // Sin novedad por aprobar → no se lista.
       if (extra <= 0 && festivas <= 0 && nocturnasNum <= 0) return;
       resultado.push({
