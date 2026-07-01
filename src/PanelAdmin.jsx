@@ -360,6 +360,8 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
   const [mostrarConsolidadoEmpleado, setMostrarConsolidadoEmpleado] = useState(false);
   const [soloMultiTienda, setSoloMultiTienda] = useState(false);
   const [empleadoExpandido, setEmpleadoExpandido] = useState(null);
+  const [verAprobadasExtras, setVerAprobadasExtras] = useState(false);
+  const [verAprobadasDescansos, setVerAprobadasDescansos] = useState(false);
 
   const cargarDatos = async () => {
     setCargando(true); setError("");
@@ -1501,6 +1503,15 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
             const nombreTienda = listaTiendas.find((t) => t.codigo === tiendaSeleccionada)?.nombre || tiendaSeleccionada;
             const filasExtrasTienda = filasExtras.filter((f) => f.tiendaCodigo === tiendaSeleccionada);
             const descansosTienda = descansosNoTomados.filter((d) => d.tiendaCodigo === tiendaSeleccionada);
+            // Opción 2: las aprobadas salen de la lista de pendientes y quedan en una sección plegable.
+            const extrasPend = filasExtrasTienda.filter((f) => f.aprobacionEstado !== "aprobado");
+            const extrasAprob = filasExtrasTienda.filter((f) => f.aprobacionEstado === "aprobado");
+            const extrasVisibles = verAprobadasExtras ? [...extrasPend, ...extrasAprob] : extrasPend;
+            const descSort = (arr) => arr.slice().sort((a, b) => a.weekDom.localeCompare(b.weekDom) || a.nombre.localeCompare(b.nombre));
+            const descPend = descSort(descansosTienda.filter((d) => d.aprobacionEstado !== "aprobado"));
+            const descAprob = descSort(descansosTienda.filter((d) => d.aprobacionEstado === "aprobado"));
+            const descVisibles = verAprobadasDescansos ? [...descPend, ...descAprob] : descPend;
+            const toggleStyle = { display: "inline-flex", alignItems: "center", gap: 5, background: "#F1EFE8", border: "1px solid #DEDBD2", borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, color: "#5C5F5A", cursor: "pointer", fontFamily: "inherit", marginBottom: 10 };
             return (
               <div style={{ marginTop: 18, borderTop: "1px solid #EDEBE4", paddingTop: 18 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>{nombreTienda}</div>
@@ -1536,6 +1547,9 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                   <div style={{ marginTop: 20 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: rol.color, marginBottom: 4 }}>Aprobación de novedades de nómina</div>
                     <div style={{ fontSize: 12, color: "#5C5F5A", marginBottom: 10 }}>Aprueba o rechaza las horas extra, dominicales/festivas y nocturnas de cada colaborador.</div>
+                    {extrasAprob.length > 0 && (
+                      <div><button onClick={() => setVerAprobadasExtras((v) => !v)} style={toggleStyle}>{verAprobadasExtras ? "▾ Ocultar" : "▸ Ver"} {extrasAprob.length} ya aprobada(s)</button></div>
+                    )}
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
                         <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
@@ -1546,7 +1560,10 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                         </tr>
                       </thead>
                       <tbody>
-                        {filasExtrasTienda.map((f, i) => {
+                        {extrasVisibles.length === 0 && (
+                          <tr><td colSpan={12} style={{ ...tdStyle, textAlign: "center", color: "#5C5F5A", fontStyle: "italic" }}>No hay novedades pendientes de aprobar.</td></tr>
+                        )}
+                        {extrasVisibles.map((f, i) => {
                           const SL = { semana_1: "Semana 1", semana_2: "Semana 2", semana_3: "Semana 3", semana_4: "Semana 4" };
                           const aprobado = f.aprobacionEstado === "aprobado";
                           const rechazado = f.aprobacionEstado === "rechazado";
@@ -1590,6 +1607,9 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                   <div style={{ marginTop: 20 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: rol.color, marginBottom: 4 }}>Descansos no tomados (a pagar)</div>
                     <div style={{ fontSize: 12, color: "#5C5F5A", marginBottom: 10 }}>Operarios que trabajaron los 7 días de la semana sin tomar descanso. Aprueba para que se les pague el día de descanso.</div>
+                    {descAprob.length > 0 && (
+                      <div><button onClick={() => setVerAprobadasDescansos((v) => !v)} style={toggleStyle}>{verAprobadasDescansos ? "▾ Ocultar" : "▸ Ver"} {descAprob.length} ya aprobado(s)</button></div>
+                    )}
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
                         <tr style={{ background: "#FAFAF7", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5C5F5A" }}>
@@ -1598,9 +1618,10 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                         </tr>
                       </thead>
                       <tbody>
-                        {descansosTienda
-                          .sort((a, b) => a.weekDom.localeCompare(b.weekDom) || a.nombre.localeCompare(b.nombre))
-                          .map((d, i) => {
+                        {descVisibles.length === 0 && (
+                          <tr><td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#5C5F5A", fontStyle: "italic" }}>No hay descansos pendientes de aprobar.</td></tr>
+                        )}
+                        {descVisibles.map((d, i) => {
                             const aprobado = d.aprobacionEstado === "aprobado";
                             const rechazado = d.aprobacionEstado === "rechazado";
                             return (
