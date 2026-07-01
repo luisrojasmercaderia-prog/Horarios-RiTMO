@@ -409,6 +409,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
             resultado.push({
               tiendaCodigo: t.codigo, tiendaNombre: t.nombre,
               semana: SEMANA_LABEL[registro.semana_fecha] || registro.semana_fecha,
+              semanaFecha: registro.semana_fecha,
               operario: op.nombre || "(Sin nombre)", cedula: op.cedula || "",
               reales: op.reales, festivas: op.festivas, nocturnas: op.nocturnas,
               extrasFestivas: op.extrasFestivas, extrasNormales: op.extrasNormales,
@@ -1512,6 +1513,9 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
             const descAprob = descSort(descansosTienda.filter((d) => d.aprobacionEstado === "aprobado"));
             const descVisibles = verAprobadasDescansos ? [...descPend, ...descAprob] : descPend;
             const toggleStyle = { display: "inline-flex", alignItems: "center", gap: 5, background: "#F1EFE8", border: "1px solid #DEDBD2", borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, color: "#5C5F5A", cursor: "pointer", fontFamily: "inherit", marginBottom: 10 };
+            // Cruce del descanso no tomado (a pagar) con cada fila del consolidado, por cédula + semana.
+            const descPorClave = {};
+            descansosTienda.forEach((d) => { descPorClave[`${(d.cedula || "").trim()}__${d.weekDom}`] = d; });
             return (
               <div style={{ marginTop: 18, borderTop: "1px solid #EDEBE4", paddingTop: 18 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>{nombreTienda}</div>
@@ -1524,6 +1528,7 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                         <th style={thStyle}>Semana</th><th style={thStyle}>Operario</th><th style={thStyle}>Cédula</th>
                         <th style={thStyle}>Hrs Festivas</th><th style={thStyle}>Hrs Nocturnas</th>
                         <th style={thStyle}>Extras Festivas</th><th style={thStyle}>Extras Normales</th>
+                        <th style={thStyle}>Descanso a pagar</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1536,6 +1541,14 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                           <td style={tdStyle}>{fmt(f.nocturnas)}</td>
                           <td style={tdStyle}>{fmt(f.extrasFestivas)}</td>
                           <td style={tdStyle}>{fmt(f.extrasNormales)}</td>
+                          <td style={tdStyle}>
+                            {(() => {
+                              const desc = descPorClave[`${(f.cedula || "").trim()}__${f.semanaFecha}`];
+                              if (!desc) return "—";
+                              const ap = desc.aprobacionEstado === "aprobado";
+                              return <span style={{ fontWeight: 700, color: ap ? "#2E7D32" : "#946800" }} title={ap ? "Descanso aprobado (se paga)" : "Descanso detectado — pendiente de aprobar"}>1 día{ap ? " ✓" : " (pend.)"}</span>;
+                            })()}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
