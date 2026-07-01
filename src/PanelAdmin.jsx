@@ -1544,9 +1544,8 @@ function PanelConRol({ sesion, onCerrarSesion, asignacionesJefes, setAsignacione
                           <td style={tdStyle}>
                             {(() => {
                               const desc = descPorClave[`${(f.cedula || "").trim()}__${f.semanaFecha}`];
-                              if (!desc) return "—";
-                              const ap = desc.aprobacionEstado === "aprobado";
-                              return <span style={{ fontWeight: 700, color: ap ? "#2E7D32" : "#946800" }} title={ap ? "Descanso aprobado (se paga)" : "Descanso detectado — pendiente de aprobar"}>1 día{ap ? " ✓" : " (pend.)"}</span>;
+                              if (!desc || desc.aprobacionEstado !== "aprobado") return "—";
+                              return <span style={{ fontWeight: 700, color: "#2E7D32" }} title="Descanso aprobado (se paga)">1 día</span>;
                             })()}
                           </td>
                         </tr>
