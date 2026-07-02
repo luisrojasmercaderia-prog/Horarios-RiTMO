@@ -56,6 +56,7 @@ function nuevaFila() {
     picos_consignados: "",
     picos_por_consignar: "",
     otros: "",
+    observaciones: "",
   };
 }
 
@@ -72,7 +73,6 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [estado, setEstado] = useState(""); // "guardado" | "error" | ""
-  const [observaciones, setObservaciones] = useState("");
   const [dirty, setDirty] = useState(false); // hay cambios sin guardar
   const [soportes, setSoportes] = useState([]); // [{path, url}] fotos de soporte de gastos
   const [showSoportes, setShowSoportes] = useState(false);
@@ -103,7 +103,6 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
         .order("orden", { ascending: true });
       if (error) throw error;
       if (data && data.length > 0) {
-        setObservaciones(data[0].observaciones ?? "");
         setFilas(
           data.map((r) => ({
             uid: Math.random().toString(36).slice(2),
@@ -118,15 +117,14 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
             picos_consignados: r.picos_consignados ?? "",
             picos_por_consignar: r.picos_por_consignar ?? "",
             otros: r.otros ?? "",
+            observaciones: r.observaciones ?? "",
           }))
         );
       } else {
         setFilas([nuevaFila()]);
-        setObservaciones("");
       }
     } catch (e) {
       setFilas([nuevaFila()]);
-      setObservaciones("");
     } finally {
       setCargando(false);
       setDirty(false);
@@ -253,7 +251,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
           picos_consignados: n(f.picos_consignados),
           picos_por_consignar: n(f.picos_por_consignar),
           otros: n(f.otros),
-          observaciones: observaciones.trim() || null,
+          observaciones: (f.observaciones || "").trim() || null,
           orden: i,
         }));
 
@@ -300,7 +298,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
   };
 
   const exportarExcel = () => {
-    exportarCuadreExcel({ codigoTienda, nombreTienda, fecha, filas, totales, observaciones });
+    exportarCuadreExcel({ codigoTienda, nombreTienda, fecha, filas, totales });
   };
 
   const imprimir = () => window.print();
@@ -462,13 +460,14 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
                   <th key={c.key} style={{ ...thStyle, minWidth: 96 }}>{c.label}</th>
                 ))}
                 <th style={{ ...thStyle, minWidth: 96, background: "#E85D1F" }}>Descuadre</th>
+                <th style={{ ...thStyle, minWidth: 150, textAlign: "left" }}>Observaciones</th>
                 <th style={{ ...thStyle, minWidth: 150 }}>Firma</th>
                 <th className="no-print" style={{ ...thStyle, width: 40, background: "#3FBFC4" }}></th>
               </tr>
             </thead>
             <tbody>
               {cargando ? (
-                <tr><td colSpan={MONEY_COLS.length + 6} style={{ padding: 24, textAlign: "center", color: "#5C5F5A" }}>Cargando…</td></tr>
+                <tr><td colSpan={MONEY_COLS.length + 7} style={{ padding: 24, textAlign: "center", color: "#5C5F5A" }}>Cargando…</td></tr>
               ) : (
                 filas.map((f) => {
                   const d = calcDescuadre(f);
@@ -507,6 +506,9 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
                       <td style={{ ...tdStyle, textAlign: "right", fontWeight: 700, color: desc === 0 ? "#1B5E33" : "#B42318", background: desc === 0 ? "#F3FBF5" : "#FEF3F2" }}>
                         {desc === 0 ? "$0" : `$${fmt(desc)}`}
                       </td>
+                      <td style={tdStyle}>
+                        <input value={f.observaciones} onChange={(e) => setCelda(f.uid, "observaciones", e.target.value)} placeholder="—" style={{ ...cellInput, textAlign: "left", minWidth: 140 }} />
+                      </td>
                       <td style={tdStyle}></td>
                       <td className="no-print" style={{ ...tdStyle, textAlign: "center" }}>
                         <button onClick={() => eliminarFila(f.uid)} title="Eliminar fila" style={btnIcon}>
@@ -527,6 +529,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
                 <td style={{ ...tdTotal, textAlign: "right", background: totales.descuadre === 0 ? "#1B5E33" : "#B42318" }}>
                   {totales.descuadre === 0 ? "$0" : `$${fmt(totales.descuadre)}`}
                 </td>
+                <td style={tdTotal}></td>
                 <td style={tdTotal}></td>
                 <td className="no-print" style={tdTotal}></td>
               </tr>
@@ -568,22 +571,12 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
           </div>
         )}
 
-        {/* Firma del supervisor + Observaciones */}
+        {/* Firma del supervisor */}
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap", marginTop: 28, alignItems: "flex-end" }}>
           <div style={{ flex: "0 0 240px" }}>
             <div style={{ borderTop: "1.5px solid #241C14", paddingTop: 6, fontSize: 13, color: "#241C14" }}>
               Firma Supervisor
             </div>
-          </div>
-          <div style={{ flex: "1 1 320px" }}>
-            <label style={labelStyle}>Observaciones</label>
-            <textarea
-              value={observaciones}
-              onChange={(e) => { setEstado(""); setDirty(true); setObservaciones(e.target.value); }}
-              placeholder="Notas del día, descuadres a justificar, novedades…"
-              rows={3}
-              style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.5 }}
-            />
           </div>
         </div>
 
