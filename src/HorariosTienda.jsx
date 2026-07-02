@@ -1363,12 +1363,17 @@ export default function HorariosTienda({ codigoTienda, onSalir }) {
                             </div>
                           </td>
                           <td className="col-validado no-print" style={{ ...tdStyle, textAlign: "center" }}>
-                            {entry.nombre.trim() !== "" && (
-                              <input type="checkbox" checked={entry.validado} disabled={!modoSupervisor || completado}
-                                onChange={(e) => updateEntry(d.dia, entry.id, "validado", e.target.checked)}
-                                title={completado ? "Planilla completada" : modoSupervisor ? "Marcar horas reales como validadas" : "Solo el supervisor puede validar"}
-                                style={{ width: 18, height: 18, cursor: (!modoSupervisor || completado) ? "not-allowed" : "pointer", accentColor: "#3FBFC4" }} />
-                            )}
+                            {entry.nombre.trim() !== "" && (() => {
+                              // No se puede validar un día laborable sin la Llegada Real y Salida Real.
+                              const faltanReales = !esNoLaborable(entry.estado) && (entry.estado || "").trim() !== "" && (!(entry.llegadaReal || "").trim() || !(entry.salidaReal || "").trim());
+                              const bloqueado = !modoSupervisor || completado || faltanReales;
+                              return (
+                                <input type="checkbox" checked={entry.validado} disabled={bloqueado}
+                                  onChange={(e) => updateEntry(d.dia, entry.id, "validado", e.target.checked)}
+                                  title={completado ? "Planilla completada" : faltanReales ? "Llena la Llegada Real y la Salida Real de este día antes de validar" : modoSupervisor ? "Marcar horas reales como validadas" : "Solo el supervisor puede validar"}
+                                  style={{ width: 18, height: 18, cursor: bloqueado ? "not-allowed" : "pointer", accentColor: "#3FBFC4" }} />
+                              );
+                            })()}
                           </td>
                           <td className="col-nocturnas" style={tdStyle}>
                             <span style={{ fontSize: 12, color: "#5C5F5A", display: "block", textAlign: "center" }}>{entry.horasNocturnas || "0"}</span>
