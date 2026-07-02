@@ -534,7 +534,9 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
                           list="lista-empleados"
                           value={f.nombre}
                           onChange={(e) => setCelda(f.uid, "nombre", e.target.value)}
+                          onFocus={(e) => e.target.select()}
                           placeholder="Cajero…"
+                          title="Toca y escribe para cambiar el cajero"
                           style={{ ...cellInput, textAlign: "left", minWidth: 150 }}
                         />
                       </td>
