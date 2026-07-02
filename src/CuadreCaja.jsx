@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { LogOut, Plus, Trash2, Save, FileSpreadsheet, AlertTriangle, CheckCircle2, Printer, Paperclip, X, Camera } from "lucide-react";
+import { LogOut, Plus, Trash2, Save, FileSpreadsheet, AlertTriangle, CheckCircle2, Printer, Paperclip, X, Camera, ShieldCheck } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import { supabase } from "./supabaseClient";
 import logoRitmo from "./logo-ritmo.png";
@@ -7,6 +7,8 @@ import logoRitmo from "./logo-ritmo.png";
 const SOPORTES_BUCKET = "cuadres-soportes";
 // Fila interna especial donde se guarda la "Observación General" del día (sin tocar el esquema)
 const GENERAL_MARKER = "__GENERAL__";
+// Clave para el Modo Supervisor del cuadre (requerido para borrar filas). Cambiable aquí.
+const CUADRE_SPV_PASSWORD = "spv1234";
 
 // Columnas de dinero. La primera (Ventas Odoo) es lo que el sistema dice que se vendió.
 // El resto (2..8) es lo que el cajero entregó/justificó.
@@ -77,6 +79,15 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
   const [estado, setEstado] = useState(""); // "guardado" | "error" | ""
   const [dirty, setDirty] = useState(false); // hay cambios sin guardar
   const [observacionGeneral, setObservacionGeneral] = useState(""); // nota general del día
+  const [modoSupervisor, setModoSupervisor] = useState(false); // requerido para borrar filas
+
+  const toggleSupervisor = () => {
+    if (modoSupervisor) { setModoSupervisor(false); return; }
+    const clave = window.prompt("Ingresa la clave de Modo Supervisor para poder borrar filas:");
+    if (clave === null) return;
+    if (clave.trim() === CUADRE_SPV_PASSWORD) setModoSupervisor(true);
+    else alert("Clave incorrecta.");
+  };
   const [soportes, setSoportes] = useState([]); // [{path, url}] fotos de soporte de gastos
   const [showSoportes, setShowSoportes] = useState(false);
   const [subiendoSoporte, setSubiendoSoporte] = useState(false);
@@ -448,6 +459,9 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
 
           <div style={{ flex: 1 }} />
 
+          <button onClick={toggleSupervisor} style={{ ...btnSecondary, ...(modoSupervisor ? { background: "#2E9CA1", color: "white", borderColor: "#2E9CA1" } : {}) }}>
+            <ShieldCheck size={15} /> {modoSupervisor ? "Supervisor activo" : "Modo Supervisor"}
+          </button>
           <button onClick={() => setShowSoportes(true)} style={{ ...btnSecondary, ...(soportes.length > 0 ? { borderColor: "#2E9CA1", color: "#2E9CA1", background: "#EAF6F6" } : {}) }}>
             <Paperclip size={15} /> Soportes de gastos{soportes.length > 0 ? ` (${soportes.length})` : ""}
           </button>
@@ -533,7 +547,12 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
                       </td>
                       <td style={tdStyle}></td>
                       <td className="no-print" style={{ ...tdStyle, textAlign: "center" }}>
-                        <button onClick={() => eliminarFila(f.uid)} title="Eliminar fila" style={btnIcon}>
+                        <button
+                          onClick={() => eliminarFila(f.uid)}
+                          disabled={!modoSupervisor}
+                          title={modoSupervisor ? "Eliminar fila" : "Activa el Modo Supervisor para borrar filas"}
+                          style={{ ...btnIcon, ...(modoSupervisor ? {} : { color: "#CFC9BE", cursor: "not-allowed" }) }}
+                        >
                           <Trash2 size={14} />
                         </button>
                       </td>
