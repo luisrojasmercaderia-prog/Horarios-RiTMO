@@ -530,15 +530,19 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
                         <input value={f.cedula} onChange={(e) => setCelda(f.uid, "cedula", e.target.value)} style={cellInput} />
                       </td>
                       <td style={tdStyle}>
-                        <input
-                          list="lista-empleados"
+                        <select
                           value={f.nombre}
                           onChange={(e) => setCelda(f.uid, "nombre", e.target.value)}
-                          onFocus={(e) => e.target.select()}
-                          placeholder="Cajero…"
-                          title="Toca y escribe para cambiar el cajero"
-                          style={{ ...cellInput, textAlign: "left", minWidth: 150 }}
-                        />
+                          style={{ ...cellInput, textAlign: "left", minWidth: 150, cursor: "pointer" }}
+                        >
+                          <option value="">Seleccionar cajero…</option>
+                          {empleados.map((emp) => (
+                            <option key={emp.id} value={emp.nombre}>{emp.nombre}</option>
+                          ))}
+                          {f.nombre.trim() !== "" && !empleados.some((emp) => emp.nombre === f.nombre) && (
+                            <option value={f.nombre}>{f.nombre}</option>
+                          )}
+                        </select>
                       </td>
                       <td style={tdStyle}>
                         <input value={f.pos} disabled={!habilitado} onChange={(e) => setCelda(f.uid, "pos", e.target.value)} style={{ ...cellInput, width: 40, textAlign: "center", ...(habilitado ? {} : celdaBloqueada) }} inputMode="numeric" />
@@ -593,12 +597,6 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
             </tfoot>
           </table>
         </div>
-
-        <datalist id="lista-empleados">
-          {empleados.map((e) => (
-            <option key={e.id} value={e.nombre} />
-          ))}
-        </datalist>
 
         <button onClick={agregarFila} className="no-print" style={{ ...btnSecondary, marginTop: 14 }}>
           <Plus size={15} /> Agregar cajero
