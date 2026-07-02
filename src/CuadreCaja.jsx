@@ -5,6 +5,8 @@ import { supabase } from "./supabaseClient";
 import logoRitmo from "./logo-ritmo.png";
 
 const SOPORTES_BUCKET = "cuadres-soportes";
+// Fila interna especial donde se guarda la "Observación General" del día (sin tocar el esquema)
+const GENERAL_MARKER = "__GENERAL__";
 
 // Columnas de dinero. La primera (Ventas Odoo) es lo que el sistema dice que se vendió.
 // El resto (2..8) es lo que el cajero entregó/justificó.
@@ -74,6 +76,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
   const [guardando, setGuardando] = useState(false);
   const [estado, setEstado] = useState(""); // "guardado" | "error" | ""
   const [dirty, setDirty] = useState(false); // hay cambios sin guardar
+  const [observacionGeneral, setObservacionGeneral] = useState(""); // nota general del día
   const [soportes, setSoportes] = useState([]); // [{path, url}] fotos de soporte de gastos
   const [showSoportes, setShowSoportes] = useState(false);
   const [subiendoSoporte, setSubiendoSoporte] = useState(false);
@@ -102,9 +105,12 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
         .eq("fecha", fecha)
         .order("orden", { ascending: true });
       if (error) throw error;
-      if (data && data.length > 0) {
+      const genRow = (data || []).find((r) => r.cedula === GENERAL_MARKER);
+      setObservacionGeneral(genRow ? (genRow.observaciones ?? "") : "");
+      const cajeros = (data || []).filter((r) => r.cedula !== GENERAL_MARKER);
+      if (cajeros.length > 0) {
         setFilas(
-          data.map((r) => ({
+          cajeros.map((r) => ({
             uid: Math.random().toString(36).slice(2),
             cedula: r.cedula ?? "",
             nombre: r.nombre ?? "",
@@ -125,6 +131,7 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
       }
     } catch (e) {
       setFilas([nuevaFila()]);
+      setObservacionGeneral("");
     } finally {
       setCargando(false);
       setDirty(false);
@@ -254,6 +261,21 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
           observaciones: (f.observaciones || "").trim() || null,
           orden: i,
         }));
+
+      // Observación general del día: se guarda en una fila interna especial.
+      if (observacionGeneral.trim() !== "") {
+        registros.push({
+          tienda_codigo: codigoTienda,
+          fecha,
+          cedula: GENERAL_MARKER,
+          nombre: "Observación general",
+          pos: null,
+          ventas_odoo: 0, efectivo_boveda: 0, ventas_tcd: 0, bonos_adess: 0,
+          gastos: 0, picos_consignados: 0, picos_por_consignar: 0, otros: 0,
+          observaciones: observacionGeneral.trim(),
+          orden: 9998,
+        });
+      }
 
       // Reemplazar el cuadre del día: borrar lo existente e insertar lo actual
       const { error: delErr } = await supabase
@@ -571,12 +593,22 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
           </div>
         )}
 
-        {/* Firma del supervisor */}
+        {/* Firma del supervisor + Observación general */}
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap", marginTop: 28, alignItems: "flex-end" }}>
           <div style={{ flex: "0 0 240px" }}>
             <div style={{ borderTop: "1.5px solid #241C14", paddingTop: 6, fontSize: 13, color: "#241C14" }}>
               Firma Supervisor
             </div>
+          </div>
+          <div style={{ flex: "1 1 320px" }}>
+            <label style={labelStyle}>Observación General</label>
+            <textarea
+              value={observacionGeneral}
+              onChange={(e) => { setEstado(""); setDirty(true); setObservacionGeneral(e.target.value); }}
+              placeholder="Nota general del día, novedades…"
+              rows={3}
+              style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.5 }}
+            />
           </div>
         </div>
 
