@@ -476,6 +476,8 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
                 filas.map((f) => {
                   const d = calcDescuadre(f);
                   const desc = Math.round(d * 100) / 100;
+                  // No se pueden escribir montos hasta que la fila tenga nombre y cédula.
+                  const habilitado = f.nombre.trim() !== "" && f.cedula.trim() !== "";
                   return (
                     <tr key={f.uid}>
                       <td style={tdStyle}>
@@ -491,14 +493,16 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
                         />
                       </td>
                       <td style={tdStyle}>
-                        <input value={f.pos} onChange={(e) => setCelda(f.uid, "pos", e.target.value)} style={{ ...cellInput, width: 40, textAlign: "center" }} inputMode="numeric" />
+                        <input value={f.pos} disabled={!habilitado} onChange={(e) => setCelda(f.uid, "pos", e.target.value)} style={{ ...cellInput, width: 40, textAlign: "center", ...(habilitado ? {} : celdaBloqueada) }} inputMode="numeric" />
                       </td>
                       {MONEY_COLS.map((c) => (
-                        <td key={c.key} style={tdStyle}>
+                        <td key={c.key} style={{ ...tdStyle, background: habilitado ? undefined : "#F7F5F0" }}>
                           <input
                             value={f[c.key]}
+                            disabled={!habilitado}
                             onChange={(e) => setCelda(f.uid, c.key, e.target.value)}
-                            style={{ ...cellInput, textAlign: "right" }}
+                            title={habilitado ? "" : "Primero ingresa el nombre y la cédula del cajero"}
+                            style={{ ...cellInput, textAlign: "right", ...(habilitado ? {} : celdaBloqueada) }}
                             inputMode="decimal"
                           />
                         </td>
@@ -753,6 +757,7 @@ const thStyle = { background: "#3FBFC4", color: "white", fontWeight: 700, paddin
 const tdStyle = { border: "1px solid #E4E7E7", padding: 0 };
 const tdTotal = { background: "#2E9CA1", color: "white", fontWeight: 700, padding: "8px 6px", border: "1px solid #36AAAF", fontSize: 12 };
 const cellInput = { width: "100%", border: "none", padding: "8px 6px", fontSize: 12.5, fontFamily: "inherit", outline: "none", background: "transparent", color: "#241C14", boxSizing: "border-box" };
+const celdaBloqueada = { background: "#F7F5F0", color: "#B4B2A9", cursor: "not-allowed" };
 const btnGhost = { display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.2)", color: "white", border: "none", borderRadius: 7, padding: "8px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
 const btnPrimary = { display: "inline-flex", alignItems: "center", gap: 6, background: "#E85D1F", color: "white", border: "none", borderRadius: 7, padding: "9px 16px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
 const btnSecondary = { display: "inline-flex", alignItems: "center", gap: 6, background: "white", color: "#2E9CA1", border: "1px solid #BfE3E5", borderRadius: 7, padding: "9px 14px", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
