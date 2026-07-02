@@ -434,9 +434,6 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
           <button onClick={imprimir} style={btnSecondary}>
             <Printer size={15} /> Imprimir
           </button>
-          <button onClick={exportarExcel} style={btnSecondary}>
-            <FileSpreadsheet size={15} /> Exportar a Excel
-          </button>
           <button onClick={guardar} disabled={guardando} style={{ ...btnPrimary, opacity: guardando ? 0.7 : 1 }}>
             <Save size={15} /> {guardando ? "Guardando..." : dirty ? "Guardar cambios" : "Guardado"}
           </button>
