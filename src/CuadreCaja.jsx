@@ -231,7 +231,16 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
     );
   };
 
-  const agregarFila = () => { setDirty(true); setFilas((p) => [...p, nuevaFila()]); };
+  const agregarFila = () => {
+    // No permitir filas vacías: la fila actual debe tener nombre y cédula antes de agregar otra.
+    const incompleta = filas.some((f) => f.nombre.trim() === "" || f.cedula.trim() === "");
+    if (incompleta) {
+      alert("Completa el cajero de la fila actual (nombre y cédula) antes de agregar otra.");
+      return;
+    }
+    setDirty(true);
+    setFilas((p) => [...p, nuevaFila()]);
+  };
   const eliminarFila = (uid) => {
     setDirty(true);
     setFilas((p) => (p.length === 1 ? [nuevaFila()] : p.filter((f) => f.uid !== uid)));
@@ -302,6 +311,11 @@ export default function CuadreCaja({ codigoTienda, nombreTienda, onSalir }) {
       }
       setEstado("guardado");
       setDirty(false);
+      // Quitar de la vista las filas vacías (sin cajero); dejar al menos una.
+      setFilas((prev) => {
+        const llenas = prev.filter((f) => f.nombre.trim() !== "");
+        return llenas.length > 0 ? llenas : [nuevaFila()];
+      });
       return true;
     } catch (e) {
       setEstado("error");
